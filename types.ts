@@ -2,6 +2,14 @@ export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-su
 
 export type Severity = 'safe' | 'warning' | 'critical';
 
+export interface TranslationPreset {
+  title_original: string;
+  title_vi: string;
+  genres: string[];
+  tone: string[];
+  humor_level: number;
+}
+
 export interface SubtitleSegment {
   id: number;
   startTime: string; // HH:MM:SS,mmm

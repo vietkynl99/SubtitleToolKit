@@ -1,15 +1,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { SubtitleSegment } from "../types";
+import { SubtitleSegment, TranslationPreset } from "../types";
 
 export async function translateSegments(
   segments: SubtitleSegment[], 
   onBatchStart?: (startIndex: number, count: number) => void,
-  onBatchComplete?: (batchIndex: number, translatedTexts: string[]) => void
+  onBatchComplete?: (batchIndex: number, translatedTexts: string[]) => void,
+  preset?: TranslationPreset
 ): Promise<SubtitleSegment[]> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
-  // v1.3.0 Logic: Only translate if translatedText is null or empty
   const segmentsToTranslateIndices = segments
     .map((s, idx) => ({ s, idx }))
     .filter(item => !item.s.translatedText || item.s.translatedText.trim() === '')
@@ -22,6 +22,15 @@ export async function translateSegments(
   const batchSize = 15;
   const results = [...segments];
 
+  // v2.2.0 Style Context
+  const styleInstruction = preset ? `
+  Style Context:
+  - Genres: ${preset.genres.join(', ')}
+  - Tone: ${preset.tone.join(', ')}
+  - Humor Level: ${preset.humor_level}/10
+  Ensure consistent honorifics (nhân xưng) and vocabulary matching this creative direction.
+  ` : "";
+
   for (let i = 0; i < segmentsToTranslateIndices.length; i += batchSize) {
     const currentIndicesBatch = segmentsToTranslateIndices.slice(i, i + batchSize);
     const batch = currentIndicesBatch.map(idx => segments[idx]);
@@ -31,7 +40,7 @@ export async function translateSegments(
     }
 
     const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
-    Instruction: Use natural cinema style. Keep honorifics (nhân xưng) consistent.
+    Instruction: Use natural cinema style. ${styleInstruction}
     Return a JSON array of strings in the exact same order as the provided segments.
     
     Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
@@ -73,6 +82,70 @@ export async function translateSegments(
   }
 
   return results;
+}
+
+export async function extractTitleFromFilename(filename: string): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const cleaned = filename.replace(/\.srt$/i, '').trim();
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Tên file sau có thể chứa nhiều thông tin không liên quan (tags, websites, groups).
+    Hãy trích xuất phần có khả năng cao nhất là tiêu đề tác phẩm.
+    Chỉ trả về duy nhất tiêu đề, không giải thích.
+
+    Tên file: ${cleaned}`
+  });
+  
+  return response.text?.trim() || cleaned;
+}
+
+export async function translateTitle(title: string): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Dịch tiêu đề tác phẩm sau sang tiếng Việt tự nhiên, phù hợp ngữ cảnh phim ảnh: ${title}`
+  });
+  return response.text?.trim() || title;
+}
+
+export async function analyzeTranslationStyle(title: string, originalTitle: string): Promise<TranslationPreset> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Phân tích tiêu đề sau và xác định phong cách dịch (Version 2.2.0):
+    Tiêu đề: ${title}
+
+    Hãy xác định:
+    1. genres: Danh sách các thể loại (Tu tiên, Tiên hiệp, Đô thị, Xuyên không, Hành động, Hài hước, v.v.)
+    2. tone: Danh sách các phong cách dịch (Trang trọng, Huyền ảo, Hài hước, Kịch tính, Bí ẩn, v.v.)
+    3. humor_level: Mức độ hài hước từ 0 đến 10.
+
+    Trả về JSON đúng format.
+    {
+      "title_original": "${originalTitle}",
+      "title_vi": "${title}",
+      "genres": ["...", "..."],
+      "tone": ["...", "..."],
+      "humor_level": 0-10
+    }`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          title_original: { type: Type.STRING },
+          title_vi: { type: Type.STRING },
+          genres: { type: Type.ARRAY, items: { type: Type.STRING } },
+          tone: { type: Type.ARRAY, items: { type: Type.STRING } },
+          humor_level: { type: Type.NUMBER }
+        },
+        required: ["title_original", "title_vi", "genres", "tone", "humor_level"]
+      }
+    }
+  });
+  
+  return JSON.parse(response.text || "{}") as TranslationPreset;
 }
 
 export async function aiFixSegments(segments: SubtitleSegment[]): Promise<SubtitleSegment[]> {

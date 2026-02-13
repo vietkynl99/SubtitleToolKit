@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
 import { AnalysisResult, Severity } from '../types';
@@ -63,7 +62,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           <button 
             onClick={() => onFilterTrigger('safe')}
             className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'safe' ? 'bg-emerald-500/20 border-emerald-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+              activeFilter === 'safe' ? 'bg-emerald-500/20 border-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
             }`}
           >
             <span className="block text-2xl font-bold text-emerald-400">{data.cpsGroups.safe}</span>
@@ -72,7 +71,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           <button 
             onClick={() => onFilterTrigger('warning')}
             className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'warning' ? 'bg-amber-500/20 border-amber-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+              activeFilter === 'warning' ? 'bg-amber-500/20 border-amber-500 shadow-lg shadow-amber-500/10' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
             }`}
           >
             <span className="block text-2xl font-bold text-amber-400">{data.cpsGroups.warning}</span>
@@ -81,7 +80,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           <button 
             onClick={() => onFilterTrigger('critical')}
             className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'critical' ? 'bg-rose-500/20 border-rose-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+              activeFilter === 'critical' ? 'bg-rose-500/20 border-rose-500 shadow-lg shadow-rose-500/10' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
             }`}
           >
             <span className="block text-2xl font-bold text-rose-400">{data.cpsGroups.critical}</span>
@@ -90,7 +89,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           <button 
             onClick={() => onFilterTrigger('all')}
             className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500 shadow-lg' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/10' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
             }`}
           >
             <span className="block text-2xl font-bold text-slate-100">{data.totalLines}</span>
@@ -135,7 +134,6 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <Bar 
                   dataKey="count" 
                   radius={[3, 3, 0, 0]} 
-                  // Fix: Property 'range' does not exist on type 'BarRectangleItem'. Added type assertion for event payload.
                   onClick={(d: any) => onFilterTrigger({ type: 'range', min: d.min, max: d.max, label: d.range })}
                 >
                   {formattedHistogramData.map((entry, index) => {
@@ -162,7 +160,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
-      {/* CPS Statistics Box */}
+      {/* Statistics Box */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">CPS Statistics</h3>
         <div className="grid grid-cols-2 gap-2">
@@ -180,7 +178,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
-      {/* Generated Files List */}
+      {/* Generated Files */}
       {generatedFiles.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Generated Files</h3>
@@ -225,7 +223,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </section>
       )}
 
-      {/* File Tools Section */}
+      {/* File Tools */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">File Tools</h3>
         <div className="space-y-2">
@@ -249,7 +247,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
-      {/* Global Reset Section (v1.4.0) */}
+      {/* Global Reset */}
       <section className="pt-4 border-t border-slate-800/50">
         <button 
           onClick={onClearProject}
@@ -259,7 +257,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </button>
       </section>
 
-      {/* Issue Alerts */}
+      {/* Alerts */}
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Issue Alerts</h3>
         {data.tooFastLines > 0 && (

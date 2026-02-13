@@ -6,7 +6,8 @@ import {
   AppSettings, 
   ProjectHistory,
   Severity,
-  SplitMetadata
+  SplitMetadata,
+  TranslationPreset
 } from './types';
 import { 
   parseSRT, 
@@ -22,12 +23,16 @@ import {
 } from './services/subtitleLogic';
 import { 
   translateSegments, 
-  aiFixSegments 
+  aiFixSegments,
+  extractTitleFromFilename,
+  translateTitle,
+  analyzeTranslationStyle
 } from './services/geminiService';
 import Layout from './components/Layout';
 import SegmentList from './components/SegmentList';
 import AnalyzerPanel from './components/AnalyzerPanel';
 import SplitModal from './components/SplitModal';
+import PresetPage from './components/PresetPage';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
 const App: React.FC = () => {
@@ -50,6 +55,10 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
+  // v2.2.0 Preset State
+  const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
+  const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
+
   const dropzoneRef = useRef<HTMLLabelElement>(null);
 
   // Load history & settings on mount
@@ -71,7 +80,7 @@ const App: React.FC = () => {
     return analyzeSegments(segments, 'translatedText', settings.safeThreshold, settings.criticalThreshold);
   }, [segments, settings.safeThreshold, settings.criticalThreshold]);
 
-  // v1.7.0 Derived Duration for Header
+  // Derived Duration for Header
   const totalDurationStr = useMemo(() => {
     if (segments.length === 0) return '0m 0s';
     const last = segments[segments.length - 1];
@@ -101,6 +110,72 @@ const App: React.FC = () => {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     showToast("Đã copy tên file vào clipboard");
+  };
+
+  // v2.2.0 Preset Generation Flow - STRICTLY MANUAL
+  const handleGeneratePreset = async (fName: string) => {
+    if (!fName) return;
+    setIsPresetLoading(true);
+    try {
+      const extracted = await extractTitleFromFilename(fName);
+      let originalTitle = extracted;
+      let titleVi = extracted;
+      
+      const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
+      if (isChinese(extracted)) {
+        titleVi = await translateTitle(extracted);
+      }
+      
+      const preset = await analyzeTranslationStyle(titleVi, originalTitle);
+      setTranslationPreset(preset);
+      showToast("Analyze Complete: Creative DNA initialized.");
+    } catch (err) {
+      console.error("Preset generation failed", err);
+      showToast("Không thể phân tích phong cách tự động.");
+    } finally {
+      setIsPresetLoading(false);
+    }
+  };
+
+  const handleExportPreset = () => {
+    if (!translationPreset) return;
+    const blob = new Blob([JSON.stringify(translationPreset, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    // Requirement v2.2.0: [Preset] <OriginalTitleAfterClean>.json
+    a.href = url;
+    a.download = `[Preset] ${translationPreset.title_original}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportPreset = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        // Requirement v2.2.0 Validation: genres and tone are arrays
+        const isValid = json.title_original && 
+                        json.title_vi && 
+                        Array.isArray(json.genres) && 
+                        Array.isArray(json.tone) && 
+                        typeof json.humor_level === 'number';
+
+        if (isValid) {
+          setTranslationPreset(json);
+          showToast("Preset DNA successfully imported.");
+        } else {
+          showToast("File preset không hợp lệ hoặc sai Version.");
+        }
+      } catch (err) {
+        showToast("Lỗi khi đọc file preset.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   // Save history helper
@@ -147,11 +222,13 @@ const App: React.FC = () => {
       }
 
       if (settings.autoFixOnUpload) {
-        const fixed = parsed.map(s => ({ ...s, originalText: performLocalFix(s.originalText) }));
+        const fixed = parsed.map(s => ({ ...s, originalText: performLocalFix(s.originalText || "") }));
         setSegments(fixed);
       } else {
         setSegments(parsed);
       }
+      
+      setTranslationPreset(null);
       
       setProgress(100);
       setStatus('success');
@@ -165,12 +242,12 @@ const App: React.FC = () => {
     reader.readAsText(file);
   }, [settings.autoFixOnUpload]);
 
-  // Clear Project Implementation (v1.5.0)
   const performClear = async (skipFeedback = false) => {
     setStatus('clearing');
     await new Promise(resolve => setTimeout(resolve, 800));
     setSegments([]);
     setGeneratedFiles([]);
+    setTranslationPreset(null);
     setFileName('');
     setFileSize(0);
     setProgress(0);
@@ -180,7 +257,7 @@ const App: React.FC = () => {
     setShowClearModal(false);
     setActiveTab('upload');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!skipFeedback) showToast("Project đã được xóa.");
+    if (!skipFeedback) showToast("Project has been cleared.");
   };
 
   const handleClearProject = () => {
@@ -248,12 +325,8 @@ const App: React.FC = () => {
       await translateSegments(
         segments, 
         (startIndex, count) => {
-          // Set isProcessing to true for the current batch indices that are actually being translated
           setSegments(prev => {
             const next = [...prev];
-            // The service passes real start index of the batch relative to full array
-            // We set isProcessing for 'count' items starting at startIndex
-            // In translateSegments v1.2.0, count is batchSize (15) or remainder
             for (let i = startIndex; i < startIndex + count; i++) {
               if (next[i] && (!next[i].translatedText || next[i].translatedText === '')) {
                 next[i] = { ...next[i], isProcessing: true };
@@ -263,25 +336,16 @@ const App: React.FC = () => {
           });
         },
         (batchRelativeStart, translatedBatch) => {
-          setSegments(prev => {
-            const next = [...prev];
-            // We need to re-find which segments were actually translated if we want pinpoint accuracy
-            // but translateSegments already updates 'results' array which is returned at the end.
-            // The callback here is mainly for progress and immediate UI update.
-            // For simplicity, translateSegments already handles the object update.
-            return next;
-          });
-          
-          // v1.2.0: Progress based on items requiring translation
           const totalToTranslate = needingTranslation.length;
           const processedCount = batchRelativeStart + translatedBatch.length;
           setProgress(Math.floor((processedCount / totalToTranslate) * 100));
-        }
+        },
+        translationPreset || undefined
       );
       
       setProgress(100);
       setStatus('success');
-      showToast("Đã hoàn thành dịch toàn bộ.");
+      showToast("Dịch hoàn tất.");
     } catch (err) {
       setStatus('error');
       showToast("Có lỗi xảy ra khi dịch.");
@@ -298,7 +362,7 @@ const App: React.FC = () => {
       setSegments(fixed);
       setProgress(100);
       setStatus('success');
-      showToast("AI đã tối ưu xong.");
+      showToast("AI Fix completed.");
     } catch (err) {
       setStatus('error');
       showToast("Lỗi AI Fix.");
@@ -308,11 +372,11 @@ const App: React.FC = () => {
   const handleLocalFixAll = () => {
     const fixed = segments.map(s => ({
       ...s,
-      translatedText: performLocalFix(s.translatedText || s.originalText),
+      translatedText: performLocalFix(s.translatedText || s.originalText || ""),
       isModified: true
     }));
     setSegments(fixed);
-    showToast("Đã sửa nhanh định dạng.");
+    showToast("Sửa nhanh định dạng hoàn tất.");
   };
 
   const downloadSRT = (segs: SubtitleSegment[], name: string, metadata?: SplitMetadata) => {
@@ -367,14 +431,6 @@ const App: React.FC = () => {
     setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text, isModified: true } : s));
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   const updateThreshold = (key: 'safeThreshold' | 'criticalThreshold', val: number) => {
     const newSettings = { ...settings, [key]: val };
     if (key === 'safeThreshold' && val >= newSettings.criticalThreshold - 5) {
@@ -387,7 +443,6 @@ const App: React.FC = () => {
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
-      {/* Toast Notification */}
       {toast.visible && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 border border-slate-700 px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
           <p className="text-sm font-bold text-blue-400 flex items-center gap-2">
@@ -396,10 +451,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Confirmation Modals */}
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
             <h3 className="text-xl font-bold mb-3">Xác nhận xóa dự án?</h3>
             <p className="text-slate-400 text-sm mb-8 leading-relaxed">
               Bạn có chắc muốn xóa project hiện tại? Mọi thay đổi chưa export sẽ bị mất.
@@ -436,7 +490,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Global File Header */}
       {status === 'success' && segments.length > 0 && fileName && (
         <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-300 z-20">
           <div className="flex items-center gap-4 overflow-hidden">
@@ -460,7 +513,7 @@ const App: React.FC = () => {
           <div className="w-full max-w-2xl text-center">
             <h1 className="text-4xl font-bold text-slate-100 mb-2 tracking-tight">Subtitle Toolkit</h1>
             <p className="text-slate-400 mb-12">Dịch và tối ưu phụ đề chuyên nghiệp</p>
-            <label ref={dropzoneRef} className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'}`}>
+            <label ref={dropzoneRef} className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500 shadow-xl shadow-blue-500/10' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'}`}>
               <input type="file" accept=".srt" className="hidden" onChange={handleFileUpload} />
               <div className="p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6">{ICONS.Upload}</div>
               <p className="text-xl font-bold text-slate-200">Kéo thả file SRT hoặc click để chọn</p>
@@ -469,9 +522,22 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'preset' && (
+        <PresetPage 
+          preset={translationPreset}
+          isLoading={isPresetLoading}
+          onReAnalyze={() => handleGeneratePreset(fileName)}
+          onExport={handleExportPreset}
+          onImport={handleImportPreset}
+          onUpdatePreset={setTranslationPreset}
+          fileName={fileName}
+          totalSegments={segments.length}
+        />
+      )}
+
       {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Content Area: Wide Segment Card List (Requirement v1.8.0) */}
+          {/* Main Content Area: Wide Segment Card List */}
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
             <SegmentList 
               segments={filteredSegments} 
@@ -488,7 +554,7 @@ const App: React.FC = () => {
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                  <button onClick={handleTranslate} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-blue-500 disabled:opacity-50">
+                  <button onClick={handleTranslate} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-blue-500 disabled:opacity-50 shadow-lg shadow-blue-500/20">
                     {status === 'processing' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate} AI Dịch Toàn Bộ
                   </button>
                   <button onClick={handleAiFix} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 text-sm font-bold rounded-lg transition-all hover:bg-slate-700">
@@ -496,14 +562,14 @@ const App: React.FC = () => {
                   </button>
                   <button onClick={handleLocalFixAll} className="px-4 py-2 border border-slate-700 text-slate-400 text-sm font-bold rounded-lg transition-all hover:bg-slate-800">Sửa Nhanh</button>
                 </div>
-                <button onClick={handleExport} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-emerald-500">
+                <button onClick={handleExport} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-500/20 hover:bg-emerald-500">
                   {ICONS.Export} Xuất File SRT
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right Sidebar: Dashboard / Analyzer (Requirement v1.8.0) */}
+          {/* Right Sidebar: Dashboard / Analyzer */}
           <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900">
              <AnalyzerPanel 
                 data={analysis} 
@@ -522,7 +588,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* History & Settings */}
       {activeTab === 'history' && (
         <div className="flex-1 p-12 overflow-y-auto">
           <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
@@ -549,12 +614,32 @@ const App: React.FC = () => {
             <div>
               <h3 className="font-bold mb-2">Safe Threshold</h3>
               <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
-              <span className="text-blue-400 font-bold">{settings.safeThreshold} CPS</span>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-blue-400 font-bold">{settings.safeThreshold} CPS</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Low Speed</span>
+              </div>
             </div>
             <div>
               <h3 className="font-bold mb-2">Critical Threshold</h3>
               <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" />
-              <span className="text-rose-400 font-bold">{settings.criticalThreshold} CPS</span>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-rose-400 font-bold">{settings.criticalThreshold} CPS</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed</span>
+              </div>
+            </div>
+            <div className="pt-6 border-t border-slate-800">
+               <label className="flex items-center gap-4 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={settings.autoFixOnUpload}
+                    onChange={(e) => setSettings({...settings, autoFixOnUpload: e.target.checked})}
+                    className="w-5 h-5 bg-slate-800 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 transition-all"
+                  />
+                  <div>
+                    <span className="block font-bold text-slate-200 group-hover:text-white transition-all">Auto-fix on Upload</span>
+                    <span className="text-xs text-slate-500">Tự động sửa lỗi định dạng ngay khi nạp file.</span>
+                  </div>
+               </label>
             </div>
           </div>
         </div>
