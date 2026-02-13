@@ -32,6 +32,8 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [fileName, setFileName] = useState<string>('');
+  const [fileSize, setFileSize] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
 
   // Derived state
   const analysis = useMemo(() => analyzeSegments(segments, 'translatedText'), [segments]);
@@ -56,12 +58,22 @@ const App: React.FC = () => {
     localStorage.setItem('subtitle_history', JSON.stringify(updated));
   }, [history]);
 
-  // Handlers
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Consolidated File Processing
+  const processFile = useCallback((file: File) => {
+    if (!file.name.toLowerCase().endsWith('.srt')) {
+      alert('Vui lòng chọn file định dạng .srt');
+      setStatus('error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Dung lượng file vượt quá 5MB');
+      setStatus('error');
+      return;
+    }
 
     setFileName(file.name);
+    setFileSize(file.size);
     setStatus('processing');
     setProgress(20);
 
@@ -70,6 +82,12 @@ const App: React.FC = () => {
       const content = event.target?.result as string;
       const parsed = parseSRT(content);
       
+      if (parsed.length === 0) {
+        alert('File không có segment hợp lệ hoặc sai định dạng');
+        setStatus('error');
+        return;
+      }
+
       if (settings.autoFixOnUpload) {
         const fixed = parsed.map(s => ({ ...s, originalText: performLocalFix(s.originalText) }));
         setSegments(fixed);
@@ -81,7 +99,34 @@ const App: React.FC = () => {
       setStatus('success');
       setActiveTab('editor');
     };
+    reader.onerror = () => {
+      setStatus('error');
+      alert('Lỗi khi đọc file');
+    };
     reader.readAsText(file);
+  }, [settings.autoFixOnUpload]);
+
+  // Handlers
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   const handleTranslate = async () => {
@@ -132,42 +177,84 @@ const App: React.FC = () => {
     a.download = `optimized_${fileName || 'subtitles.srt'}`;
     a.click();
     URL.revokeObjectURL(url);
+    saveToHistory(segments, fileName || 'Exported Project');
   };
 
   const updateSegmentText = (id: number, text: string) => {
     setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text, isModified: true } : s));
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50">
+        <div 
+          className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50 transition-colors duration-300"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <div className="w-full max-w-2xl text-center">
-            <div className="mb-8 flex justify-center">
-              <div className="p-6 bg-blue-600/10 rounded-full border-2 border-dashed border-blue-500/30 animate-pulse">
+            <h1 className="text-4xl font-bold text-slate-100 mb-2 tracking-tight">Subtitle Toolkit</h1>
+            <p className="text-slate-400 mb-12 max-w-md mx-auto leading-relaxed">
+              Dịch và tối ưu phụ đề chuyên nghiệp với sự hỗ trợ của AI
+            </p>
+
+            <label 
+              className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer overflow-hidden ${
+                isDragging 
+                  ? 'bg-blue-600/10 border-blue-500 scale-[1.02] shadow-2xl shadow-blue-500/10' 
+                  : 'bg-slate-900/40 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60'
+              }`}
+            >
+              <input type="file" accept=".srt" className="hidden" onChange={handleFileUpload} />
+              
+              <div className={`p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6 transition-transform duration-300 ${isDragging ? 'scale-110 animate-bounce' : 'group-hover:scale-110'}`}>
                 {ICONS.Upload}
               </div>
-            </div>
-            <h1 className="text-4xl font-bold text-slate-100 mb-4 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-8 max-w-md mx-auto leading-relaxed">
-              Upload your Chinese SRT files to begin the translation and optimization process.
-            </p>
-            
-            <label className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl cursor-pointer transition-all shadow-xl shadow-blue-500/20 active:scale-95">
-              {ICONS.Upload}
-              <span>Choose SRT File</span>
-              <input type="file" accept=".srt" className="hidden" onChange={handleFileUpload} />
+              
+              <div className="space-y-2">
+                <p className="text-xl font-bold text-slate-200">
+                  {isDragging ? 'Thả file để tải lên' : 'Kéo thả file SRT vào đây'}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Hoặc click để chọn file từ máy tính
+                </p>
+              </div>
+
+              {status === 'processing' && (
+                <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-blue-400 font-bold">Đang xử lý file...</p>
+                  <div className="w-full max-w-xs bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                    <div className="bg-blue-500 h-full animate-pulse transition-all" style={{ width: `${progress}%` }}></div>
+                  </div>
+                </div>
+              )}
             </label>
+
+            <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Định dạng .SRT</span>
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tối đa 5MB</span>
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tự động nhận diện Encoding</span>
+            </div>
             
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
               {[
-                { title: 'AI Translation', desc: 'Context-aware Chinese to Vietnamese translation.' },
-                { title: 'Smart Analytics', desc: 'Real-time CPS and line-length monitoring.' },
-                { title: 'Auto Optimization', desc: 'Fix formatting and timing issues instantly.' }
+                { title: 'Dịch AI', desc: 'Sử dụng Gemini 3 để dịch sát nghĩa, mượt mà.' },
+                { title: 'Phân tích CPS', desc: 'Kiểm soát tốc độ đọc của khán giả thời gian thực.' },
+                { title: 'Tối ưu hoá', desc: 'Tự động sửa lỗi format và ngắt dòng hợp lý.' }
               ].map((feature, idx) => (
-                <div key={idx} className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl">
-                  <h3 className="text-blue-400 font-bold mb-2">{feature.title}</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">{feature.desc}</p>
+                <div key={idx} className="bg-slate-900/30 border border-slate-800/50 p-6 rounded-2xl">
+                  <h3 className="text-blue-400 font-bold mb-2 text-sm">{feature.title}</h3>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">{feature.desc}</p>
                 </div>
               ))}
             </div>
@@ -192,10 +279,12 @@ const App: React.FC = () => {
               {selectedSegment ? (
                 <div className="h-full flex flex-col">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-bold flex items-center gap-3">
-                      <span className="text-slate-500 font-mono">Segment #{selectedSegment.id}</span>
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-xs text-slate-400 font-mono">{selectedSegment.startTime} - {selectedSegment.endTime}</span>
-                    </h2>
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-lg font-bold flex items-center gap-3">
+                        <span className="text-slate-500 font-mono">Segment #{selectedSegment.id}</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-xs text-slate-400 font-mono">{selectedSegment.startTime} - {selectedSegment.endTime}</span>
+                      </h2>
+                    </div>
                     <div className="flex gap-2">
                        <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors" title="Save changes">
                          {ICONS.Save}
@@ -225,7 +314,11 @@ const App: React.FC = () => {
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-slate-600">
                   <div className="mb-4 text-slate-800">{ICONS.File}</div>
-                  <p className="text-sm font-medium">Select a segment to start editing</p>
+                  <p className="text-sm font-medium">Chọn một segment để bắt đầu biên tập</p>
+                  <div className="mt-8 p-4 bg-slate-900/50 border border-slate-800 rounded-xl max-w-xs text-center">
+                    <p className="text-xs text-slate-500">File: <span className="text-slate-400">{fileName}</span></p>
+                    <p className="text-xs text-slate-500 mt-1">Size: <span className="text-slate-400">{formatSize(fileSize)}</span></p>
+                  </div>
                 </div>
               )}
             </div>
@@ -239,8 +332,8 @@ const App: React.FC = () => {
                     disabled={status === 'processing'}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all"
                   >
-                    {status === 'processing' ? ICONS.Retry : ICONS.Translate}
-                    AI Translate
+                    {status === 'processing' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate}
+                    AI Dịch Toàn Bộ
                   </button>
                   <button 
                     onClick={handleAiFix}
@@ -248,13 +341,13 @@ const App: React.FC = () => {
                     className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-lg transition-all"
                   >
                     {ICONS.Fix}
-                    AI Refine
+                    AI Tối Ưu
                   </button>
                   <button 
                     onClick={handleLocalFixAll}
                     className="flex items-center gap-2 px-4 py-2 border border-slate-700 hover:bg-slate-800 text-slate-400 text-sm font-bold rounded-lg transition-all"
                   >
-                    Auto Format
+                    Sửa Nhanh
                   </button>
                 </div>
                 <button 
@@ -262,7 +355,7 @@ const App: React.FC = () => {
                   className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition-all"
                 >
                   {ICONS.Export}
-                  Export SRT
+                  Xuất File SRT
                 </button>
               </div>
             </div>
@@ -277,10 +370,10 @@ const App: React.FC = () => {
 
       {activeTab === 'history' && (
         <div className="flex-1 p-12 overflow-y-auto">
-          <h2 className="text-3xl font-bold mb-8">Recent Projects</h2>
+          <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
           {history.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 p-12 rounded-3xl text-center">
-              <p className="text-slate-500 italic">No project history found yet.</p>
+              <p className="text-slate-500 italic">Chưa có lịch sử dự án nào.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -288,7 +381,17 @@ const App: React.FC = () => {
                 <div key={item.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl hover:border-blue-500/30 transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <div className="p-3 bg-blue-600/10 rounded-xl text-blue-500">{ICONS.File}</div>
-                    <button className="text-slate-600 hover:text-rose-500 transition-colors">{ICONS.Delete}</button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const updated = history.filter(h => h.id !== item.id);
+                        setHistory(updated);
+                        localStorage.setItem('subtitle_history', JSON.stringify(updated));
+                      }}
+                      className="text-slate-600 hover:text-rose-500 transition-colors"
+                    >
+                      {ICONS.Delete}
+                    </button>
                   </div>
                   <h3 className="font-bold text-slate-100 mb-1 group-hover:text-blue-400 transition-colors">{item.name}</h3>
                   <p className="text-xs text-slate-500 mb-4">{new Date(item.timestamp).toLocaleString()}</p>
@@ -302,7 +405,7 @@ const App: React.FC = () => {
                       }}
                       className="text-xs font-bold text-blue-400 hover:underline"
                     >
-                      Load Project
+                      Tải Dự Án
                     </button>
                   </div>
                 </div>
@@ -314,11 +417,11 @@ const App: React.FC = () => {
 
       {activeTab === 'settings' && (
         <div className="flex-1 p-12 max-w-4xl">
-          <h2 className="text-3xl font-bold mb-8">System Settings</h2>
+          <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
           <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden divide-y divide-slate-800">
             <div className="p-8">
-              <h3 className="font-bold mb-2">CPS (Characters Per Second)</h3>
-              <p className="text-sm text-slate-500 mb-6">Set the global threshold for subtitle speed warnings.</p>
+              <h3 className="font-bold mb-2">Ngưỡng CPS (Characters Per Second)</h3>
+              <p className="text-sm text-slate-500 mb-6">Thiết lập ngưỡng tốc độ đọc trung bình cho phụ đề.</p>
               <div className="flex items-center gap-6">
                 <input 
                   type="range" min="15" max="35" 
@@ -332,8 +435,8 @@ const App: React.FC = () => {
 
             <div className="p-8 flex items-center justify-between">
               <div>
-                <h3 className="font-bold mb-1">Auto-Fix on Upload</h3>
-                <p className="text-sm text-slate-500">Automatically remove double spaces and fix simple formatting.</p>
+                <h3 className="font-bold mb-1">Tự động sửa lỗi khi Upload</h3>
+                <p className="text-sm text-slate-500">Tự động xóa khoảng trắng thừa và ngắt dòng cơ bản.</p>
               </div>
               <button 
                 onClick={() => setSettings({...settings, autoFixOnUpload: !settings.autoFixOnUpload})}
@@ -344,33 +447,38 @@ const App: React.FC = () => {
             </div>
 
             <div className="p-8">
-              <h3 className="font-bold mb-2">AI Model Selection</h3>
+              <h3 className="font-bold mb-2">Lựa chọn AI Model</h3>
               <div className="grid grid-cols-2 gap-4 mt-4">
                 <button 
                   onClick={() => setSettings({...settings, aiMode: 'fast'})}
                   className={`p-4 rounded-xl border transition-all text-left ${settings.aiMode === 'fast' ? 'bg-blue-600/10 border-blue-500 text-blue-100' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}
                 >
-                  <div className="font-bold text-sm mb-1">Gemini Flash (Default)</div>
-                  <div className="text-[10px] opacity-70 italic">Optimized for speed & low cost</div>
+                  <div className="font-bold text-sm mb-1">Gemini 3 Flash (Mặc định)</div>
+                  <div className="text-[10px] opacity-70 italic">Nhanh chóng, tiết kiệm token</div>
                 </button>
                 <button 
                   onClick={() => setSettings({...settings, aiMode: 'pro'})}
                   className={`p-4 rounded-xl border transition-all text-left ${settings.aiMode === 'pro' ? 'bg-blue-600/10 border-blue-500 text-blue-100' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600'}`}
                 >
-                  <div className="font-bold text-sm mb-1">Gemini Pro</div>
-                  <div className="text-[10px] opacity-70 italic">Better nuance & translation quality</div>
+                  <div className="font-bold text-sm mb-1">Gemini 3 Pro</div>
+                  <div className="text-[10px] opacity-70 italic">Chất lượng dịch và văn phong tốt hơn</div>
                 </button>
               </div>
             </div>
           </div>
           
           <div className="mt-12 p-8 bg-rose-500/5 border border-rose-500/10 rounded-3xl">
-             <h3 className="text-rose-400 font-bold mb-2">Danger Zone</h3>
+             <h3 className="text-rose-400 font-bold mb-2">Vùng nguy hiểm</h3>
              <button 
-               onClick={() => { localStorage.removeItem('subtitle_history'); setHistory([]); }}
+               onClick={() => { 
+                 if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử?')) {
+                   localStorage.removeItem('subtitle_history'); 
+                   setHistory([]); 
+                 }
+               }}
                className="text-xs font-bold text-rose-500 hover:bg-rose-500 hover:text-white px-4 py-2 rounded-lg border border-rose-500/20 transition-all"
              >
-               Clear All Project History
+               Xóa Toàn Bộ Lịch Sử Dự Án
              </button>
           </div>
         </div>
