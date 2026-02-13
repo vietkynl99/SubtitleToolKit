@@ -5,176 +5,111 @@ Last Updated: 2026-02-13
 
 ---
 
-# 1. Overview
+# 1. Global Layout Structure
 
-Subtitle Toolkit là web app dùng để:
+Ứng dụng bao gồm:
 
-- Upload file SRT tiếng Trung
-- Phân tích tốc độ (CPS)
-- Dịch sang tiếng Việt
-- Tối ưu subtitle
-- Fix lỗi (local + AI)
+- Sidebar Navigation Menu
+- Global File Header
+- Clear Project Button
+- Global Progress Bar
+- Main Content Area
+
+---
+
+# 2. Sidebar Navigation Structure (CRITICAL – DO NOT MERGE)
+
+Menu phải có cấu trúc PHẲNG (flat structure).
+
+Không có menu lồng nhau.
+
+Thứ tự bắt buộc:
+
+1. Upload
+2. Translation Style
+3. File Tools
+4. Editor
+5. Settings
+
+---
+
+# 3. Translation Style
+
+Translation Style là một menu độc lập.
+
+❌ Không nằm trong File Tools  
+❌ Không phải là tab của File Tools  
+❌ Không được render chung container với Split SRT  
+
+Khi click:
+
+→ Render nội dung của Translation Style module
+
+---
+
+# 4. File Tools
+
+File Tools là một menu độc lập.
+
+Hiện tại File Tools chỉ chứa 1 công cụ:
+
 - Split SRT
-- Export file kết quả
 
-Ứng dụng chỉ cho phép tồn tại **1 project active tại một thời điểm**.
+Trong trang File Tools:
 
----
+- Hiển thị tiêu đề: "File Tools"
+- Bên dưới hiển thị tool: Split SRT
 
-# 2. Global Application State
-
-Các trạng thái chính:
-
-- idle
-- uploading
-- analyzing
-- success
-- clearing
-- error
-
-State Flow chuẩn:
-
-idle  
-→ uploading  
-→ analyzing  
-→ success  
-
-Khi clear:
-
-success  
-→ clearing  
-→ idle  
-
-Khi replace file:
-
-success  
-→ confirm-replace  
-→ clearing  
-→ uploading  
-→ analyzing  
-→ success  
+Không được hiển thị Translation Style ở đây.
 
 ---
 
-# 3. Single Project Rule
+# 5. Clear Current Project Position
 
-Không được tồn tại 2 project đồng thời.
+Clear Project:
 
-Khi upload file mới:
+- Không nằm trong Sidebar Menu
+- Không phải là 1 menu item
 
-- Project cũ phải bị destroy hoàn toàn
-- Không giữ segment
-- Không giữ analyzer data
-- Không giữ histogram
-- Không giữ split files
-- Không giữ AI cache
+Vị trí:
 
----
-
-# 4. Global File Header
-
-Hiển thị khi projectState === success.
-
-Bắt buộc hiển thị:
-- Tên file
-
-Khuyến nghị:
-- Tổng segment
-- Tổng thời lượng
-- Encoding
-
-Ví dụ:
-
-movie_ep1.srt  
-3311 segments | 120m 24s | UTF-8
-
-Khi Clear:
-activeFileName = null  
-Header phải biến mất.
+- Nằm phía trên Progress Bar
+- Hiển thị khi projectState != idle
 
 ---
 
-# 5. Segment List Global Rule (NEW v1.7.0)
+# 6. Navigation Rules (Strict)
 
-Segment List phải hiển thị:
+Mỗi menu:
 
-- Original text (CN)
-- Translation (VN) nếu có
+- Có route riêng
+- Có component riêng
+- Không share layout content
 
-Không được yêu cầu click từng segment để xem bản dịch.
+Sai cấu trúc nếu:
 
-Nếu translation rỗng:
-- Không hiển thị placeholder.
-- Không hiển thị text tạm.
-
-Nếu translation tồn tại:
-- Hiển thị nguyên văn nội dung đã lưu.
-
-Việc render translation phải realtime khi:
-- AI dịch xong
-- User chỉnh sửa
-- AI Fix thay đổi nội dung
+- Translation Style và Split SRT chung 1 container
+- Hoặc File Tools có tab Translation Style
 
 ---
 
-# 6. Clear Current Project
+# 7. Route Mapping Example
 
-Khi Confirm Clear:
-
-1. projectState → clearing
-2. Reset:
-   - segments = []
-   - analyzerData = null
-   - histogram = null
-   - translationCache = null
-   - splitFiles = []
-   - progress = 0
-3. activeFileName = null
-4. Unmount Editor / Analyzer / Histogram / Split
-5. Mount Upload View
-6. Scroll top
-7. Toast: "Project đã được xóa"
-
-Cuối cùng:
-projectState → idle
+/upload  
+/translation-style  
+/file-tools  
+/editor  
+/settings  
 
 ---
 
-# 7. Replace File Rule
+# 8. Không được làm
 
-Nếu đã có project active và user upload file mới:
+❌ Không lồng Translation Style vào File Tools  
+❌ Không tạo tab chung giữa 2 module  
+❌ Không render conditional tab trong cùng 1 page  
 
-Phải hiển thị confirm modal.
-
-Nếu Confirm:
-
-1. Clear project
-2. projectState → uploading
-3. Parse file mới
-4. Analyze
-5. projectState → success
-6. Set activeFileName = file mới
-
----
-
-# 8. Settings Persistence
-
-Clear không được reset:
-- CPS threshold
-- AI model preference
-- History
-- Saved settings
-
----
-
-# 9. Error Handling
-
-Nếu upload hoặc parse lỗi:
-
-projectState → error
-
-Hiển thị message rõ ràng  
-Cho phép retry
+Cấu trúc phải tách biệt hoàn toàn.
 
 ---
 

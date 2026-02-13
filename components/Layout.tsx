@@ -6,14 +6,17 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   progress: number;
+  hasProject: boolean;
+  onClearProject: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, progress }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, progress, hasProject, onClearProject }) => {
+  // Requirement 2: Mandatory Flat Menu Order v1.7.0
   const menuItems = [
     { id: 'upload', label: 'Upload', icon: ICONS.Upload },
-    { id: 'preset', label: 'Translation Preset', icon: ICONS.Fix },
+    { id: 'translation-style', label: 'Translation Style', icon: ICONS.Fix }, // Independent Menu
+    { id: 'file-tools', label: 'File Tools', icon: ICONS.Split }, // Now just File Tools (Split)
     { id: 'editor', label: 'Editor', icon: ICONS.File },
-    { id: 'history', label: 'History', icon: ICONS.History },
     { id: 'settings', label: 'Settings', icon: ICONS.Settings },
   ];
 
@@ -26,7 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
           <span className="hidden md:block font-bold text-lg tracking-tight">Subtitle Toolkit</span>
         </div>
         
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -43,17 +46,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Progress</span>
-            <span className="text-xs text-blue-400 font-bold">{progress}%</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-            <div 
-              className="bg-blue-500 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        {/* Sidebar Footer Area */}
+        <div className="p-4 border-t border-slate-800 space-y-4">
+          {/* Requirement 3: Clear Current Project button above Progress Bar */}
+          {hasProject && (
+            <button 
+              onClick={onClearProject}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all border border-rose-500/20 group"
+            >
+              <span className="transition-transform group-hover:rotate-90">{ICONS.Delete}</span>
+              <span className="hidden md:block">Clear Project</span>
+            </button>
+          )}
+
+          {/* Requirement 4: Global Progress Bar */}
+          {hasProject && progress > 0 && (
+            <div className="animate-in fade-in duration-500">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Progress</span>
+                <span className="text-[10px] text-blue-400 font-bold">{progress}%</span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-blue-500 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 

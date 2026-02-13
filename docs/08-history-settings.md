@@ -1,77 +1,52 @@
-# History & Settings
+# FEATURE: Settings
 
-Version: 1.2.0  
+Version: 1.6.0  
 Last Updated: 2026-02-13  
 
 ---
 
-# 1. Settings Persistence
+# 1. Mục tiêu
 
-Các setting sau phải được lưu persistent:
+Cho phép người dùng cấu hình các thông số hệ thống để tối ưu hóa quy trình dịch và phân tích.
 
-- CPS threshold
-- AI model preference
-- Default optimization config
-
-Có thể dùng:
-
-- LocalStorage
-- IndexedDB
+❌ Không còn tính năng History.
+❌ Không lưu project history vào LocalStorage.
 
 ---
 
-# 2. CPS Threshold Default
+# 2. CPS Threshold Settings
 
-Default:
+Cho phép thay đổi ngưỡng:
 
-safe: <25  
+safe: mặc định <25  
 warning: 25–40  
 critical: >40  
 
-User có thể thay đổi trong Settings.
+Analyzer phải đọc ngưỡng từ Settings này để tính toán Severity.
 
 ---
 
-# 3. Clear Project Behavior
+# 3. Auto Fix Toggle
 
-Khi Clear Project:
+Toggle bật/tắt:
 
-Phải xóa:
-
-- Project hiện tại trong memory
-- Segment list
-- Analyzer data
-- Histogram
-- Split files
-- AI temporary result cache
-
-Không được xóa:
-
-- Settings
-- CPS threshold
-- AI preference
-- History saved projects
+- Local Auto Fix on Upload: Tự động dọn dẹp khoảng trắng và ngắt dòng cơ bản khi nạp file.
 
 ---
 
-# 4. Auto Save
+# 4. Optimization Mode
 
-Nếu Auto Save bật:
+Chọn chế độ ưu tiên cho AI:
 
-- Clear phải xóa snapshot hiện tại
-- Pero không xóa version backup trước đó
+- Safe Mode: Giữ nghĩa tối đa, chỉ sửa khi CPS quá cao.
+- Aggressive Mode: Ưu tiên tốc độ đọc, ép CPS về mức an toàn.
 
 ---
 
-# 5. History (Future Expand)
+# 5. Không được làm
 
-Có thể mở rộng:
-
-- Lưu project theo version
-- Restore project cũ
-- Compare version
-
-Hiện tại chưa bắt buộc implement.
+❌ Không lưu lịch sử project (Để bảo mật dữ liệu khách hàng).
+❌ Không hiển thị danh sách file đã mở trước đó.
 
 ---
 

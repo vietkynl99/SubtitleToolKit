@@ -4,7 +4,6 @@ import {
   SubtitleSegment, 
   AnalysisResult, 
   AppSettings, 
-  ProjectHistory,
   Severity,
   SplitMetadata,
   TranslationPreset
@@ -31,7 +30,7 @@ import {
 import Layout from './components/Layout';
 import SegmentList from './components/SegmentList';
 import AnalyzerPanel from './components/AnalyzerPanel';
-import SplitModal from './components/SplitModal';
+import FileToolsPage from './components/FileToolsPage';
 import PresetPage from './components/PresetPage';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
@@ -42,30 +41,25 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<number>(0);
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [history, setHistory] = useState<ProjectHistory[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<any>('all');
-  const [showSplitModal, setShowSplitModal] = useState<boolean>(false);
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
-  // v2.2.0 Preset State
+  // Translation Style DNA State
   const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
   const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
 
   const dropzoneRef = useRef<HTMLLabelElement>(null);
 
-  // Load history & settings on mount
+  // Load settings on mount
   useEffect(() => {
-    const savedHistory = localStorage.getItem('subtitle_history');
-    if (savedHistory) setHistory(JSON.parse(savedHistory));
-    
     const savedSettings = localStorage.getItem('subtitle_settings');
     if (savedSettings) setSettings(JSON.parse(savedSettings));
   }, []);
@@ -112,7 +106,7 @@ const App: React.FC = () => {
     showToast("Đã copy tên file vào clipboard");
   };
 
-  // v2.2.0 Preset Generation Flow - STRICTLY MANUAL
+  // DNA Style Generation
   const handleGeneratePreset = async (fName: string) => {
     if (!fName) return;
     setIsPresetLoading(true);
@@ -142,8 +136,6 @@ const App: React.FC = () => {
     const blob = new Blob([JSON.stringify(translationPreset, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    
-    // Requirement v2.2.0: [Preset] <OriginalTitleAfterClean>.json
     a.href = url;
     a.download = `[Preset] ${translationPreset.title_original}.json`;
     a.click();
@@ -157,7 +149,6 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        // Requirement v2.2.0 Validation: genres and tone are arrays
         const isValid = json.title_original && 
                         json.title_vi && 
                         Array.isArray(json.genres) && 
@@ -177,19 +168,6 @@ const App: React.FC = () => {
     reader.readAsText(file);
     e.target.value = '';
   };
-
-  // Save history helper
-  const saveToHistory = useCallback((segs: SubtitleSegment[], name: string) => {
-    const newEntry: ProjectHistory = {
-      id: Date.now().toString(),
-      name,
-      timestamp: Date.now(),
-      segments: segs
-    };
-    const updated = [newEntry, ...history].slice(0, 10);
-    setHistory(updated);
-    localStorage.setItem('subtitle_history', JSON.stringify(updated));
-  }, [history]);
 
   // Consolidated File Processing
   const processFile = useCallback((file: File) => {
@@ -229,7 +207,6 @@ const App: React.FC = () => {
       }
       
       setTranslationPreset(null);
-      
       setProgress(100);
       setStatus('success');
       setActiveTab('editor');
@@ -260,13 +237,8 @@ const App: React.FC = () => {
     if (!skipFeedback) showToast("Project has been cleared.");
   };
 
-  const handleClearProject = () => {
-    const hasModifications = segments.some(s => s.isModified);
-    if (hasModifications || segments.length > 0) {
-      setShowClearModal(true);
-    } else {
-      performClear();
-    }
+  const handleClearProjectRequest = () => {
+    setShowClearModal(true);
   };
 
   const handleReplaceConfirm = async () => {
@@ -311,7 +283,6 @@ const App: React.FC = () => {
 
   const handleTranslate = async () => {
     if (segments.length === 0) return;
-    
     const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
     if (needingTranslation.length === 0) {
       showToast("Tất cả segment đã có bản dịch.");
@@ -320,7 +291,6 @@ const App: React.FC = () => {
 
     setStatus('processing');
     setProgress(5);
-    
     try {
       await translateSegments(
         segments, 
@@ -342,7 +312,6 @@ const App: React.FC = () => {
         },
         translationPreset || undefined
       );
-      
       setProgress(100);
       setStatus('success');
       showToast("Dịch hoàn tất.");
@@ -356,7 +325,6 @@ const App: React.FC = () => {
     if (segments.length === 0) return;
     setStatus('processing');
     setProgress(50);
-    
     try {
       const fixed = await aiFixSegments(segments);
       setSegments(fixed);
@@ -392,12 +360,10 @@ const App: React.FC = () => {
 
   const handleExport = () => {
     downloadSRT(segments, `optimized_${fileName || 'subtitles.srt'}`);
-    saveToHistory(segments, fileName || 'Exported Project');
   };
 
   const handleSplitConfirm = async (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => {
     await new Promise(resolve => setTimeout(resolve, 600));
-
     let results: SplitResult[] = [];
     if (mode === 'duration') results = splitByDuration(segments, value as number, fileName, includeMetadata);
     else if (mode === 'count') results = splitByCount(segments, value as number, fileName, includeMetadata);
@@ -406,6 +372,7 @@ const App: React.FC = () => {
 
     if (results.length > 0) {
       setGeneratedFiles(prev => [...prev, ...results]);
+      showToast(`Đã chia file thành ${results.length} phần.`);
     }
   };
 
@@ -419,6 +386,7 @@ const App: React.FC = () => {
       setSegments(file.segments);
       setSelectedId(null);
       setFilter('all');
+      setActiveTab('editor');
       showToast(`Đã nạp file: ${file.fileName}`);
     }
   };
@@ -442,7 +410,13 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={setActiveTab} 
+      progress={progress}
+      hasProject={segments.length > 0}
+      onClearProject={handleClearProjectRequest}
+    >
       {toast.visible && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 border border-slate-700 px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
           <p className="text-sm font-bold text-blue-400 flex items-center gap-2">
@@ -481,15 +455,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {showSplitModal && (
-        <SplitModal 
-          onClose={() => setShowSplitModal(false)} 
-          onConfirm={handleSplitConfirm} 
-          totalSegments={segments.length} 
-          segments={segments}
-        />
-      )}
-
       {status === 'success' && segments.length > 0 && fileName && (
         <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-300 z-20">
           <div className="flex items-center gap-4 overflow-hidden">
@@ -499,9 +464,9 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{segments.length} segments</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span>{totalDurationStr}</span>
+                <span>{analysis.avgCPS.toFixed(1)} Avg CPS</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span>UTF-8</span>
+                <span>{totalDurationStr}</span>
               </div>
             </div>
           </div>
@@ -522,7 +487,8 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'preset' && (
+      {/* v1.7.0 Independent Translation Style Menu */}
+      {activeTab === 'translation-style' && (
         <PresetPage 
           preset={translationPreset}
           isLoading={isPresetLoading}
@@ -535,9 +501,22 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* v1.7.0 Independent File Tools Menu (Now just Split) */}
+      {activeTab === 'file-tools' && (
+        <FileToolsPage 
+          fileName={fileName}
+          totalSegments={segments.length}
+          segments={segments}
+          onSplitConfirm={handleSplitConfirm}
+          generatedFiles={generatedFiles}
+          onDownloadGenerated={handleDownloadGenerated}
+          onLoadGenerated={handleLoadGenerated}
+          onDeleteGenerated={handleDeleteGenerated}
+        />
+      )}
+
       {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Content Area: Wide Segment Card List */}
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
             <SegmentList 
               segments={filteredSegments} 
@@ -549,8 +528,6 @@ const App: React.FC = () => {
               safeThreshold={settings.safeThreshold}
               criticalThreshold={settings.criticalThreshold}
             />
-
-            {/* Bottom Actions Bar */}
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
@@ -568,8 +545,6 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-
-          {/* Right Sidebar: Dashboard / Analyzer */}
           <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900">
              <AnalyzerPanel 
                 data={analysis} 
@@ -577,8 +552,8 @@ const App: React.FC = () => {
                 onFilterTrigger={setFilter} 
                 safeThreshold={settings.safeThreshold}
                 criticalThreshold={settings.criticalThreshold}
-                onOpenSplit={() => setShowSplitModal(true)}
-                onClearProject={handleClearProject}
+                onOpenSplit={() => setActiveTab('file-tools')}
+                onClearProject={handleClearProjectRequest}
                 generatedFiles={generatedFiles}
                 onDownloadGenerated={handleDownloadGenerated}
                 onLoadGenerated={handleLoadGenerated}
@@ -588,29 +563,10 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'history' && (
-        <div className="flex-1 p-12 overflow-y-auto">
-          <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
-          {history.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 p-12 rounded-3xl text-center text-slate-500">Chưa có lịch sử.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {history.map(item => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl hover:border-blue-500/30 transition-all">
-                  <h3 className="font-bold text-slate-100 mb-1">{item.name}</h3>
-                  <p className="text-xs text-slate-500 mb-4">{new Date(item.timestamp).toLocaleString()}</p>
-                  <button onClick={() => { setSegments(item.segments); setFileName(item.name); setActiveTab('editor'); setStatus('success'); }} className="text-xs font-bold text-blue-400 hover:underline">Tải Dự Án</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {activeTab === 'settings' && (
         <div className="flex-1 p-12 max-w-4xl overflow-y-auto">
-          <h2 className="text-3xl font-bold mb-8">Cài đặt</h2>
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-8 shadow-xl">
+          <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
+          <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl">
             <div>
               <h3 className="font-bold mb-2">Safe Threshold</h3>
               <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
