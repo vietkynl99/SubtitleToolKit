@@ -1,56 +1,51 @@
 # FEATURE: Subtitle Analyzer
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Last Updated:** 2026-02-13  
 **Changelog:**
-- Thêm tích hợp trạng thái phân loại với Editor Filter.
-- Chuẩn hóa level: Safe / Warning / Critical.
+- CPS severity không còn cố định.
+- Analyzer đọc threshold từ Settings.
+- Default thresholds: 25 / 40.
 
 ## 1. Mục tiêu
-Định lượng chất lượng phụ đề và cung cấp trạng thái phân loại cho từng segment để phục vụ filter trong Editor.
+Định lượng chất lượng phụ đề và cung cấp trạng thái phân loại cho từng segment để phục vụ filter trong Editor dựa trên các ngưỡng có thể cấu hình.
 
 ## 2. Logic Requirements
-### Công thức CPS
-`Số ký tự / (Thời gian kết thúc - Thời gian bắt đầu)`
+### CPS Threshold Configuration
+Analyzer phải lấy 2 giá trị từ Settings:
+- `safeThreshold` (Mặc định: 25)
+- `criticalThreshold` (Mặc định: 40)
 
-### Phân loại CPS & Severity Level
-| CPS | Level | Màu | Ý nghĩa |
-| :--- | :--- | :--- | :--- |
-| < 20 | Safe | Xanh | An toàn |
-| 20–25 | Warning | Vàng | Cảnh báo |
-| > 25 | Critical | Đỏ | Quá nhanh |
+### Phân loại Severity
+| Điều kiện | Level |
+| :--- | :--- |
+| CPS < safeThreshold | Safe |
+| safeThreshold ≤ CPS ≤ criticalThreshold | Warning |
+| CPS > criticalThreshold | Critical |
 
-### Điều kiện nâng cấp lên Critical
-Segment sẽ được đánh dấu Critical nếu:
-- CPS > 25
-- Hoặc có lỗi timestamp chồng lấn
-- Hoặc > 2 dòng
-- Hoặc 1 dòng > 45 ký tự
+### Điều kiện nâng cấp lên Critical (Override Rule)
+Segment sẽ được đánh dấu Critical ngay cả khi CPS an toàn nếu:
+- Có lỗi timestamp chồng lấn.
+- Hoặc > 2 dòng.
+- Hoặc 1 dòng > 45 ký tự.
 
-### Metadata Gắn vào Segment
-Mỗi segment phải có:
-- `cps`: number
-- `severity`: (safe | warning | critical)
-- `issueList`: (array mô tả lỗi)
+### Re-analysis Trigger
+Phải re-analyze toàn bộ segment khi:
+- User chỉnh sửa nội dung text.
+- User thay đổi CPS threshold trong Settings.
+- User import file mới.
 
 ## 3. UI Requirements
 ### Dashboard
-- Tổng số Safe
-- Tổng số Warning
-- Tổng số Critical
-- Click vào từng số sẽ tự động kích hoạt Filter tương ứng trong Segment List.
+- Tổng số Safe, Warning, Critical dựa trên ngưỡng động.
+- Click vào từng số sẽ kích hoạt Filter tương ứng.
 
 ### Filter Integration
 - Filter nằm phía trên Segment List.
-- Khi chọn: Hệ thống chỉ render segment có severity tương ứng.
-- Khi Analyzer tính lại: Filter đang bật vẫn giữ nguyên, danh sách được re-render theo trạng thái mới.
+- Re-render danh sách theo trạng thái mới khi Analyzer tính toán lại.
 
 ## 4. Trạng thái (State)
-- `processing`: Đang tính toán lại khi user chỉnh sửa text.
+- `processing`: Đang tính toán lại.
 - `success`: Cập nhật severity và dashboard.
-- `partial-success`: Nếu chỉ một phần segment được phân tích lại.
 
 ## 5. Điều kiện tích hợp
-Kết quả Analyzer là:
-- Đầu vào cho 04-local-fix
-- Đầu vào cho 06-optimization
-- Đầu vào cho Filter trong Editor (UI layer)
+Kết quả Analyzer là đầu vào cho 04-local-fix, 06-optimization và UI Layer Filter.

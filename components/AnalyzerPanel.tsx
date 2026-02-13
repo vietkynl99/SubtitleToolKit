@@ -6,9 +6,17 @@ interface AnalyzerPanelProps {
   data: AnalysisResult;
   onFilterTrigger: (filter: 'all' | Severity) => void;
   activeFilter: 'all' | Severity;
+  safeThreshold: number;
+  criticalThreshold: number;
 }
 
-const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data, onFilterTrigger, activeFilter }) => {
+const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ 
+  data, 
+  onFilterTrigger, 
+  activeFilter,
+  safeThreshold,
+  criticalThreshold
+}) => {
   const chartData = [
     { name: 'Safe', value: data.cpsGroups.safe, color: '#10b981', id: 'safe' },
     { name: 'Warning', value: data.cpsGroups.warning, color: '#f59e0b', id: 'warning' },
@@ -86,7 +94,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data, onFilterTrigger, ac
             <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-rose-400">{data.tooFastLines} segments too fast</p>
-              <p className="text-[10px] text-rose-400/60">CPS exceeds 25. Readers may struggle.</p>
+              <p className="text-[10px] text-rose-400/60">CPS exceeds {criticalThreshold}. Readers may struggle.</p>
             </div>
           </div>
         )}

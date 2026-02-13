@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Upload, 
@@ -38,7 +37,8 @@ export const ICONS = {
 };
 
 export const DEFAULT_SETTINGS = {
-  defaultCPS: 20,
+  safeThreshold: 25,
+  criticalThreshold: 40,
   autoFixOnUpload: false,
   aiMode: 'fast' as const
 };

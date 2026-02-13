@@ -40,7 +40,8 @@ export interface ProjectHistory {
 }
 
 export interface AppSettings {
-  defaultCPS: number;
+  safeThreshold: number;
+  criticalThreshold: number;
   autoFixOnUpload: boolean;
   aiMode: 'fast' | 'pro';
 }

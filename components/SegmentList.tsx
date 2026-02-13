@@ -7,9 +7,19 @@ interface SegmentListProps {
   onSelect: (id: number) => void;
   filter: 'all' | Severity;
   onFilterChange: (filter: 'all' | Severity) => void;
+  safeThreshold: number;
+  criticalThreshold: number;
 }
 
-const SegmentList: React.FC<SegmentListProps> = ({ segments, selectedId, onSelect, filter, onFilterChange }) => {
+const SegmentList: React.FC<SegmentListProps> = ({ 
+  segments, 
+  selectedId, 
+  onSelect, 
+  filter, 
+  onFilterChange,
+  safeThreshold,
+  criticalThreshold
+}) => {
   const getSeverityBadge = (severity: Severity) => {
     switch (severity) {
       case 'critical': return <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50" title="Critical"></span>;
@@ -19,8 +29,8 @@ const SegmentList: React.FC<SegmentListProps> = ({ segments, selectedId, onSelec
   };
 
   const getCpsColor = (cps: number) => {
-    if (cps > 25) return 'text-rose-400';
-    if (cps >= 20) return 'text-amber-400';
+    if (cps > criticalThreshold) return 'text-rose-400';
+    if (cps >= safeThreshold) return 'text-amber-400';
     return 'text-emerald-400';
   };
 

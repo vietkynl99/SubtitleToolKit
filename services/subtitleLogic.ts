@@ -47,18 +47,23 @@ export function calculateCPS(segment: SubtitleSegment, text: string): number {
   return text.length / duration;
 }
 
-export function getSegmentMetadata(segment: SubtitleSegment, textKey: 'originalText' | 'translatedText'): { severity: Severity, cps: number, issueList: string[] } {
+export function getSegmentMetadata(
+  segment: SubtitleSegment, 
+  textKey: 'originalText' | 'translatedText',
+  safeThreshold: number,
+  criticalThreshold: number
+): { severity: Severity, cps: number, issueList: string[] } {
   const text = segment[textKey] || segment.originalText;
   const cps = calculateCPS(segment, text);
   const issueList: string[] = [];
   let severity: Severity = 'safe';
 
-  if (cps > 25) {
+  if (cps > criticalThreshold) {
     severity = 'critical';
-    issueList.push('CPS quá nhanh (> 25)');
-  } else if (cps >= 20) {
+    issueList.push(`CPS vượt quá ngưỡng Critical (> ${criticalThreshold})`);
+  } else if (cps >= safeThreshold) {
     severity = 'warning';
-    issueList.push('CPS cảnh báo (20-25)');
+    issueList.push(`CPS nằm trong vùng cảnh báo (${safeThreshold}-${criticalThreshold})`);
   }
 
   const lines = text.split('\n');
@@ -75,14 +80,19 @@ export function getSegmentMetadata(segment: SubtitleSegment, textKey: 'originalT
   return { severity, cps, issueList };
 }
 
-export function analyzeSegments(segments: SubtitleSegment[], textKey: 'originalText' | 'translatedText'): AnalysisResult {
+export function analyzeSegments(
+  segments: SubtitleSegment[], 
+  textKey: 'originalText' | 'translatedText',
+  safeThreshold: number = 25,
+  criticalThreshold: number = 40
+): AnalysisResult {
   let tooLongLines = 0;
   let tooFastLines = 0;
   let totalCPS = 0;
   const groups = { safe: 0, warning: 0, critical: 0 };
 
   segments.forEach(s => {
-    const meta = getSegmentMetadata(s, textKey);
+    const meta = getSegmentMetadata(s, textKey, safeThreshold, criticalThreshold);
     s.severity = meta.severity;
     s.cps = meta.cps;
     s.issueList = meta.issueList;
@@ -90,7 +100,7 @@ export function analyzeSegments(segments: SubtitleSegment[], textKey: 'originalT
     totalCPS += meta.cps;
 
     if (meta.issueList.some(i => i.includes('dòng'))) tooLongLines++;
-    if (meta.cps > 25) tooFastLines++;
+    if (meta.cps > criticalThreshold) tooFastLines++;
 
     groups[meta.severity]++;
   });
@@ -106,9 +116,7 @@ export function analyzeSegments(segments: SubtitleSegment[], textKey: 'originalT
 
 export function performLocalFix(text: string): string {
   let fixed = text.trim();
-  // Remove multiple spaces
   fixed = fixed.replace(/\s+/g, ' ');
-  // Auto-wrap if too long
   if (fixed.length > 40 && !fixed.includes('\n')) {
     const mid = Math.floor(fixed.length / 2);
     const spaceIndex = fixed.indexOf(' ', mid);

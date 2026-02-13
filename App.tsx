@@ -36,8 +36,24 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<'all' | Severity>('all');
 
-  // Derived state
-  const analysis = useMemo(() => analyzeSegments(segments, 'translatedText'), [segments]);
+  // Load history & settings on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('subtitle_history');
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+    
+    const savedSettings = localStorage.getItem('subtitle_settings');
+    if (savedSettings) setSettings(JSON.parse(savedSettings));
+  }, []);
+
+  // Save settings when changed
+  useEffect(() => {
+    localStorage.setItem('subtitle_settings', JSON.stringify(settings));
+  }, [settings]);
+
+  // Derived state - Analysis
+  const analysis = useMemo(() => {
+    return analyzeSegments(segments, 'translatedText', settings.safeThreshold, settings.criticalThreshold);
+  }, [segments, settings.safeThreshold, settings.criticalThreshold]);
   
   const filteredSegments = useMemo(() => {
     if (filter === 'all') return segments;
@@ -45,12 +61,6 @@ const App: React.FC = () => {
   }, [segments, filter]);
 
   const selectedSegment = useMemo(() => segments.find(s => s.id === selectedId), [segments, selectedId]);
-
-  // Load history on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('subtitle_history');
-    if (saved) setHistory(JSON.parse(saved));
-  }, []);
 
   // Save history helper
   const saveToHistory = useCallback((segs: SubtitleSegment[], name: string) => {
@@ -199,6 +209,18 @@ const App: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Settings validation
+  const updateThreshold = (key: 'safeThreshold' | 'criticalThreshold', val: number) => {
+    const newSettings = { ...settings, [key]: val };
+    if (key === 'safeThreshold' && val >= newSettings.criticalThreshold - 5) {
+      // Automatic gap enforcement or prevent update
+      newSettings.criticalThreshold = val + 5;
+    } else if (key === 'criticalThreshold' && val <= newSettings.safeThreshold + 5) {
+      newSettings.safeThreshold = Math.max(0, val - 5);
+    }
+    setSettings(newSettings);
+  };
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
       {activeTab === 'upload' && (
@@ -266,6 +288,8 @@ const App: React.FC = () => {
               onSelect={setSelectedId}
               filter={filter}
               onFilterChange={setFilter}
+              safeThreshold={settings.safeThreshold}
+              criticalThreshold={settings.criticalThreshold}
             />
           </div>
 
@@ -368,9 +392,15 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Column 3: Analytics with click-to-filter */}
+          {/* Column 3: Analytics with dynamic thresholds */}
           <div className="w-80 flex flex-col border-l border-slate-800">
-             <AnalyzerPanel data={analysis} activeFilter={filter} onFilterTrigger={setFilter} />
+             <AnalyzerPanel 
+                data={analysis} 
+                activeFilter={filter} 
+                onFilterTrigger={setFilter} 
+                safeThreshold={settings.safeThreshold}
+                criticalThreshold={settings.criticalThreshold}
+             />
           </div>
         </div>
       )}
@@ -423,23 +453,44 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 max-w-4xl">
+        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar">
           <h2 className="text-3xl font-bold mb-8 tracking-tight">Cài đặt hệ thống</h2>
           <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden divide-y divide-slate-800 shadow-xl">
+            {/* Safe Threshold */}
             <div className="p-8">
-              <h3 className="font-bold mb-2">Ngưỡng CPS (Characters Per Second)</h3>
-              <p className="text-sm text-slate-500 mb-6">Thiết lập ngưỡng tốc độ đọc trung bình cho phụ đề.</p>
+              <h3 className="font-bold mb-1">Ngưỡng An Toàn (Safe Threshold)</h3>
+              <p className="text-sm text-slate-500 mb-6">Mọi segment có CPS thấp hơn mức này được coi là Safe (🟢).</p>
               <div className="flex items-center gap-6">
                 <input 
-                  type="range" min="15" max="35" 
-                  value={settings.defaultCPS} 
-                  onChange={(e) => setSettings({...settings, defaultCPS: Number(e.target.value)})}
-                  className="flex-1 h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer"
+                  type="range" min="10" max="60" 
+                  value={settings.safeThreshold} 
+                  onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))}
+                  className="flex-1 h-2 bg-slate-800 rounded-full appearance-none accent-emerald-500 cursor-pointer"
                 />
-                <span className="w-12 text-center font-bold text-blue-400">{settings.defaultCPS}</span>
+                <span className="w-16 text-center font-bold text-emerald-400 px-3 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">{settings.safeThreshold}</span>
               </div>
             </div>
 
+            {/* Critical Threshold */}
+            <div className="p-8">
+              <h3 className="font-bold mb-1">Ngưỡng Nguy Hiểm (Critical Threshold)</h3>
+              <p className="text-sm text-slate-500 mb-6">Mọi segment có CPS cao hơn mức này được coi là Critical (🔴).</p>
+              <div className="flex items-center gap-6">
+                <input 
+                  type="range" min="15" max="80" 
+                  value={settings.criticalThreshold} 
+                  onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))}
+                  className="flex-1 h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer"
+                />
+                <span className="w-16 text-center font-bold text-rose-400 px-3 py-1 bg-rose-500/10 rounded border border-rose-500/20">{settings.criticalThreshold}</span>
+              </div>
+              <div className="mt-4 p-3 bg-slate-800/40 rounded-xl flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-medium">Vùng Cảnh Báo (Warning):</span>
+                <span className="text-xs text-amber-400 font-bold">{settings.safeThreshold} ≤ CPS ≤ {settings.criticalThreshold}</span>
+              </div>
+            </div>
+
+            {/* Auto Fix */}
             <div className="p-8 flex items-center justify-between">
               <div>
                 <h3 className="font-bold mb-1">Tự động sửa lỗi khi Upload</h3>
@@ -453,6 +504,7 @@ const App: React.FC = () => {
               </button>
             </div>
 
+            {/* AI Model */}
             <div className="p-8">
               <h3 className="font-bold mb-2">Lựa chọn AI Model</h3>
               <div className="grid grid-cols-2 gap-4 mt-4">
