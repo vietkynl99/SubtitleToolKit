@@ -100,6 +100,11 @@ const App: React.FC = () => {
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    showToast("Đã copy tên file vào clipboard");
+  };
+
   // Save history helper
   const saveToHistory = useCallback((segs: SubtitleSegment[], name: string) => {
     const newEntry: ProjectHistory = {
@@ -311,6 +316,17 @@ const App: React.FC = () => {
     downloadSRT(file.segments, file.fileName, file.metadata);
   };
 
+  // v1.6.0 Handle loading a split result back into the main project
+  const handleLoadGenerated = (file: SplitResult) => {
+    if (confirm(`Bạn có muốn tải file "${file.fileName}" vào Editor để làm việc không?\nProject hiện tại sẽ bị thay thế.`)) {
+      setFileName(file.fileName);
+      setSegments(file.segments);
+      setSelectedId(null);
+      setFilter('all');
+      showToast(`Đã nạp file: ${file.fileName}`);
+    }
+  };
+
   const handleDeleteGenerated = (idx: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== idx));
   };
@@ -433,8 +449,13 @@ const App: React.FC = () => {
               {ICONS.File}
             </div>
             <div className="overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-100 truncate" title={fileName}>
+              <h2 
+                className="text-sm font-bold text-slate-100 truncate cursor-pointer hover:text-blue-400 transition-colors flex items-center gap-2 group" 
+                title={`Click to copy: ${fileName}`}
+                onClick={() => copyToClipboard(fileName)}
+              >
                 {fileName.length > 40 ? fileName.substring(0, 37) + '...' : fileName}
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-slate-500 font-normal">(Click to copy)</span>
               </h2>
               <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span className="flex items-center gap-1">{segments.length} segments</span>
@@ -605,6 +626,7 @@ const App: React.FC = () => {
                 onClearProject={handleClearProject}
                 generatedFiles={generatedFiles}
                 onDownloadGenerated={handleDownloadGenerated}
+                onLoadGenerated={handleLoadGenerated}
                 onDeleteGenerated={handleDeleteGenerated}
              />
           </div>

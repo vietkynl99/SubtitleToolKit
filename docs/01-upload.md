@@ -1,24 +1,101 @@
-FEATURE: Subtitle Upload
+# Upload Module
 
-Version: 1.5.0
-Last Updated: 2026-02-13
-Changelog:
-- Nâng cấp cơ chế Drag & Drop thành tương tác chính.
-- Bổ sung trạng thái drag-over và visual feedback rõ ràng.
-- Tích hợp Clear Project để quay về trạng thái Upload ban đầu (v1.2.0).
-- Clear Project phải trigger mount lại Upload View (v1.3.0).
-- Thêm behavior khi upload file mới trong lúc đã có project (v1.4.0).
-- Upload thành công phải cập nhật Global Header (v1.5.0).
+Version: 1.5.0  
+Last Updated: 2026-02-13  
 
-1. Mục tiêu
-Cung cấp cổng vào an toàn, trực quan và thuận tiện cho dữ liệu phụ đề, với Drag & Drop là phương thức tương tác chính.
+---
 
-2. Required Behavior After Upload Success (v1.5.0)
-Sau khi upload + parse thành công:
-- **Set activeFileName:** Gán tên file gốc vào header.
-- **Header Re-render:** UI Header phải tự động cập nhật thông tin file mới.
-- **Clear Project:** Khi xóa project, `activeFileName` phải reset về `null` và ẩn header.
-- **Replace File:** Sau khi confirm replace, header phải hiển thị tên file mới ngay lập tức.
+# 1. Upload Methods
 
-3. Upload While Project Exists (v1.4.0)
-... (giữ nguyên logic confirm modal)
+Cho phép:
+
+- Click chọn file
+- Drag & Drop file vào Dropzone
+
+Chỉ chấp nhận:
+
+- .srt
+
+---
+
+# 2. Upload Flow
+
+Khi chưa có project:
+
+idle  
+→ uploading  
+→ analyzing  
+→ success  
+
+---
+
+# 3. Drag & Drop
+
+Dropzone phải:
+
+- Highlight khi drag vào
+- Validate file type
+- Hiển thị lỗi nếu không phải .srt
+
+---
+
+# 4. Replace Existing Project
+
+Nếu segments.length > 0:
+
+Không được upload trực tiếp.
+
+Phải hiển thị modal xác nhận.
+
+---
+
+Modal:
+
+Bạn đang có một project đang mở.  
+Bạn có muốn xóa file hiện tại và upload file mới không?
+
+---
+
+Nếu Cancel:
+
+Không làm gì.
+
+---
+
+Nếu Confirm:
+
+1. Clear project
+2. projectState → uploading
+3. Parse file mới
+4. Analyze
+5. projectState → success
+6. Set activeFileName = file mới
+
+---
+
+# 5. Sau Upload Thành Công
+
+Bắt buộc:
+
+- activeFileName = originalFile.name
+- Render Global File Header
+- Load Editor
+- Load Analyzer
+- Load Histogram
+
+---
+
+# 6. Clear Integration
+
+Khi Clear Project được kích hoạt:
+
+Upload module phải:
+
+- Reset về idle
+- Hiển thị Dropzone trống
+- Không giữ tên file cũ
+- Không giữ metadata
+
+---
+
+End of file.

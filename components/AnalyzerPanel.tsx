@@ -14,6 +14,7 @@ interface AnalyzerPanelProps {
   onClearProject: () => void;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
+  onLoadGenerated?: (file: SplitResult) => void;
   onDeleteGenerated: (index: number) => void;
 }
 
@@ -27,6 +28,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   onClearProject,
   generatedFiles,
   onDownloadGenerated,
+  onLoadGenerated,
   onDeleteGenerated
 }) => {
   const chartData = [
@@ -185,6 +187,15 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {onLoadGenerated && (
+                    <button 
+                      onClick={() => onLoadGenerated(file)}
+                      className="p-1.5 hover:bg-emerald-500/10 text-emerald-400 rounded-lg transition-colors"
+                      title="Load into Editor"
+                    >
+                      {ICONS.Next}
+                    </button>
+                  )}
                   <button 
                     onClick={() => onDownloadGenerated(file)}
                     className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors"

@@ -1,50 +1,239 @@
-# MASTER REQUIREMENT: Subtitle Toolkit
-**Version:** 1.7.0  
-**Last Updated:** 2026-02-13  
-**Status:** Approved  
-**Changelog:**
-- Thêm CPS Histogram vào Quality Dashboard.
-- Bổ sung thống kê toán học đầy đủ (Min, Max, Average, Median).
-- Thêm tính năng Clear Current Project (v1.4.0).
-- Bổ sung Clear Project Execution Flow (v1.5.0).
-- Thêm Project Replacement Rule (v1.6.0).
-- Thêm Global File Header Display (v1.7.0).
+# Subtitle Toolkit – Master Requirement
 
-## 1. Product Overview
-### Mục tiêu sản phẩm
-Xây dựng một nền tảng web chuyên dụng để dịch và tối ưu hóa phụ đề từ tiếng Trung sang tiếng Việt, kết hợp giữa thuật toán xử lý tại chỗ (Local) và trí tuệ nhân tạo (AI).
+Version: 1.6.0  
+Last Updated: 2026-02-13  
 
 ---
 
-## 5. UI Layout Tổng Thể (Updated v1.7.0)
-Trong Control Panel → Analyzer Section phải gồm:
+# 1. Overview
 
-**Quality Dashboard:**
-- Safe, Warning, Critical counts.
-- Total Lines.
+Subtitle Toolkit là web app dùng để:
 
-**CPS Distribution:**
-- Severity Chart (Safe/Warning/Critical).
-- Detailed CPS Histogram (step 5).
+- Upload file SRT tiếng Trung
+- Phân tích tốc độ (CPS)
+- Dịch sang tiếng Việt
+- Tối ưu subtitle
+- Fix lỗi (local + AI)
+- Split SRT
+- Export file kết quả
 
-**CPS Statistics:**
-- Min, Max, Average, Median.
-
-**Global File Header (v1.7.0):**
-- Hiển thị khi `projectState === success`.
-- Ẩn khi `idle`, `uploading`, `clearing`.
-- Hiển thị: Tên file (truncate > 40 ký tự), Tổng segments, Tổng thời lượng, Encoding (UTF-8).
-- Tên file header phải cập nhật nếu project được thay thế hoặc đổi file active.
-
-**Global Project Reset – Clear SRT (v1.5.0):**
-... (giữ nguyên các quy tắc execution flow)
-
-**Project Replacement Rule (v1.6.0):**
-- Ứng dụng không được phép tồn tại 2 project đồng thời.
-- Khi upload file mới trong khi project cũ đang mở, hệ thống **bắt buộc** phải hỏi xác nhận.
+Ứng dụng chỉ cho phép tồn tại **1 project active tại một thời điểm**.
 
 ---
 
-## 6. Non-functional Requirements
-- **Performance:** Xử lý file 1000 dòng trong < 5 giây. Histogram calculation < 200ms.
-- **Persistence:** Lưu trạng thái vào LocalStorage. Clear project không xóa Settings/History.
+# 2. Global Application State
+
+Các trạng thái chính:
+
+- idle
+- uploading
+- analyzing
+- success
+- clearing
+- error
+
+State Flow chuẩn:
+
+idle  
+→ uploading  
+→ analyzing  
+→ success  
+
+Khi clear:
+
+success  
+→ clearing  
+→ idle  
+
+Khi replace file:
+
+success  
+→ confirm-replace  
+→ clearing  
+→ uploading  
+→ analyzing  
+→ success  
+
+---
+
+# 3. Single Project Rule
+
+Không được tồn tại 2 project đồng thời.
+
+Khi upload file mới:
+
+- Project cũ phải bị destroy hoàn toàn
+- Không giữ segment
+- Không giữ analyzer data
+- Không giữ histogram
+- Không giữ split files
+- Không giữ AI cache
+
+---
+
+# 4. Global File Header
+
+## Mục tiêu
+
+Luôn hiển thị tên file đang active để user biết mình đang xử lý file nào.
+
+---
+
+## Điều kiện hiển thị
+
+Hiển thị khi:
+
+projectState === success
+
+Ẩn khi:
+
+- idle
+- uploading
+- clearing
+- error
+
+---
+
+## Nội dung hiển thị
+
+Bắt buộc:
+
+- Tên file
+
+Khuyến nghị:
+
+- Số segment
+- Tổng thời lượng
+
+Ví dụ:
+
+[📄] movie_ep1.srt  
+3311 segments | 102m 51s
+
+---
+
+## Khi split
+
+Nếu file sau split:
+
+Tên phải cập nhật theo file mới:
+
+[split range 100 to 1000] movie_ep1.srt
+
+---
+
+## Khi clear
+
+activeFileName = null  
+Header phải biến mất hoàn toàn.
+
+---
+
+# 5. Clear Current Project
+
+## Mục tiêu
+
+Cho phép reset toàn bộ project về trạng thái như mới load trang.
+
+---
+
+## UI
+
+Nút: Clear Current Project  
+Vị trí: File Control Area  
+
+---
+
+## Khi click
+
+Hiển thị modal:
+
+Bạn có chắc muốn xóa project hiện tại?  
+Mọi thay đổi chưa export sẽ bị mất.
+
+Buttons:
+
+- Cancel
+- Confirm
+
+---
+
+## Nếu Confirm
+
+Bắt buộc thực hiện:
+
+1. projectState → clearing  
+2. Reset toàn bộ:
+   - segments = []
+   - analyzerData = null
+   - histogram = null
+   - translationCache = null
+   - splitFiles = []
+   - progress = 0
+3. activeFileName = null
+4. Unmount:
+   - Editor
+   - Analyzer
+   - Histogram
+   - Split Panel
+5. Mount lại Upload View
+6. Scroll lên đầu trang
+7. Hiển thị toast: "Project đã được xóa"
+
+Cuối cùng:
+
+projectState → idle
+
+---
+
+# 6. Replace File Rule
+
+Nếu đã có project active và user:
+
+- Click Upload
+- Hoặc Drag & Drop file mới
+
+Phải hiển thị modal:
+
+Bạn đang có một project đang mở.  
+Bạn có muốn xóa file hiện tại và upload file mới không?
+
+Buttons:
+
+- Cancel
+- Confirm & Upload
+
+Nếu Confirm:
+
+1. Clear project
+2. Upload file mới
+3. Parse
+4. Analyze
+5. Load Editor
+6. projectState → success
+
+---
+
+# 7. Settings Persistence
+
+Clear Project không được reset:
+
+- CPS threshold
+- AI model preference
+- History
+- Saved settings
+
+---
+
+# 8. Error Handling
+
+Nếu upload hoặc parse lỗi:
+
+projectState → error
+
+Hiển thị message rõ ràng  
+Cho phép retry
+
+---
+
+End of file.
