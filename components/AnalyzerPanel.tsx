@@ -1,6 +1,9 @@
+
 import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { AnalysisResult, Severity } from '../types';
+import { ICONS } from '../constants';
+import { SplitResult } from '../services/subtitleLogic';
 
 interface AnalyzerPanelProps {
   data: AnalysisResult;
@@ -8,6 +11,10 @@ interface AnalyzerPanelProps {
   activeFilter: 'all' | Severity;
   safeThreshold: number;
   criticalThreshold: number;
+  onOpenSplit: () => void;
+  generatedFiles: SplitResult[];
+  onDownloadGenerated: (file: SplitResult) => void;
+  onDeleteGenerated: (index: number) => void;
 }
 
 const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ 
@@ -15,7 +22,11 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   onFilterTrigger, 
   activeFilter,
   safeThreshold,
-  criticalThreshold
+  criticalThreshold,
+  onOpenSplit,
+  generatedFiles,
+  onDownloadGenerated,
+  onDeleteGenerated
 }) => {
   const chartData = [
     { name: 'Safe', value: data.cpsGroups.safe, color: '#10b981', id: 'safe' },
@@ -24,7 +35,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   ];
 
   return (
-    <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900">
+    <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar">
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Quality Dashboard</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -85,6 +96,63 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </section>
+
+      {/* v1.3.0 Generated Files Section */}
+      {generatedFiles.length > 0 && (
+        <section>
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Generated Files</h3>
+          <div className="space-y-2">
+            {generatedFiles.map((file, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl group animate-in slide-in-from-right duration-300">
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <span className="text-blue-400 shrink-0">{ICONS.File}</span>
+                  <div className="overflow-hidden">
+                    <span className="block text-[10px] font-bold text-slate-200 truncate">{file.fileName}</span>
+                    <span className="text-[9px] text-slate-500">{file.segments.length} segments</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => onDownloadGenerated(file)}
+                    className="p-1.5 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-colors"
+                    title="Download"
+                  >
+                    {ICONS.Export}
+                  </button>
+                  <button 
+                    onClick={() => onDeleteGenerated(idx)}
+                    className="p-1.5 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors"
+                    title="Remove"
+                  >
+                    {ICONS.Delete}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">File Tools</h3>
+        <button 
+          onClick={onOpenSplit}
+          className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-blue-600/10 text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
+              {ICONS.Split}
+            </span>
+            <div className="text-left">
+              <span className="block text-xs font-bold text-slate-200">Split SRT</span>
+              <span className="text-[10px] text-slate-500">Chia nhỏ file thành nhiều phần</span>
+            </div>
+          </div>
+          <span className="text-slate-600 group-hover:text-slate-400 transition-all">
+            {ICONS.Next}
+          </span>
+        </button>
       </section>
 
       <section className="space-y-3">

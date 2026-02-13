@@ -45,3 +45,11 @@ export interface AppSettings {
   autoFixOnUpload: boolean;
   aiMode: 'fast' | 'pro';
 }
+
+export interface SplitMetadata {
+  range: string;
+  start: string;
+  end: string;
+  segments: number;
+  duration: string;
+}

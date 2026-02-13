@@ -5,13 +5,19 @@ import {
   AnalysisResult, 
   AppSettings, 
   ProjectHistory,
-  Severity
+  Severity,
+  SplitMetadata
 } from './types';
 import { 
   parseSRT, 
   analyzeSegments, 
   performLocalFix, 
-  generateSRT 
+  generateSRT,
+  splitByCount,
+  splitByDuration,
+  splitByManual,
+  splitByRange,
+  SplitResult
 } from './services/subtitleLogic';
 import { 
   translateSegments, 
@@ -20,6 +26,7 @@ import {
 import Layout from './components/Layout';
 import SegmentList from './components/SegmentList';
 import AnalyzerPanel from './components/AnalyzerPanel';
+import SplitModal from './components/SplitModal';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
 const App: React.FC = () => {
@@ -35,6 +42,10 @@ const App: React.FC = () => {
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<'all' | Severity>('all');
+  const [showSplitModal, setShowSplitModal] = useState<boolean>(false);
+  
+  // v1.3.0 Generated files storage
+  const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
 
   // Load history & settings on mount
   useEffect(() => {
@@ -115,6 +126,8 @@ const App: React.FC = () => {
       setProgress(100);
       setStatus('success');
       setActiveTab('editor');
+      // Clear generated files on new upload
+      setGeneratedFiles([]);
     };
     reader.onerror = () => {
       setStatus('error');
@@ -185,16 +198,44 @@ const App: React.FC = () => {
     setSegments(fixed);
   };
 
-  const handleExport = () => {
-    const srt = generateSRT(segments);
+  const downloadSRT = (segs: SubtitleSegment[], name: string, metadata?: SplitMetadata) => {
+    const srt = generateSRT(segs, metadata);
     const blob = new Blob([srt], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `optimized_${fileName || 'subtitles.srt'}`;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExport = () => {
+    downloadSRT(segments, `optimized_${fileName || 'subtitles.srt'}`);
     saveToHistory(segments, fileName || 'Exported Project');
+  };
+
+  const handleSplitConfirm = async (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => {
+    // Artificial delay for processing visual feedback as per v1.3.0
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    let results: SplitResult[] = [];
+    if (mode === 'duration') results = splitByDuration(segments, value as number, fileName, includeMetadata);
+    else if (mode === 'count') results = splitByCount(segments, value as number, fileName, includeMetadata);
+    else if (mode === 'manual') results = splitByManual(segments, (value as string).split('\n').filter(x => x.trim()), fileName, includeMetadata);
+    else if (mode === 'range') results = splitByRange(segments, value.start, value.end, fileName, includeMetadata);
+
+    if (results.length > 0) {
+      // v1.3.0 Recommended UX: Add to Generated Files List
+      setGeneratedFiles(prev => [...prev, ...results]);
+    }
+  };
+
+  const handleDownloadGenerated = (file: SplitResult) => {
+    downloadSRT(file.segments, file.fileName, file.metadata);
+  };
+
+  const handleDeleteGenerated = (idx: number) => {
+    setGeneratedFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -213,7 +254,6 @@ const App: React.FC = () => {
   const updateThreshold = (key: 'safeThreshold' | 'criticalThreshold', val: number) => {
     const newSettings = { ...settings, [key]: val };
     if (key === 'safeThreshold' && val >= newSettings.criticalThreshold - 5) {
-      // Automatic gap enforcement or prevent update
       newSettings.criticalThreshold = val + 5;
     } else if (key === 'criticalThreshold' && val <= newSettings.safeThreshold + 5) {
       newSettings.safeThreshold = Math.max(0, val - 5);
@@ -223,6 +263,15 @@ const App: React.FC = () => {
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
+      {showSplitModal && (
+        <SplitModal 
+          onClose={() => setShowSplitModal(false)} 
+          onConfirm={handleSplitConfirm} 
+          totalSegments={segments.length} 
+          segments={segments}
+        />
+      )}
+
       {activeTab === 'upload' && (
         <div 
           className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50 transition-colors duration-300"
@@ -400,6 +449,10 @@ const App: React.FC = () => {
                 onFilterTrigger={setFilter} 
                 safeThreshold={settings.safeThreshold}
                 criticalThreshold={settings.criticalThreshold}
+                onOpenSplit={() => setShowSplitModal(true)}
+                generatedFiles={generatedFiles}
+                onDownloadGenerated={handleDownloadGenerated}
+                onDeleteGenerated={handleDeleteGenerated}
              />
           </div>
         </div>

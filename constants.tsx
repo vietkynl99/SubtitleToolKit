@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   Upload, 
@@ -14,7 +15,8 @@ import {
   Save,
   Trash2,
   RefreshCw,
-  FileText
+  FileText,
+  Scissors
 } from 'lucide-react';
 
 export const ICONS = {
@@ -33,7 +35,8 @@ export const ICONS = {
   Save: <Save size={18} />,
   Delete: <Trash2 size={18} />,
   Retry: <RefreshCw size={18} />,
-  File: <FileText size={18} />
+  File: <FileText size={18} />,
+  Split: <Scissors size={18} />
 };
 
 export const DEFAULT_SETTINGS = {
