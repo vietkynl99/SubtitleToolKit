@@ -44,6 +44,8 @@ const App: React.FC = () => {
   const [filter, setFilter] = useState<any>('all');
   const [showSplitModal, setShowSplitModal] = useState<boolean>(false);
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
+  const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
@@ -150,7 +152,7 @@ const App: React.FC = () => {
   }, [settings.autoFixOnUpload]);
 
   // Clear Project Implementation (v1.5.0)
-  const performClear = async () => {
+  const performClear = async (skipFeedback = false) => {
     setStatus('clearing');
     
     // Simulate short processing for visual feedback
@@ -170,7 +172,7 @@ const App: React.FC = () => {
     // UI Navigation & Feedback
     setActiveTab('upload');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    showToast("Project đã được xóa.");
+    if (!skipFeedback) showToast("Project đã được xóa.");
   };
 
   const handleClearProject = () => {
@@ -182,10 +184,30 @@ const App: React.FC = () => {
     }
   };
 
+  // Project Replacement confirm (v1.6.0)
+  const handleReplaceConfirm = async () => {
+    if (!pendingFile) return;
+    setShowReplaceModal(false);
+    await performClear(true); // Clear old one without "Cleared" toast
+    processFile(pendingFile);
+    setPendingFile(null);
+  };
+
+  const handleNewUploadTrigger = (file: File) => {
+    if (segments.length > 0) {
+      setPendingFile(file);
+      setShowReplaceModal(true);
+    } else {
+      processFile(file);
+    }
+  };
+
   // Handlers
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processFile(file);
+    if (file) handleNewUploadTrigger(file);
+    // Clear the input value to allow the same file to be selected again if needed
+    e.target.value = '';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -202,7 +224,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) processFile(file);
+    if (file) handleNewUploadTrigger(file);
   };
 
   const handleTranslate = async () => {
@@ -333,11 +355,50 @@ const App: React.FC = () => {
               </button>
               <button 
                 disabled={status === 'clearing'}
-                onClick={performClear}
+                onClick={() => performClear()}
                 className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 {status === 'clearing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Replacement Modal (v1.6.0) */}
+      {showReplaceModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+            <h3 className="text-xl font-bold mb-3">Tải lên file mới?</h3>
+            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 mb-6">
+               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Project đang mở:</p>
+               <div className="flex items-center gap-3">
+                 <div className="text-blue-400">{ICONS.File}</div>
+                 <div className="overflow-hidden">
+                   <p className="text-xs font-bold text-slate-200 truncate">{fileName}</p>
+                   <p className="text-[10px] text-slate-500">{segments.length} segments</p>
+                 </div>
+               </div>
+            </div>
+            <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+              Bạn đang có một project đang mở. Mọi thay đổi chưa export của file cũ sẽ bị mất hoàn toàn nếu bạn nạp file mới.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                disabled={status === 'clearing'}
+                onClick={() => { setShowReplaceModal(false); setPendingFile(null); }}
+                className="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
+              >
+                Hủy
+              </button>
+              <button 
+                disabled={status === 'clearing'}
+                onClick={handleReplaceConfirm}
+                className="flex-1 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                {status === 'clearing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Confirm & Upload
               </button>
             </div>
           </div>
@@ -383,10 +444,10 @@ const App: React.FC = () => {
                 <p className="text-sm text-slate-500">Hoặc click để chọn file từ máy tính</p>
               </div>
 
-              {status === 'processing' && (
+              {(status === 'processing' || status === 'clearing') && (
                 <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
                   <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-blue-400 font-bold">Đang xử lý file...</p>
+                  <p className="text-blue-400 font-bold">{status === 'clearing' ? 'Đang dọn dẹp project cũ...' : 'Đang xử lý file...'}</p>
                   <div className="w-full max-w-xs bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
                     <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
                   </div>
