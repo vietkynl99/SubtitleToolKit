@@ -9,23 +9,28 @@ export async function translateSegments(
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
+  // v1.3.0 Logic: Only translate if translatedText is null or empty
+  const segmentsToTranslateIndices = segments
+    .map((s, idx) => ({ s, idx }))
+    .filter(item => !item.s.translatedText || item.s.translatedText.trim() === '')
+    .map(item => item.idx);
+
+  if (segmentsToTranslateIndices.length === 0) {
+    return segments;
+  }
+
   const batchSize = 15;
   const results = [...segments];
 
-  for (let i = 0; i < segments.length; i += batchSize) {
-    const batch = segments.slice(i, i + batchSize);
+  for (let i = 0; i < segmentsToTranslateIndices.length; i += batchSize) {
+    const currentIndicesBatch = segmentsToTranslateIndices.slice(i, i + batchSize);
+    const batch = currentIndicesBatch.map(idx => segments[idx]);
     
     if (onBatchStart) {
-      onBatchStart(i, batch.length);
+      onBatchStart(currentIndicesBatch[0], currentIndicesBatch.length);
     }
 
-    const contextBefore = i > 0 ? segments.slice(Math.max(0, i - 2), i).map(s => s.originalText) : [];
-    const contextAfter = (i + batchSize) < segments.length ? segments.slice(i + batchSize, i + batchSize + 2).map(s => s.originalText) : [];
-
-    const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese. 
-    Context before: ${JSON.stringify(contextBefore)}
-    Context after: ${JSON.stringify(contextAfter)}
-    
+    const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
     Instruction: Use natural cinema style. Keep honorifics (nhân xưng) consistent.
     Return a JSON array of strings in the exact same order as the provided segments.
     
@@ -47,10 +52,11 @@ export async function translateSegments(
       const translatedBatch = JSON.parse(response.text || "[]");
       
       translatedBatch.forEach((text: string, index: number) => {
-        if (results[i + index]) {
-          results[i + index].translatedText = text;
-          results[i + index].isModified = true;
-          results[i + index].isProcessing = false;
+        const realIdx = currentIndicesBatch[index];
+        if (results[realIdx]) {
+          results[realIdx].translatedText = text;
+          results[realIdx].isModified = true;
+          results[realIdx].isProcessing = false;
         }
       });
 
@@ -58,12 +64,11 @@ export async function translateSegments(
         onBatchComplete(i, translatedBatch);
       }
     } catch (error) {
-      console.error("Translation error in batch starting at", i, error);
-      // Ensure we clear processing state on error
-      batch.forEach((_, idx) => {
-        if (results[i + idx]) results[i + idx].isProcessing = false;
+      console.error("Translation error in batch starting at relative index", i, error);
+      currentIndicesBatch.forEach(idx => {
+        if (results[idx]) results[idx].isProcessing = false;
       });
-      if (onBatchComplete) onBatchComplete(i, batch.map(s => s.translatedText));
+      if (onBatchComplete) onBatchComplete(i, batch.map(s => s.translatedText || ""));
     }
   }
 

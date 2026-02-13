@@ -6,10 +6,10 @@ export interface SubtitleSegment {
   id: number;
   startTime: string; // HH:MM:SS,mmm
   endTime: string;
-  originalText: string;
-  translatedText: string;
+  originalText: string | null; // Nullable for VN-only segments
+  translatedText: string | null; // Nullable for CN-only segments
   isModified: boolean;
-  isProcessing?: boolean; // New: track AI progress
+  isProcessing?: boolean;
   errors: SubtitleError[];
   severity: Severity;
   cps: number;

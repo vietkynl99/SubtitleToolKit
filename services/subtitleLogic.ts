@@ -6,28 +6,45 @@ export interface SplitResult {
   metadata?: SplitMetadata;
 }
 
+const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
+
 export function parseSRT(content: string): SubtitleSegment[] {
   const segments: SubtitleSegment[] = [];
   const blocks = content.trim().split(/\n\s*\n/);
 
   blocks.forEach((block) => {
-    const lines = block.split('\n');
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '');
     if (lines.length >= 3) {
-      const id = parseInt(lines[0].trim());
+      const id = parseInt(lines[0]);
       const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
       
-      if (timeMatch) {
+      if (timeMatch && !isNaN(id)) {
         const startTime = timeMatch[1];
         const endTime = timeMatch[2];
-        const originalText = lines.slice(2).join('\n').trim();
         
+        const contentLines = lines.slice(2);
+        const cnLines: string[] = [];
+        const vnLines: string[] = [];
+
+        // v1.3.0 Logic: Detect language for each line
+        contentLines.forEach(line => {
+          if (isChinese(line)) {
+            cnLines.push(line);
+          } else {
+            vnLines.push(line);
+          }
+        });
+
+        const originalText = cnLines.length > 0 ? cnLines.join('\n') : null;
+        const translatedText = vnLines.length > 0 ? vnLines.join('\n') : null;
+
         segments.push({
           id,
           startTime,
           endTime,
           originalText,
-          translatedText: '',
-          isModified: false,
+          translatedText,
+          isModified: translatedText !== null,
           errors: [],
           severity: 'safe',
           cps: 0,
@@ -67,7 +84,8 @@ export function getSegmentMetadata(
   safeThreshold: number,
   criticalThreshold: number
 ): { severity: Severity, cps: number, issueList: string[] } {
-  const text = segment[textKey] || segment.originalText;
+  // v1.3.0 Requirement 8: If original is null, use translation for CPS
+  const text = segment[textKey] || segment.originalText || segment.translatedText || "";
   const cps = calculateCPS(segment, text);
   const issueList: string[] = [];
   let severity: Severity = 'safe';
@@ -108,7 +126,6 @@ export function analyzeSegments(
   const groups = { safe: 0, warning: 0, critical: 0 };
   const allCPS: number[] = [];
 
-  // Histogram buckets: 0-5, 5-10, ..., 40-45, 45+
   const histogramCounts = new Array(10).fill(0);
 
   segments.forEach(s => {
@@ -127,7 +144,6 @@ export function analyzeSegments(
 
     groups[meta.severity]++;
 
-    // Bucket calculation
     const bucketIdx = Math.min(Math.floor(meta.cps / 5), 9);
     histogramCounts[bucketIdx]++;
   });
@@ -147,12 +163,10 @@ export function analyzeSegments(
     };
   }
 
-  // Median
   const sortedCPS = [...allCPS].sort((a, b) => a - b);
   const mid = Math.floor(sortedCPS.length / 2);
   const medianCPS = sortedCPS.length % 2 !== 0 ? sortedCPS[mid] : (sortedCPS[mid - 1] + sortedCPS[mid]) / 2;
 
-  // v1.4.0 Histogram Trim Edge Buckets Logic
   let firstNonEmpty = histogramCounts.findIndex(count => count > 0);
   let lastNonEmpty = -1;
   for (let i = histogramCounts.length - 1; i >= 0; i--) {
@@ -212,7 +226,7 @@ export function generateSRT(segments: SubtitleSegment[], metadata?: SplitMetadat
   }
   
   const content = segments.map((s, index) => {
-    const text = s.translatedText || s.originalText;
+    const text = s.translatedText || s.originalText || "";
     return `${index + 1}\n${s.startTime} --> ${s.endTime}\n${text}\n`;
   }).join('\n');
 
@@ -233,17 +247,10 @@ function createMetadata(segments: SubtitleSegment[], range: string): SplitMetada
   };
 }
 
-/**
- * Clean base name to ensure we don't nest split prefixes
- */
 function getCleanBaseName(baseName: string): string {
-  // Remove any existing "[split ...]" prefix pattern
   return baseName.replace(/^\[split [^\]]+\]\s*/i, '');
 }
 
-/**
- * Split SRT into multiple parts by Segment Count
- */
 export function splitByCount(segments: SubtitleSegment[], countPerFile: number, baseName: string, includeMetadata: boolean = true): SplitResult[] {
   const results: SplitResult[] = [];
   const cleanBase = getCleanBaseName(baseName);
@@ -262,9 +269,6 @@ export function splitByCount(segments: SubtitleSegment[], countPerFile: number, 
   return results;
 }
 
-/**
- * Split SRT into multiple parts by Duration (minutes)
- */
 export function splitByDuration(segments: SubtitleSegment[], minutes: number, baseName: string, includeMetadata: boolean = true): SplitResult[] {
   const results: SplitResult[] = [];
   const durationSec = minutes * 60;
@@ -311,9 +315,6 @@ export function splitByDuration(segments: SubtitleSegment[], minutes: number, ba
   return results;
 }
 
-/**
- * Split SRT into multiple parts by Manual Timestamp markers
- */
 export function splitByManual(segments: SubtitleSegment[], markers: string[], baseName: string, includeMetadata: boolean = true): SplitResult[] {
   const results: SplitResult[] = [];
   const cleanBase = getCleanBaseName(baseName);
@@ -363,9 +364,6 @@ export function splitByManual(segments: SubtitleSegment[], markers: string[], ba
   return results;
 }
 
-/**
- * Split SRT by a specific segment range
- */
 export function splitByRange(segments: SubtitleSegment[], startIdx: number, endIdx: number, baseName: string, includeMetadata: boolean = true): SplitResult[] {
   const realStart = Math.max(0, startIdx - 1);
   const realEnd = Math.min(segments.length, endIdx);

@@ -71,7 +71,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
         </div>
       </div>
       
-      {/* Card List - Using standard overflow for simplicity, but optimized card design */}
+      {/* Card List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
         {segments.map((seg) => (
           <div
@@ -110,7 +110,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               <div className="flex-1 p-5 border-b md:border-b-0 md:border-r border-slate-800/50 bg-slate-900/30">
                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Original (CN)</div>
                 <p className="text-base text-slate-400 leading-relaxed font-medium">
-                  {seg.originalText}
+                  {seg.originalText || <span className="text-slate-700 italic text-sm">Không có text gốc</span>}
                 </p>
               </div>
 

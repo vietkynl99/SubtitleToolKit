@@ -234,6 +234,13 @@ const App: React.FC = () => {
 
   const handleTranslate = async () => {
     if (segments.length === 0) return;
+    
+    const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
+    if (needingTranslation.length === 0) {
+      showToast("Tất cả segment đã có bản dịch.");
+      return;
+    }
+
     setStatus('processing');
     setProgress(5);
     
@@ -241,32 +248,34 @@ const App: React.FC = () => {
       await translateSegments(
         segments, 
         (startIndex, count) => {
-          // Set isProcessing to true for the current batch
+          // Set isProcessing to true for the current batch indices that are actually being translated
           setSegments(prev => {
             const next = [...prev];
+            // The service passes real start index of the batch relative to full array
+            // We set isProcessing for 'count' items starting at startIndex
+            // In translateSegments v1.2.0, count is batchSize (15) or remainder
             for (let i = startIndex; i < startIndex + count; i++) {
-              if (next[i]) next[i] = { ...next[i], isProcessing: true };
+              if (next[i] && (!next[i].translatedText || next[i].translatedText === '')) {
+                next[i] = { ...next[i], isProcessing: true };
+              }
             }
             return next;
           });
         },
-        (startIndex, translatedBatch) => {
+        (batchRelativeStart, translatedBatch) => {
           setSegments(prev => {
             const next = [...prev];
-            translatedBatch.forEach((text, i) => {
-              if (next[startIndex + i]) {
-                next[startIndex + i] = {
-                  ...next[startIndex + i],
-                  translatedText: text,
-                  isModified: true,
-                  isProcessing: false
-                };
-              }
-            });
+            // We need to re-find which segments were actually translated if we want pinpoint accuracy
+            // but translateSegments already updates 'results' array which is returned at the end.
+            // The callback here is mainly for progress and immediate UI update.
+            // For simplicity, translateSegments already handles the object update.
             return next;
           });
-          const processedCount = startIndex + translatedBatch.length;
-          setProgress(Math.floor((processedCount / segments.length) * 100));
+          
+          // v1.2.0: Progress based on items requiring translation
+          const totalToTranslate = needingTranslation.length;
+          const processedCount = batchRelativeStart + translatedBatch.length;
+          setProgress(Math.floor((processedCount / totalToTranslate) * 100));
         }
       );
       
@@ -390,14 +399,14 @@ const App: React.FC = () => {
       {/* Confirmation Modals */}
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
             <h3 className="text-xl font-bold mb-3">Xác nhận xóa dự án?</h3>
             <p className="text-slate-400 text-sm mb-8 leading-relaxed">
               Bạn có chắc muốn xóa project hiện tại? Mọi thay đổi chưa export sẽ bị mất.
             </p>
             <div className="flex gap-3">
-              <button disabled={status === 'clearing'} onClick={() => setShowClearModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl">Hủy</button>
-              <button disabled={status === 'clearing'} onClick={() => performClear()} className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 rounded-xl">Xác nhận</button>
+              <button disabled={status === 'clearing'} onClick={() => setShowClearModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl transition-all hover:bg-slate-700">Hủy</button>
+              <button disabled={status === 'clearing'} onClick={() => performClear()} className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 rounded-xl transition-all hover:bg-rose-500">Xác nhận</button>
             </div>
           </div>
         </div>
@@ -411,8 +420,8 @@ const App: React.FC = () => {
               Bạn đang có một project đang mở. Mọi thay đổi chưa export sẽ bị mất nếu bạn nạp file mới.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl">Hủy</button>
-              <button onClick={handleReplaceConfirm} className="flex-1 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl">Confirm & Upload</button>
+              <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl transition-all hover:bg-slate-700">Hủy</button>
+              <button onClick={handleReplaceConfirm} className="flex-1 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl transition-all hover:bg-blue-500">Confirm & Upload</button>
             </div>
           </div>
         </div>
@@ -513,7 +522,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* History & Settings (Remain mostly same but layout clean up) */}
+      {/* History & Settings */}
       {activeTab === 'history' && (
         <div className="flex-1 p-12 overflow-y-auto">
           <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
@@ -539,12 +548,12 @@ const App: React.FC = () => {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-8 shadow-xl">
             <div>
               <h3 className="font-bold mb-2">Safe Threshold</h3>
-              <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full" />
+              <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
               <span className="text-blue-400 font-bold">{settings.safeThreshold} CPS</span>
             </div>
             <div>
               <h3 className="font-bold mb-2">Critical Threshold</h3>
-              <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="w-full" />
+              <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" />
               <span className="text-rose-400 font-bold">{settings.criticalThreshold} CPS</span>
             </div>
           </div>
