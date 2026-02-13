@@ -1,0 +1,5 @@
+{
+  "name": "Subtitle Toolkit",
+  "description": "An advanced web application for uploading Chinese SRT files, translating them to Vietnamese, analyzing subtitle metrics like CPS, and performing local or AI-driven optimizations and fixes.",
+  "requestFramePermissions": []
+}
