@@ -17,7 +17,8 @@ import {
   splitByDuration,
   splitByManual,
   splitByRange,
-  SplitResult
+  SplitResult,
+  timeToSeconds
 } from './services/subtitleLogic';
 import { 
   translateSegments, 
@@ -69,6 +70,16 @@ const App: React.FC = () => {
   const analysis = useMemo(() => {
     return analyzeSegments(segments, 'translatedText', settings.safeThreshold, settings.criticalThreshold);
   }, [segments, settings.safeThreshold, settings.criticalThreshold]);
+
+  // v1.7.0 Derived Duration for Header
+  const totalDurationStr = useMemo(() => {
+    if (segments.length === 0) return '0m 0s';
+    const last = segments[segments.length - 1];
+    const totalSec = timeToSeconds(last.endTime);
+    const m = Math.floor(totalSec / 60);
+    const s = Math.floor(totalSec % 60);
+    return `${m}m ${s}s`;
+  }, [segments]);
   
   const filteredSegments = useMemo(() => {
     if (filter === 'all') return segments;
@@ -337,7 +348,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Confirmation Modal (v1.5.0) */}
+      {/* Confirmation Modal */}
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
@@ -412,6 +423,35 @@ const App: React.FC = () => {
           totalSegments={segments.length} 
           segments={segments}
         />
+      )}
+
+      {/* Global File Header (v1.7.0) */}
+      {status === 'success' && segments.length > 0 && fileName && (
+        <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-300 z-20">
+          <div className="flex items-center gap-4 overflow-hidden">
+            <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">
+              {ICONS.File}
+            </div>
+            <div className="overflow-hidden">
+              <h2 className="text-sm font-bold text-slate-100 truncate" title={fileName}>
+                {fileName.length > 40 ? fileName.substring(0, 37) + '...' : fileName}
+              </h2>
+              <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                <span className="flex items-center gap-1">{segments.length} segments</span>
+                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="flex items-center gap-1">{totalDurationStr}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="flex items-center gap-1">UTF-8</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tight">Active Project</span>
+            </div>
+          </div>
+        </div>
       )}
 
       {activeTab === 'upload' && (
@@ -590,7 +630,7 @@ const App: React.FC = () => {
                   <p className="text-xs text-slate-500 mb-4">{new Date(item.timestamp).toLocaleString()}</p>
                   <div className="flex justify-between items-center pt-4 border-t border-slate-800/50">
                     <span className="text-xs font-mono text-slate-400">{item.segments.length} segments</span>
-                    <button onClick={() => { setSegments(item.segments); setFileName(item.name); setActiveTab('editor'); }} className="text-xs font-bold text-blue-400 hover:underline">Tải Dự Án</button>
+                    <button onClick={() => { setSegments(item.segments); setFileName(item.name); setActiveTab('editor'); setStatus('success'); }} className="text-xs font-bold text-blue-400 hover:underline">Tải Dự Án</button>
                   </div>
                 </div>
               ))}
