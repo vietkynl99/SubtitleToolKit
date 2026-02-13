@@ -1,5 +1,4 @@
-
-import { SubtitleSegment, AnalysisResult, SubtitleError } from '../types';
+import { SubtitleSegment, AnalysisResult, SubtitleError, Severity } from '../types';
 
 export function parseSRT(content: string): SubtitleSegment[] {
   const segments: SubtitleSegment[] = [];
@@ -23,7 +22,10 @@ export function parseSRT(content: string): SubtitleSegment[] {
           originalText,
           translatedText: '',
           isModified: false,
-          errors: []
+          errors: [],
+          severity: 'safe',
+          cps: 0,
+          issueList: []
         });
       }
     }
@@ -45,26 +47,52 @@ export function calculateCPS(segment: SubtitleSegment, text: string): number {
   return text.length / duration;
 }
 
+export function getSegmentMetadata(segment: SubtitleSegment, textKey: 'originalText' | 'translatedText'): { severity: Severity, cps: number, issueList: string[] } {
+  const text = segment[textKey] || segment.originalText;
+  const cps = calculateCPS(segment, text);
+  const issueList: string[] = [];
+  let severity: Severity = 'safe';
+
+  if (cps > 25) {
+    severity = 'critical';
+    issueList.push('CPS quá nhanh (> 25)');
+  } else if (cps >= 20) {
+    severity = 'warning';
+    issueList.push('CPS cảnh báo (20-25)');
+  }
+
+  const lines = text.split('\n');
+  if (lines.length > 2) {
+    severity = 'critical';
+    issueList.push('Quá 2 dòng');
+  }
+
+  if (lines.some(l => l.length > 45)) {
+    severity = 'critical';
+    issueList.push('Một dòng vượt quá 45 ký tự');
+  }
+
+  return { severity, cps, issueList };
+}
+
 export function analyzeSegments(segments: SubtitleSegment[], textKey: 'originalText' | 'translatedText'): AnalysisResult {
   let tooLongLines = 0;
   let tooFastLines = 0;
   let totalCPS = 0;
-  const groups = { safe: 0, warning: 0, danger: 0 };
+  const groups = { safe: 0, warning: 0, critical: 0 };
 
   segments.forEach(s => {
-    const text = s[textKey] || s.originalText;
-    const cps = calculateCPS(s, text);
-    totalCPS += cps;
+    const meta = getSegmentMetadata(s, textKey);
+    s.severity = meta.severity;
+    s.cps = meta.cps;
+    s.issueList = meta.issueList;
 
-    if (text.split('\n').length > 2 || text.length > 50) tooLongLines++;
-    if (cps > 25) {
-      tooFastLines++;
-      groups.danger++;
-    } else if (cps >= 20) {
-      groups.warning++;
-    } else {
-      groups.safe++;
-    }
+    totalCPS += meta.cps;
+
+    if (meta.issueList.some(i => i.includes('dòng'))) tooLongLines++;
+    if (meta.cps > 25) tooFastLines++;
+
+    groups[meta.severity]++;
   });
 
   return {
@@ -80,7 +108,7 @@ export function performLocalFix(text: string): string {
   let fixed = text.trim();
   // Remove multiple spaces
   fixed = fixed.replace(/\s+/g, ' ');
-  // Auto-wrap if too long (very simple logic for local fix)
+  // Auto-wrap if too long
   if (fixed.length > 40 && !fixed.includes('\n')) {
     const mid = Math.floor(fixed.length / 2);
     const spaceIndex = fixed.indexOf(' ', mid);

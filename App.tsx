@@ -1,11 +1,11 @@
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   Status, 
   SubtitleSegment, 
   AnalysisResult, 
   AppSettings, 
-  ProjectHistory 
+  ProjectHistory,
+  Severity
 } from './types';
 import { 
   parseSRT, 
@@ -34,9 +34,16 @@ const App: React.FC = () => {
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [filter, setFilter] = useState<'all' | Severity>('all');
 
   // Derived state
   const analysis = useMemo(() => analyzeSegments(segments, 'translatedText'), [segments]);
+  
+  const filteredSegments = useMemo(() => {
+    if (filter === 'all') return segments;
+    return segments.filter(s => s.severity === filter);
+  }, [segments, filter]);
+
   const selectedSegment = useMemo(() => segments.find(s => s.id === selectedId), [segments, selectedId]);
 
   // Load history on mount
@@ -245,31 +252,20 @@ const App: React.FC = () => {
               <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tối đa 5MB</span>
               <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tự động nhận diện Encoding</span>
             </div>
-            
-            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-              {[
-                { title: 'Dịch AI', desc: 'Sử dụng Gemini 3 để dịch sát nghĩa, mượt mà.' },
-                { title: 'Phân tích CPS', desc: 'Kiểm soát tốc độ đọc của khán giả thời gian thực.' },
-                { title: 'Tối ưu hoá', desc: 'Tự động sửa lỗi format và ngắt dòng hợp lý.' }
-              ].map((feature, idx) => (
-                <div key={idx} className="bg-slate-900/30 border border-slate-800/50 p-6 rounded-2xl">
-                  <h3 className="text-blue-400 font-bold mb-2 text-sm">{feature.title}</h3>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">{feature.desc}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       )}
 
       {activeTab === 'editor' && (
         <div className="flex-1 flex overflow-hidden">
-          {/* Column 1: List */}
+          {/* Column 1: List with Filter */}
           <div className="w-80 flex flex-col overflow-hidden">
             <SegmentList 
-              segments={segments} 
+              segments={filteredSegments} 
               selectedId={selectedId} 
-              onSelect={setSelectedId} 
+              onSelect={setSelectedId}
+              filter={filter}
+              onFilterChange={setFilter}
             />
           </div>
 
@@ -301,7 +297,18 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="space-y-3 flex-1 flex flex-col">
-                      <label className="text-xs font-bold text-blue-500 uppercase tracking-widest">Translation (VN)</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-blue-500 uppercase tracking-widest">Translation (VN)</label>
+                        {selectedSegment.issueList.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {selectedSegment.issueList.map((issue, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20">
+                                {issue}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <textarea
                         className="w-full flex-1 bg-slate-900 border border-blue-500/20 focus:border-blue-500/50 outline-none p-6 rounded-2xl text-xl text-blue-100 leading-relaxed resize-none transition-all placeholder:text-slate-700"
                         placeholder="Translating or enter manual text..."
@@ -361,16 +368,16 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Column 3: Analytics */}
+          {/* Column 3: Analytics with click-to-filter */}
           <div className="w-80 flex flex-col border-l border-slate-800">
-             <AnalyzerPanel data={analysis} />
+             <AnalyzerPanel data={analysis} activeFilter={filter} onFilterTrigger={setFilter} />
           </div>
         </div>
       )}
 
       {activeTab === 'history' && (
         <div className="flex-1 p-12 overflow-y-auto">
-          <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
+          <h2 className="text-3xl font-bold mb-8 tracking-tight">Dự án gần đây</h2>
           {history.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 p-12 rounded-3xl text-center">
               <p className="text-slate-500 italic">Chưa có lịch sử dự án nào.</p>
@@ -417,8 +424,8 @@ const App: React.FC = () => {
 
       {activeTab === 'settings' && (
         <div className="flex-1 p-12 max-w-4xl">
-          <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden divide-y divide-slate-800">
+          <h2 className="text-3xl font-bold mb-8 tracking-tight">Cài đặt hệ thống</h2>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden divide-y divide-slate-800 shadow-xl">
             <div className="p-8">
               <h3 className="font-bold mb-2">Ngưỡng CPS (Characters Per Second)</h3>
               <p className="text-sm text-slate-500 mb-6">Thiết lập ngưỡng tốc độ đọc trung bình cho phụ đề.</p>

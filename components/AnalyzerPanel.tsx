@@ -1,32 +1,61 @@
-
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AnalysisResult } from '../types';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AnalysisResult, Severity } from '../types';
 
 interface AnalyzerPanelProps {
   data: AnalysisResult;
+  onFilterTrigger: (filter: 'all' | Severity) => void;
+  activeFilter: 'all' | Severity;
 }
 
-const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data }) => {
+const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data, onFilterTrigger, activeFilter }) => {
   const chartData = [
-    { name: 'Safe', value: data.cpsGroups.safe, color: '#10b981' },
-    { name: 'Warning', value: data.cpsGroups.warning, color: '#f59e0b' },
-    { name: 'Critical', value: data.cpsGroups.danger, color: '#f43f5e' },
+    { name: 'Safe', value: data.cpsGroups.safe, color: '#10b981', id: 'safe' },
+    { name: 'Warning', value: data.cpsGroups.warning, color: '#f59e0b', id: 'warning' },
+    { name: 'Critical', value: data.cpsGroups.critical, color: '#f43f5e', id: 'critical' },
   ];
 
   return (
     <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900">
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Quality Dashboard</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={() => onFilterTrigger('safe')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              activeFilter === 'safe' ? 'bg-emerald-500/20 border-emerald-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+            }`}
+          >
+            <span className="block text-2xl font-bold text-emerald-400">{data.cpsGroups.safe}</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Safe</span>
+          </button>
+          <button 
+            onClick={() => onFilterTrigger('warning')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              activeFilter === 'warning' ? 'bg-amber-500/20 border-amber-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+            }`}
+          >
+            <span className="block text-2xl font-bold text-amber-400">{data.cpsGroups.warning}</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Warning</span>
+          </button>
+          <button 
+            onClick={() => onFilterTrigger('critical')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              activeFilter === 'critical' ? 'bg-rose-500/20 border-rose-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+            }`}
+          >
+            <span className="block text-2xl font-bold text-rose-400">{data.cpsGroups.critical}</span>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Critical</span>
+          </button>
+          <button 
+            onClick={() => onFilterTrigger('all')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+            }`}
+          >
             <span className="block text-2xl font-bold text-slate-100">{data.totalLines}</span>
-            <span className="text-xs text-slate-500">Total Lines</span>
-          </div>
-          <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-            <span className="block text-2xl font-bold text-slate-100">{data.avgCPS.toFixed(1)}</span>
-            <span className="text-xs text-slate-500">Avg CPS</span>
-          </div>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Total Lines</span>
+          </button>
         </div>
       </section>
 
@@ -35,14 +64,14 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data }) => {
         <div className="h-48 w-full bg-slate-800/30 rounded-xl p-2">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
                 cursor={{ fill: 'rgba(255,255,255,0.05)' }}
               />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="value" radius={[4, 4, 0, 0]} onClick={(data) => onFilterTrigger(data.id as Severity)}>
                 {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
+                  <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={activeFilter === 'all' || activeFilter === entry.id ? 0.8 : 0.2} className="cursor-pointer" />
                 ))}
               </Bar>
             </BarChart>
@@ -70,7 +99,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ data }) => {
             </div>
           </div>
         )}
-        {data.tooFastLines === 0 && data.tooLongLines === 0 && (
+        {data.cpsGroups.critical === 0 && data.cpsGroups.warning === 0 && (
           <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
             <p className="text-xs font-medium text-emerald-400">Everything looks great! No issues detected.</p>
           </div>

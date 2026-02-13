@@ -1,5 +1,6 @@
-
 export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-success' | 'error' | 'retry';
+
+export type Severity = 'safe' | 'warning' | 'critical';
 
 export interface SubtitleSegment {
   id: number;
@@ -9,6 +10,9 @@ export interface SubtitleSegment {
   translatedText: string;
   isModified: boolean;
   errors: SubtitleError[];
+  severity: Severity;
+  cps: number;
+  issueList: string[];
 }
 
 export interface SubtitleError {
@@ -22,9 +26,9 @@ export interface AnalysisResult {
   tooFastLines: number;
   avgCPS: number;
   cpsGroups: {
-    safe: number; // < 20
-    warning: number; // 20-25
-    danger: number; // > 25
+    safe: number; 
+    warning: number;
+    critical: number;
   };
 }
 
