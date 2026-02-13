@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SubtitleSegment, Severity } from '../types';
 
@@ -22,10 +23,17 @@ const SegmentList: React.FC<SegmentListProps> = ({
   safeThreshold,
   criticalThreshold
 }) => {
-  const getCpsColor = (cps: number) => {
-    if (cps > criticalThreshold) return 'text-rose-400';
-    if (cps >= safeThreshold) return 'text-amber-400';
-    return 'text-emerald-400';
+  // Helper to get color classes based on segment severity
+  const getSeverityClasses = (severity: Severity) => {
+    switch (severity) {
+      case 'critical':
+        return { text: 'text-rose-400', bg: 'bg-rose-500' };
+      case 'warning':
+        return { text: 'text-amber-400', bg: 'bg-amber-500' };
+      case 'safe':
+      default:
+        return { text: 'text-emerald-400', bg: 'bg-emerald-500' };
+    }
   };
 
   const filters: { id: 'all' | Severity, label: string, color: string }[] = [
@@ -73,73 +81,75 @@ const SegmentList: React.FC<SegmentListProps> = ({
       
       {/* Card List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-        {segments.map((seg) => (
-          <div
-            key={seg.id}
-            onClick={() => onSelect(seg.id)}
-            className={`w-full bg-slate-900 rounded-3xl border transition-all duration-200 overflow-hidden shadow-lg ${
-              selectedId === seg.id 
-                ? 'border-blue-500/50 ring-1 ring-blue-500/20' 
-                : 'border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            {/* Top Bar: Info & Timestamp */}
-            <div className="px-5 py-3 bg-slate-900/80 border-b border-slate-800/50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 bg-slate-800 rounded-lg text-[10px] font-bold font-mono text-slate-400">
-                  #{seg.id}
-                </span>
-                <span className="text-[11px] font-bold font-mono text-slate-500">
-                  {seg.startTime} → {seg.endTime}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                 <span className={`text-[10px] font-bold font-mono ${getCpsColor(seg.cps)}`}>
-                   {seg.cps.toFixed(1)} CPS
-                 </span>
-                 <div className={`w-2 h-2 rounded-full ${
-                   seg.severity === 'critical' ? 'bg-rose-500' : 
-                   seg.severity === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'
-                 }`} />
-              </div>
-            </div>
-
-            {/* Content Body: 2 Columns */}
-            <div className="flex flex-col md:flex-row min-h-[100px]">
-              {/* Left Column: Original CN */}
-              <div className="flex-1 p-5 border-b md:border-b-0 md:border-r border-slate-800/50 bg-slate-900/30">
-                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Original (CN)</div>
-                <p className="text-base text-slate-400 leading-relaxed font-medium">
-                  {seg.originalText || <span className="text-slate-700 italic text-sm">Không có text gốc</span>}
-                </p>
+        {segments.map((seg) => {
+          const colors = getSeverityClasses(seg.severity);
+          
+          return (
+            <div
+              key={seg.id}
+              onClick={() => onSelect(seg.id)}
+              className={`w-full bg-slate-900 rounded-3xl border transition-all duration-200 overflow-hidden shadow-lg ${
+                selectedId === seg.id 
+                  ? 'border-blue-500/50 ring-1 ring-blue-500/20' 
+                  : 'border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              {/* Top Bar: Info & Timestamp */}
+              <div className="px-5 py-3 bg-slate-900/80 border-b border-slate-800/50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="px-2.5 py-1 bg-slate-800 rounded-lg text-[10px] font-bold font-mono text-slate-400">
+                    #{seg.id}
+                  </span>
+                  <span className="text-[11px] font-bold font-mono text-slate-500">
+                    {seg.startTime} → {seg.endTime}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                   {/* Unify text and dot color using the pre-calculated severity */}
+                   <span className={`text-[10px] font-bold font-mono ${colors.text}`}>
+                     {seg.cps.toFixed(1)} CPS
+                   </span>
+                   <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
+                </div>
               </div>
 
-              {/* Right Column: Translation VN / Processing */}
-              <div className="flex-1 p-5 bg-slate-900/10">
-                <div className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest mb-2">Translation (VN)</div>
-                
-                {seg.isProcessing && !seg.translatedText ? (
-                  <div className="space-y-3 animate-pulse">
-                    <div className="text-sm font-bold text-slate-500 flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-slate-600 border-t-slate-400 rounded-full animate-spin" />
-                      ĐANG XỬ LÝ...
+              {/* Content Body: 2 Columns */}
+              <div className="flex flex-col md:flex-row min-h-[100px]">
+                {/* Left Column: Original CN */}
+                <div className="flex-1 p-5 border-b md:border-b-0 md:border-r border-slate-800/50 bg-slate-900/30">
+                  <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Original (CN)</div>
+                  <p className="text-base text-slate-400 leading-relaxed font-medium">
+                    {seg.originalText || <span className="text-slate-700 italic text-sm">Không có text gốc</span>}
+                  </p>
+                </div>
+
+                {/* Right Column: Translation VN / Processing */}
+                <div className="flex-1 p-5 bg-slate-900/10">
+                  <div className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest mb-2">Translation (VN)</div>
+                  
+                  {seg.isProcessing && !seg.translatedText ? (
+                    <div className="space-y-3 animate-pulse">
+                      <div className="text-sm font-bold text-slate-500 flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-slate-600 border-t-slate-400 rounded-full animate-spin" />
+                        ĐANG XỬ LÝ...
+                      </div>
+                      <div className="h-4 bg-slate-800 rounded-full w-3/4" />
+                      <div className="h-4 bg-slate-800 rounded-full w-1/2" />
                     </div>
-                    <div className="h-4 bg-slate-800 rounded-full w-3/4" />
-                    <div className="h-4 bg-slate-800 rounded-full w-1/2" />
-                  </div>
-                ) : (
-                  <textarea
-                    className="w-full bg-transparent border-none outline-none resize-none text-base text-blue-100 font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic"
-                    placeholder="Chưa có bản dịch..."
-                    rows={Math.max(2, (seg.translatedText || '').split('\n').length)}
-                    value={seg.translatedText || ''}
-                    onChange={(e) => onUpdateText(seg.id, e.target.value)}
-                  />
-                )}
+                  ) : (
+                    <textarea
+                      className="w-full bg-transparent border-none outline-none resize-none text-base text-blue-100 font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic"
+                      placeholder="Chưa có bản dịch..."
+                      rows={Math.max(2, (seg.translatedText || '').split('\n').length)}
+                      value={seg.translatedText || ''}
+                      onChange={(e) => onUpdateText(seg.id, e.target.value)}
+                    />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {segments.length === 0 && (
           <div className="p-12 text-center border-2 border-dashed border-slate-800 rounded-3xl">
             <p className="text-sm text-slate-500 italic">Không có segment nào phù hợp bộ lọc.</p>

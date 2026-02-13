@@ -1,11 +1,10 @@
 # FEATURE: Subtitle Analyzer
 
-Version: 1.5.0  
+Version: 1.6.0  
 Last Updated: 2026-02-13  
 
 Changelog:
-- v1.4.0: Thêm Detailed CPS Distribution + Trim Empty Edge Buckets.
-- v1.5.0: Đồng bộ Analyzer với Segment List hiển thị Translation.
+- v1.6.0: Analyzer phụ thuộc trực tiếp vào CPS Threshold trong Settings và tự động re-run khi threshold thay đổi.
 
 ---
 
@@ -22,23 +21,57 @@ Analyzer không thay đổi nội dung text.
 
 ---
 
-# 2. CPS Classification Logic
+# 2. CPS Classification Logic (UPDATED)
 
-Mặc định:
+Analyzer không dùng hard-coded threshold.
 
-safe: <25  
-warning: 25–40  
-critical: >40  
+Phải đọc từ settingsState.cpsThreshold:
 
-Ngưỡng này có thể thay đổi trong Settings.
+{
+  safeMax,
+  warningMax
+}
 
-Analyzer phải đọc ngưỡng hiện tại từ Settings.
+Classification:
+
+if (cps < safeMax) → safe  
+if (cps <= warningMax) → warning  
+else → critical  
+
+Không được hard-code 25 / 40.
 
 ---
 
-# 3. CPS Detailed Distribution (Histogram)
+# 3. Re-run Trigger (CRITICAL)
 
-Default Buckets (step 5):
+Analyzer phải re-run khi:
+
+- Upload file mới
+- Translation thay đổi làm thay đổi CPS
+- Settings.cpsThreshold thay đổi
+
+Không được giữ histogram cũ khi threshold đổi.
+
+---
+
+# 4. Segment Data Update Rule
+
+Analyzer phải cập nhật:
+
+segment.level
+
+Level không được lưu cố định sau upload.
+
+Nó phụ thuộc vào:
+
+- cps
+- threshold hiện tại
+
+---
+
+# 5. CPS Histogram
+
+Histogram vẫn dùng bucket cố định:
 
 0–5  
 5–10  
@@ -49,23 +82,17 @@ Default Buckets (step 5):
 30–35  
 35–40  
 40–45  
-45+
+45+  
+
+Lưu ý:
+
+Histogram không phụ thuộc threshold.
+
+Threshold chỉ ảnh hưởng level (safe/warning/critical), không ảnh hưởng bucket.
 
 ---
 
-# 4. Histogram Rendering Rules
-
-## 4.1 Trim Empty Edge Buckets
-
-- Không hiển thị bucket rỗng ở hai đầu.
-- Không xóa bucket rỗng ở giữa.
-- Nếu chỉ có 1 bucket có dữ liệu → chỉ render 1 cột.
-- Nếu toàn bộ rỗng → hiển thị:
-  "Không có dữ liệu CPS để hiển thị."
-
----
-
-# 5. Analyzer Output Structure
+# 6. Analyzer Output Structure
 
 Analyzer phải trả:
 
@@ -74,14 +101,17 @@ Analyzer phải trả:
   minCPS: number,
   maxCPS: number,
   avgCPS: number,
-  medianCPS: number
+  medianCPS: number,
+  safeCount: number,
+  warningCount: number,
+  criticalCount: number
 }
+
+Các count này phải dựa trên threshold hiện tại.
 
 ---
 
-# 6. Integration with Segment List
-
-Analyzer không phụ thuộc vào việc segment có translation hay không.
+# 7. Integration with Segment List
 
 Filter theo:
 
@@ -90,27 +120,31 @@ Filter theo:
 - Critical
 - CPS bucket
 
-Phải giữ nguyên translation đang hiển thị trong Segment List.
+Khi threshold thay đổi:
 
-Filter chỉ thay đổi danh sách segment được render, không thay đổi dữ liệu segment.
-
----
-
-# 7. Performance Requirement
-
-- Tính histogram ≤ 200ms với 3000 segment.
-- Trim logic phải O(n) theo số bucket.
-- Không re-calc toàn bộ khi chỉ thay đổi translation text.
+- Segment List phải cập nhật level ngay
+- Filter đang active vẫn phải hoạt động chính xác
+- Không mất translation
 
 ---
 
-# 8. Click Behavior
+# 8. Performance Requirement
 
-Click vào bucket trong histogram:
+Re-classify level:
 
-- Filter Segment List theo CPS range.
-- Không reset scroll position nếu có thể.
-- Không mất translation đã hiển thị.
+- O(n) theo số segment
+- Không tính lại CPS nếu text không đổi
+- Chỉ re-map level theo threshold mới
+
+---
+
+# 9. Không được làm
+
+❌ Không hard-code threshold  
+❌ Không giữ level từ lần analyze trước  
+❌ Không update histogram mà không update level  
+
+Analyzer và Settings phải đồng bộ 100%.
 
 ---
 

@@ -1,52 +1,78 @@
 # FEATURE: Settings
 
-Version: 1.6.0  
+Version: 1.7.0  
 Last Updated: 2026-02-13  
 
 ---
 
 # 1. Mục tiêu
 
-Cho phép người dùng cấu hình các thông số hệ thống để tối ưu hóa quy trình dịch và phân tích.
+Cho phép người dùng cấu hình các thông số hệ thống để tối ưu hóa:
 
-❌ Không còn tính năng History.
-❌ Không lưu project history vào LocalStorage.
+- Phân loại CPS
+- Auto Fix
+- Optimization
 
----
-
-# 2. CPS Threshold Settings
-
-Cho phép thay đổi ngưỡng:
-
-safe: mặc định <25  
-warning: 25–40  
-critical: >40  
-
-Analyzer phải đọc ngưỡng từ Settings này để tính toán Severity.
+❌ Không có History
+❌ Không lưu project history
 
 ---
 
-# 3. Auto Fix Toggle
+# 2. CPS Threshold Settings (CRITICAL)
 
-Toggle bật/tắt:
+Cho phép user cấu hình:
 
-- Local Auto Fix on Upload: Tự động dọn dẹp khoảng trắng và ngắt dòng cơ bản khi nạp file.
+- safeMax (mặc định: 25)
+- warningMax (mặc định: 40)
+
+Logic phân loại:
+
+safe: cps < safeMax  
+warning: safeMax ≤ cps ≤ warningMax  
+critical: cps > warningMax  
 
 ---
 
-# 4. Optimization Mode
+# 3. State Structure
 
-Chọn chế độ ưu tiên cho AI:
+settingsState ví dụ:
 
-- Safe Mode: Giữ nghĩa tối đa, chỉ sửa khi CPS quá cao.
-- Aggressive Mode: Ưu tiên tốc độ đọc, ép CPS về mức an toàn.
+{
+  cpsThreshold: {
+    safeMax: number,
+    warningMax: number
+  },
+  autoFixOnUpload: boolean,
+  optimizationMode: "safe" | "aggressive"
+}
+
+---
+
+# 4. Recalculation Rule (STRICT)
+
+Khi user thay đổi CPS Threshold:
+
+Hệ thống bắt buộc:
+
+1. Cập nhật settingsState
+2. Trigger re-run Analyzer
+3. Cập nhật lại:
+   - segment.level
+   - histogram
+   - safe / warning / critical counters
+4. Re-render Segment List
+
+Không được giữ level cũ.
 
 ---
 
 # 5. Không được làm
 
-❌ Không lưu lịch sử project (Để bảo mật dữ liệu khách hàng).
-❌ Không hiển thị danh sách file đã mở trước đó.
+❌ Không chỉ đổi màu UI mà không re-classify  
+❌ Không cache level theo threshold cũ  
+❌ Không yêu cầu user reload file  
+
+Re-analyze phải diễn ra realtime.
 
 ---
 

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
   Upload, 
@@ -40,8 +39,10 @@ export const ICONS = {
 };
 
 export const DEFAULT_SETTINGS = {
-  safeThreshold: 25,
-  criticalThreshold: 40,
+  cpsThreshold: {
+    safeMax: 25,
+    warningMax: 40
+  },
   autoFixOnUpload: false,
-  aiMode: 'fast' as const
+  optimizationMode: 'safe' as const
 };

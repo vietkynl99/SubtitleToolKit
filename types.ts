@@ -61,10 +61,12 @@ export interface ProjectHistory {
 }
 
 export interface AppSettings {
-  safeThreshold: number;
-  criticalThreshold: number;
+  cpsThreshold: {
+    safeMax: number;
+    warningMax: number;
+  };
   autoFixOnUpload: boolean;
-  aiMode: 'fast' | 'pro';
+  optimizationMode: 'safe' | 'aggressive';
 }
 
 export interface SplitMetadata {

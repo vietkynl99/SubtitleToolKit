@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   Status, 
@@ -69,32 +70,39 @@ const App: React.FC = () => {
     localStorage.setItem('subtitle_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // Derived state - Analysis
-  const analysis = useMemo(() => {
-    return analyzeSegments(segments, 'translatedText', settings.safeThreshold, settings.criticalThreshold);
-  }, [segments, settings.safeThreshold, settings.criticalThreshold]);
+  // v1.7.5 logic: Process ALL segments to get enriched data and GLOBAL stats for Dashboard
+  // Dashboard must always reflect the total project state.
+  const globalAnalysis = useMemo(() => {
+    if (segments.length === 0) return null;
+    return analyzeSegments(segments, 'translatedText', settings.cpsThreshold);
+  }, [segments, settings.cpsThreshold]);
 
-  // Derived Duration for Header
+  const processedSegments = useMemo(() => globalAnalysis?.enrichedSegments || [], [globalAnalysis]);
+  const allStats = useMemo(() => globalAnalysis?.stats, [globalAnalysis]);
+
+  // Editor-only: Filtered Segments derived from the enriched global list
+  const filteredSegments = useMemo(() => {
+    if (filter === 'all') return processedSegments;
+    if (typeof filter === 'string') {
+      return processedSegments.filter(s => s.severity === filter);
+    }
+    if (filter.type === 'range') {
+      return processedSegments.filter(s => s.cps >= filter.min && s.cps < filter.max);
+    }
+    return processedSegments;
+  }, [processedSegments, filter]);
+
+  // Derived Duration for Header (Reflects ALL segments for the file)
   const totalDurationStr = useMemo(() => {
-    if (segments.length === 0) return '0m 0s';
-    const last = segments[segments.length - 1];
-    const totalSec = timeToSeconds(last.endTime);
+    if (processedSegments.length === 0) return '0m 0s';
+    const first = processedSegments[0];
+    const last = processedSegments[processedSegments.length - 1];
+    const totalSec = Math.max(0, timeToSeconds(last.endTime) - timeToSeconds(first.startTime));
     const m = Math.floor(totalSec / 60);
     const s = Math.floor(totalSec % 60);
     return `${m}m ${s}s`;
-  }, [segments]);
+  }, [processedSegments]);
   
-  const filteredSegments = useMemo(() => {
-    if (filter === 'all') return segments;
-    if (typeof filter === 'string') {
-      return segments.filter(s => s.severity === filter);
-    }
-    if (filter.type === 'range') {
-      return segments.filter(s => s.cps >= filter.min && s.cps < filter.max);
-    }
-    return segments;
-  }, [segments, filter]);
-
   // Toast Helper
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -211,6 +219,7 @@ const App: React.FC = () => {
       setStatus('success');
       setActiveTab('editor');
       setGeneratedFiles([]);
+      setFilter('all');
     };
     reader.onerror = () => {
       setStatus('error');
@@ -399,14 +408,19 @@ const App: React.FC = () => {
     setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text, isModified: true } : s));
   };
 
-  const updateThreshold = (key: 'safeThreshold' | 'criticalThreshold', val: number) => {
-    const newSettings = { ...settings, [key]: val };
-    if (key === 'safeThreshold' && val >= newSettings.criticalThreshold - 5) {
-      newSettings.criticalThreshold = val + 5;
-    } else if (key === 'criticalThreshold' && val <= newSettings.safeThreshold + 5) {
-      newSettings.safeThreshold = Math.max(0, val - 5);
-    }
-    setSettings(newSettings);
+  const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
+    setSettings(prev => {
+      const newThreshold = { ...prev.cpsThreshold, [key]: val };
+      
+      // Auto-correct thresholds logic
+      if (key === 'safeMax' && val >= newThreshold.warningMax - 5) {
+        newThreshold.warningMax = val + 5;
+      } else if (key === 'warningMax' && val <= newThreshold.safeMax + 5) {
+        newThreshold.safeMax = Math.max(0, val - 5);
+      }
+      
+      return { ...prev, cpsThreshold: newThreshold };
+    });
   };
 
   return (
@@ -462,9 +476,10 @@ const App: React.FC = () => {
             <div className="overflow-hidden">
               <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
               <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                <span>{segments.length} segments</span>
+                {/* Always show Global info for the file here */}
+                <span>{processedSegments.length} SEGMENTS</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span>{analysis.avgCPS.toFixed(1)} Avg CPS</span>
+                <span>{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                 <span>{totalDurationStr}</span>
               </div>
@@ -487,7 +502,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* v1.7.0 Independent Translation Style Menu */}
       {activeTab === 'translation-style' && (
         <PresetPage 
           preset={translationPreset}
@@ -501,7 +515,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* v1.7.0 Independent File Tools Menu (Now just Split) */}
       {activeTab === 'file-tools' && (
         <FileToolsPage 
           fileName={fileName}
@@ -525,8 +538,8 @@ const App: React.FC = () => {
               onUpdateText={updateSegmentText}
               filter={filter}
               onFilterChange={setFilter}
-              safeThreshold={settings.safeThreshold}
-              criticalThreshold={settings.criticalThreshold}
+              safeThreshold={settings.cpsThreshold.safeMax}
+              criticalThreshold={settings.cpsThreshold.warningMax}
             />
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
@@ -547,11 +560,11 @@ const App: React.FC = () => {
           </div>
           <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900">
              <AnalyzerPanel 
-                data={analysis} 
+                data={allStats || ({} as AnalysisResult)} 
                 activeFilter={filter} 
                 onFilterTrigger={setFilter} 
-                safeThreshold={settings.safeThreshold}
-                criticalThreshold={settings.criticalThreshold}
+                safeThreshold={settings.cpsThreshold.safeMax}
+                criticalThreshold={settings.cpsThreshold.warningMax}
                 onOpenSplit={() => setActiveTab('file-tools')}
                 onClearProject={handleClearProjectRequest}
                 generatedFiles={generatedFiles}
@@ -568,34 +581,75 @@ const App: React.FC = () => {
           <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
           <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl">
             <div>
-              <h3 className="font-bold mb-2">Safe Threshold</h3>
-              <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" />
+              <h3 className="font-bold mb-2">Safe Max (CPS)</h3>
+              <input 
+                type="range" min="10" max="60" 
+                value={settings.cpsThreshold.safeMax} 
+                onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} 
+                className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" 
+              />
               <div className="flex justify-between items-center mt-2">
-                <span className="text-blue-400 font-bold">{settings.safeThreshold} CPS</span>
-                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Low Speed</span>
+                <span className="text-blue-400 font-bold">{settings.cpsThreshold.safeMax} CPS</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Low Speed limit</span>
               </div>
             </div>
             <div>
-              <h3 className="font-bold mb-2">Critical Threshold</h3>
-              <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" />
+              <h3 className="font-bold mb-2">Warning Max (CPS)</h3>
+              <input 
+                type="range" min="15" max="80" 
+                value={settings.cpsThreshold.warningMax} 
+                onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} 
+                className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" 
+              />
               <div className="flex justify-between items-center mt-2">
-                <span className="text-rose-400 font-bold">{settings.criticalThreshold} CPS</span>
-                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed</span>
+                <span className="text-rose-400 font-bold">{settings.cpsThreshold.warningMax} CPS</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed limit</span>
               </div>
             </div>
-            <div className="pt-6 border-t border-slate-800">
-               <label className="flex items-center gap-4 cursor-pointer group">
-                  <input 
-                    type="checkbox" 
-                    checked={settings.autoFixOnUpload}
-                    onChange={(e) => setSettings({...settings, autoFixOnUpload: e.target.checked})}
-                    className="w-5 h-5 bg-slate-800 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 transition-all"
-                  />
-                  <div>
-                    <span className="block font-bold text-slate-200 group-hover:text-white transition-all">Auto-fix on Upload</span>
-                    <span className="text-xs text-slate-500">Tự động sửa lỗi định dạng ngay khi nạp file.</span>
+
+            <div className="pt-6 border-t border-slate-800 space-y-6">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">AI & Automation</h3>
+              
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl cursor-pointer group hover:bg-slate-800/50 transition-all">
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.autoFixOnUpload}
+                      onChange={(e) => setSettings({...settings, autoFixOnUpload: e.target.checked})}
+                      className="w-5 h-5 bg-slate-900 border-slate-700 rounded text-blue-500 focus:ring-blue-500 transition-all"
+                    />
+                    <div>
+                      <span className="block font-bold text-slate-200">Auto-fix on Upload</span>
+                      <span className="text-xs text-slate-500">Tự động sửa lỗi định dạng ngay khi nạp file.</span>
+                    </div>
                   </div>
-               </label>
+                </label>
+
+                <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl space-y-3">
+                   <div className="text-sm font-bold text-slate-200">Optimization Mode</div>
+                   <div className="flex gap-2">
+                     {['safe', 'aggressive'].map((mode) => (
+                       <button
+                         key={mode}
+                         onClick={() => setSettings({...settings, optimizationMode: mode as any})}
+                         className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
+                           settings.optimizationMode === mode 
+                             ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10' 
+                             : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
+                         }`}
+                       >
+                         {mode}
+                       </button>
+                     ))}
+                   </div>
+                   <p className="text-[10px] text-slate-500 italic">
+                     {settings.optimizationMode === 'safe' 
+                        ? 'Chế độ Safe: Ưu tiên giữ nguyên ý nghĩa, chỉ tối ưu khi CPS quá cao.' 
+                        : 'Chế độ Aggressive: Ưu tiên trải nghiệm người dùng, ép CPS về vùng an toàn.'}
+                   </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

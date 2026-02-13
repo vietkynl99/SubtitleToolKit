@@ -32,9 +32,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   onDeleteGenerated
 }) => {
   const getBucketColor = (mid: number) => {
-    if (mid > criticalThreshold) return '#f43f5e';
-    if (mid >= safeThreshold) return '#f59e0b';
-    return '#10b981';
+    // Sync with v1.7.0 classification
+    if (mid > criticalThreshold) return '#f43f5e'; // rose-500
+    if (mid >= safeThreshold) return '#f59e0b'; // amber-500
+    return '#10b981'; // emerald-500
   };
 
   const formattedHistogramData = data.cpsHistogram.map(b => ({

@@ -1,3 +1,4 @@
+
 import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata, HistogramBucket } from '../types';
 
 export interface SplitResult {
@@ -26,7 +27,6 @@ export function parseSRT(content: string): SubtitleSegment[] {
         const cnLines: string[] = [];
         const vnLines: string[] = [];
 
-        // v1.3.0 Logic: Detect language for each line
         contentLines.forEach(line => {
           if (isChinese(line)) {
             cnLines.push(line);
@@ -81,32 +81,31 @@ export function calculateCPS(segment: SubtitleSegment, text: string): number {
 export function getSegmentMetadata(
   segment: SubtitleSegment, 
   textKey: 'originalText' | 'translatedText',
-  safeThreshold: number,
-  criticalThreshold: number
+  cpsThreshold: { safeMax: number; warningMax: number }
 ): { severity: Severity, cps: number, issueList: string[] } {
-  // v1.3.0 Requirement 8: If original is null, use translation for CPS
-  const text = segment[textKey] || segment.originalText || segment.translatedText || "";
+  const text = (segment[textKey] || segment.originalText || segment.translatedText || "").trim();
   const cps = calculateCPS(segment, text);
   const issueList: string[] = [];
   let severity: Severity = 'safe';
 
-  if (cps > criticalThreshold) {
+  // STRICT CPS ONLY LOGIC
+  if (cps > cpsThreshold.warningMax) {
     severity = 'critical';
-    issueList.push(`CPS vượt quá ngưỡng Critical (> ${criticalThreshold})`);
-  } else if (cps >= safeThreshold) {
+    issueList.push(`CPS vượt quá ngưỡng Critical (> ${cpsThreshold.warningMax})`);
+  } else if (cps >= cpsThreshold.safeMax) {
     severity = 'warning';
-    issueList.push(`CPS nằm trong vùng cảnh báo (${safeThreshold}-${criticalThreshold})`);
+    issueList.push(`CPS nằm trong vùng cảnh báo (${cpsThreshold.safeMax}-${cpsThreshold.warningMax})`);
+  } else {
+    severity = 'safe';
   }
 
-  const lines = text.split('\n');
+  // Formatting issues are tracked for information but DO NOT affect severity color
+  const lines = text.split('\n').filter(line => line.trim().length > 0);
   if (lines.length > 2) {
-    severity = 'critical';
-    issueList.push('Quá 2 dòng');
+    issueList.push('Phụ đề quá 2 dòng');
   }
-
-  if (lines.some(l => l.length > 45)) {
-    severity = 'critical';
-    issueList.push('Một dòng vượt quá 45 ký tự');
+  if (lines.some(l => l.length > 50)) {
+    issueList.push('Dòng phụ đề quá dài (> 50 ký tự)');
   }
 
   return { severity, cps, issueList };
@@ -115,9 +114,8 @@ export function getSegmentMetadata(
 export function analyzeSegments(
   segments: SubtitleSegment[], 
   textKey: 'originalText' | 'translatedText',
-  safeThreshold: number = 25,
-  criticalThreshold: number = 40
-): AnalysisResult {
+  cpsThreshold: { safeMax: number; warningMax: number }
+): { stats: AnalysisResult, enrichedSegments: SubtitleSegment[] } {
   let tooLongLines = 0;
   let tooFastLines = 0;
   let totalCPS = 0;
@@ -128,38 +126,47 @@ export function analyzeSegments(
 
   const histogramCounts = new Array(10).fill(0);
 
-  segments.forEach(s => {
-    const meta = getSegmentMetadata(s, textKey, safeThreshold, criticalThreshold);
-    s.severity = meta.severity;
-    s.cps = meta.cps;
-    s.issueList = meta.issueList;
+  const enrichedSegments = segments.map(s => {
+    const meta = getSegmentMetadata(s, textKey, cpsThreshold);
+    
+    const enriched = {
+      ...s,
+      severity: meta.severity,
+      cps: meta.cps,
+      issueList: meta.issueList
+    };
 
     totalCPS += meta.cps;
     allCPS.push(meta.cps);
     if (meta.cps < minCPS) minCPS = meta.cps;
     if (meta.cps > maxCPS) maxCPS = meta.cps;
 
-    if (meta.issueList.some(i => i.includes('dòng'))) tooLongLines++;
-    if (meta.cps > criticalThreshold) tooFastLines++;
+    if (meta.issueList.some(i => i.toLowerCase().includes('dòng'))) tooLongLines++;
+    if (meta.severity === 'critical') tooFastLines++;
 
     groups[meta.severity]++;
 
     const bucketIdx = Math.min(Math.floor(meta.cps / 5), 9);
     histogramCounts[bucketIdx]++;
+
+    return enriched;
   });
 
   const totalLines = segments.length;
   if (totalLines === 0) {
     return {
-      totalLines: 0,
-      tooLongLines: 0,
-      tooFastLines: 0,
-      avgCPS: 0,
-      minCPS: 0,
-      maxCPS: 0,
-      medianCPS: 0,
-      cpsGroups: { safe: 0, warning: 0, critical: 0 },
-      cpsHistogram: []
+      stats: {
+        totalLines: 0,
+        tooLongLines: 0,
+        tooFastLines: 0,
+        avgCPS: 0,
+        minCPS: 0,
+        maxCPS: 0,
+        medianCPS: 0,
+        cpsGroups: { safe: 0, warning: 0, critical: 0 },
+        cpsHistogram: []
+      },
+      enrichedSegments: []
     };
   }
 
@@ -194,15 +201,18 @@ export function analyzeSegments(
   }
 
   return {
-    totalLines,
-    tooLongLines,
-    tooFastLines,
-    avgCPS: totalCPS / totalLines,
-    minCPS,
-    maxCPS,
-    medianCPS,
-    cpsGroups: groups,
-    cpsHistogram
+    stats: {
+      totalLines,
+      tooLongLines,
+      tooFastLines,
+      avgCPS: totalCPS / totalLines,
+      minCPS,
+      maxCPS,
+      medianCPS,
+      cpsGroups: groups,
+      cpsHistogram
+    },
+    enrichedSegments
   };
 }
 
