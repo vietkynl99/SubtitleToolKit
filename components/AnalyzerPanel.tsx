@@ -11,6 +11,7 @@ interface AnalyzerPanelProps {
   safeThreshold: number;
   criticalThreshold: number;
   onOpenSplit: () => void;
+  onClearProject: () => void;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
   onDeleteGenerated: (index: number) => void;
@@ -23,6 +24,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   safeThreshold,
   criticalThreshold,
   onOpenSplit,
+  onClearProject,
   generatedFiles,
   onDownloadGenerated,
   onDeleteGenerated
@@ -47,7 +49,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
 
   return (
-    <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar">
+    <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-12">
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Quality Dashboard</h3>
         <div className="grid grid-cols-2 gap-3">
@@ -90,7 +92,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
-      {/* v1.4.0 CPS Histogram Chart with Trim Edge Logic */}
+      {/* CPS Histogram Chart */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Detailed CPS Distribution</h3>
         <div className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 flex items-center justify-center">
@@ -150,7 +152,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
-      {/* v1.3.0 CPS Statistics Box */}
+      {/* CPS Statistics Box */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">CPS Statistics</h3>
         <div className="grid grid-cols-2 gap-2">
@@ -204,27 +206,41 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </section>
       )}
 
+      {/* File Tools Section */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">File Tools</h3>
-        <button 
-          onClick={onOpenSplit}
-          className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <span className="p-2 bg-blue-600/10 text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
-              {ICONS.Split}
-            </span>
-            <div className="text-left">
-              <span className="block text-xs font-bold text-slate-200">Split SRT</span>
-              <span className="text-[10px] text-slate-500">Chia nhỏ file thành nhiều phần</span>
+        <div className="space-y-2">
+          <button 
+            onClick={onOpenSplit}
+            className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <span className="p-2 bg-blue-600/10 text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
+                {ICONS.Split}
+              </span>
+              <div className="text-left">
+                <span className="block text-xs font-bold text-slate-200">Split SRT</span>
+                <span className="text-[10px] text-slate-500">Chia nhỏ file thành nhiều phần</span>
+              </div>
             </div>
-          </div>
-          <span className="text-slate-600 group-hover:text-slate-400 transition-all">
-            {ICONS.Next}
-          </span>
+            <span className="text-slate-600 group-hover:text-slate-400 transition-all">
+              {ICONS.Next}
+            </span>
+          </button>
+        </div>
+      </section>
+
+      {/* Global Reset Section (v1.4.0) */}
+      <section className="pt-4 border-t border-slate-800/50">
+        <button 
+          onClick={onClearProject}
+          className="w-full flex items-center justify-center gap-2 p-3 bg-slate-800/30 border border-slate-700/30 rounded-xl hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-400 text-slate-500 text-xs font-bold transition-all"
+        >
+          {ICONS.Delete} Clear Current Project
         </button>
       </section>
 
+      {/* Issue Alerts */}
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Issue Alerts</h3>
         {data.tooFastLines > 0 && (

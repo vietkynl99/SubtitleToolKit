@@ -1,4 +1,4 @@
-export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-success' | 'error' | 'retry';
+export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-success' | 'error' | 'retry' | 'clearing';
 
 export type Severity = 'safe' | 'warning' | 'critical';
 

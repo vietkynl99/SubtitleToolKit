@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   Status, 
   SubtitleSegment, 
@@ -41,14 +41,13 @@ const App: React.FC = () => {
   const [fileName, setFileName] = useState<string>('');
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  
-  // v1.3.0 Flexible Filter: 'all' | Severity | { type: 'range', min: number, max: number, label: string }
   const [filter, setFilter] = useState<any>('all');
-  
   const [showSplitModal, setShowSplitModal] = useState<boolean>(false);
-  
-  // v1.3.0 Generated files storage
+  const [showClearModal, setShowClearModal] = useState<boolean>(false);
+  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
+  
+  const dropzoneRef = useRef<HTMLLabelElement>(null);
 
   // Load history & settings on mount
   useEffect(() => {
@@ -81,6 +80,12 @@ const App: React.FC = () => {
   }, [segments, filter]);
 
   const selectedSegment = useMemo(() => segments.find(s => s.id === selectedId), [segments, selectedId]);
+
+  // Toast Helper
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
+  };
 
   // Save history helper
   const saveToHistory = useCallback((segs: SubtitleSegment[], name: string) => {
@@ -143,6 +148,39 @@ const App: React.FC = () => {
     };
     reader.readAsText(file);
   }, [settings.autoFixOnUpload]);
+
+  // Clear Project Implementation (v1.5.0)
+  const performClear = async () => {
+    setStatus('clearing');
+    
+    // Simulate short processing for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // Reset Global State
+    setSegments([]);
+    setGeneratedFiles([]);
+    setFileName('');
+    setFileSize(0);
+    setProgress(0);
+    setStatus('idle');
+    setFilter('all');
+    setSelectedId(null);
+    setShowClearModal(false);
+
+    // UI Navigation & Feedback
+    setActiveTab('upload');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast("Project đã được xóa.");
+  };
+
+  const handleClearProject = () => {
+    const hasModifications = segments.some(s => s.isModified);
+    if (hasModifications || segments.length > 0) {
+      setShowClearModal(true);
+    } else {
+      performClear();
+    }
+  };
 
   // Handlers
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -268,6 +306,44 @@ const App: React.FC = () => {
 
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress}>
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 border border-slate-700 px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <p className="text-sm font-bold text-blue-400 flex items-center gap-2">
+            {ICONS.Success} {toast.message}
+          </p>
+        </div>
+      )}
+
+      {/* Confirmation Modal (v1.5.0) */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+            <h3 className="text-xl font-bold mb-3">Xác nhận xóa dự án?</h3>
+            <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+              Bạn có chắc muốn xóa project hiện tại? Mọi thay đổi chưa export sẽ bị mất.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                disabled={status === 'clearing'}
+                onClick={() => setShowClearModal(false)}
+                className="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
+              >
+                Hủy
+              </button>
+              <button 
+                disabled={status === 'clearing'}
+                onClick={performClear}
+                className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                {status === 'clearing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSplitModal && (
         <SplitModal 
           onClose={() => setShowSplitModal(false)} 
@@ -291,6 +367,7 @@ const App: React.FC = () => {
             </p>
 
             <label 
+              ref={dropzoneRef}
               className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer overflow-hidden ${
                 isDragging 
                   ? 'bg-blue-600/10 border-blue-500 scale-[1.02] shadow-2xl shadow-blue-500/10' 
@@ -305,12 +382,28 @@ const App: React.FC = () => {
                 <p className="text-xl font-bold text-slate-200">{isDragging ? 'Thả file để tải lên' : 'Kéo thả file SRT vào đây'}</p>
                 <p className="text-sm text-slate-500">Hoặc click để chọn file từ máy tính</p>
               </div>
+
+              {status === 'processing' && (
+                <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                  <p className="text-blue-400 font-bold">Đang xử lý file...</p>
+                  <div className="w-full max-w-xs bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
+                    <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                  </div>
+                </div>
+              )}
             </label>
+
+            <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Định dạng .SRT</span>
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tối đa 5MB</span>
+              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tự động nhận diện Encoding</span>
+            </div>
           </div>
         </div>
       )}
 
-      {activeTab === 'editor' && (
+      {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden">
           <div className="w-80 flex flex-col overflow-hidden">
             <SegmentList 
@@ -335,6 +428,11 @@ const App: React.FC = () => {
                         <span className="px-2 py-0.5 rounded bg-slate-800 text-xs text-slate-400 font-mono">{selectedSegment.startTime} - {selectedSegment.endTime}</span>
                       </h2>
                     </div>
+                    <div className="flex gap-2">
+                       <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors" title="Save changes">
+                         {ICONS.Save}
+                       </button>
+                    </div>
                   </div>
                   <div className="flex-1 space-y-8">
                     <div className="space-y-3">
@@ -346,6 +444,15 @@ const App: React.FC = () => {
                     <div className="space-y-3 flex-1 flex flex-col">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-blue-500 uppercase tracking-widest">Translation (VN)</label>
+                        {selectedSegment.issueList.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            {selectedSegment.issueList.map((issue, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20">
+                                {issue}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <textarea
                         className="w-full flex-1 bg-slate-900 border border-blue-500/20 focus:border-blue-500/50 outline-none p-6 rounded-2xl text-xl text-blue-100 leading-relaxed resize-none transition-all placeholder:text-slate-700"
@@ -360,6 +467,10 @@ const App: React.FC = () => {
                 <div className="h-full flex flex-col items-center justify-center text-slate-600">
                   <div className="mb-4 text-slate-800">{ICONS.File}</div>
                   <p className="text-sm font-medium">Chọn một segment để bắt đầu biên tập</p>
+                  <div className="mt-8 p-4 bg-slate-900/50 border border-slate-800 rounded-xl max-w-xs text-center">
+                    <p className="text-xs text-slate-500">File: <span className="text-slate-400">{fileName}</span></p>
+                    <p className="text-xs text-slate-500 mt-1">Size: <span className="text-slate-400">{formatSize(fileSize)}</span></p>
+                  </div>
                 </div>
               )}
             </div>
@@ -367,10 +478,10 @@ const App: React.FC = () => {
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                  <button onClick={handleTranslate} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all">
+                  <button onClick={handleTranslate} disabled={status === 'processing' || status === 'clearing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all">
                     {status === 'processing' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate} AI Dịch Toàn Bộ
                   </button>
-                  <button onClick={handleAiFix} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-lg transition-all">
+                  <button onClick={handleAiFix} disabled={status === 'processing' || status === 'clearing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-lg transition-all">
                     {ICONS.Fix} AI Tối Ưu
                   </button>
                   <button onClick={handleLocalFixAll} className="flex items-center gap-2 px-4 py-2 border border-slate-700 hover:bg-slate-800 text-slate-400 text-sm font-bold rounded-lg transition-all">Sửa Nhanh</button>
@@ -390,6 +501,7 @@ const App: React.FC = () => {
                 safeThreshold={settings.safeThreshold}
                 criticalThreshold={settings.criticalThreshold}
                 onOpenSplit={() => setShowSplitModal(true)}
+                onClearProject={handleClearProject}
                 generatedFiles={generatedFiles}
                 onDownloadGenerated={handleDownloadGenerated}
                 onDeleteGenerated={handleDeleteGenerated}
