@@ -1,15 +1,66 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset } from "../types";
 
+/**
+ * Translates a single batch of segments. 
+ * This allows the UI to handle orchestration and stop-on-error requirements.
+ */
+export async function translateBatch(
+  batch: SubtitleSegment[],
+  preset?: TranslationPreset
+): Promise<string[]> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const model = 'gemini-3-flash-preview';
+
+  // v2.2.0 Style Context
+  const styleInstruction = preset ? `
+  Style Context:
+  - Genres: ${preset.genres.join(', ')}
+  - Tone: ${preset.tone.join(', ')}
+  - Humor Level: ${preset.humor_level}/10
+  Ensure consistent honorifics (nhân xưng) and vocabulary matching this creative direction.
+  ` : "";
+
+  const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
+    Instruction: Use natural cinema style. ${styleInstruction}
+    Return a JSON array of strings in the exact same order as the provided segments.
+    
+    Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
+    });
+
+    const translatedBatch = JSON.parse(response.text || "[]");
+    if (!Array.isArray(translatedBatch)) {
+      throw new Error("Invalid response format from AI");
+    }
+    return translatedBatch;
+  } catch (error) {
+    console.error("Batch translation error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Legacy wrapper or helper if still needed. 
+ * Note: App.tsx now handles the batching loop to fulfill v1.2.0 requirements.
+ */
 export async function translateSegments(
   segments: SubtitleSegment[], 
   onBatchStart?: (startIndex: number, count: number) => void,
   onBatchComplete?: (batchIndex: number, translatedTexts: string[]) => void,
   preset?: TranslationPreset
 ): Promise<SubtitleSegment[]> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = 'gemini-3-flash-preview';
-
   const segmentsToTranslateIndices = segments
     .map((s, idx) => ({ s, idx }))
     .filter(item => !item.s.translatedText || item.s.translatedText.trim() === '')
@@ -22,15 +73,6 @@ export async function translateSegments(
   const batchSize = 15;
   const results = [...segments];
 
-  // v2.2.0 Style Context
-  const styleInstruction = preset ? `
-  Style Context:
-  - Genres: ${preset.genres.join(', ')}
-  - Tone: ${preset.tone.join(', ')}
-  - Humor Level: ${preset.humor_level}/10
-  Ensure consistent honorifics (nhân xưng) and vocabulary matching this creative direction.
-  ` : "";
-
   for (let i = 0; i < segmentsToTranslateIndices.length; i += batchSize) {
     const currentIndicesBatch = segmentsToTranslateIndices.slice(i, i + batchSize);
     const batch = currentIndicesBatch.map(idx => segments[idx]);
@@ -39,26 +81,8 @@ export async function translateSegments(
       onBatchStart(currentIndicesBatch[0], currentIndicesBatch.length);
     }
 
-    const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
-    Instruction: Use natural cinema style. ${styleInstruction}
-    Return a JSON array of strings in the exact same order as the provided segments.
-    
-    Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
-
     try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          }
-        }
-      });
-
-      const translatedBatch = JSON.parse(response.text || "[]");
+      const translatedBatch = await translateBatch(batch, preset);
       
       translatedBatch.forEach((text: string, index: number) => {
         const realIdx = currentIndicesBatch[index];
@@ -73,11 +97,10 @@ export async function translateSegments(
         onBatchComplete(i, translatedBatch);
       }
     } catch (error) {
-      console.error("Translation error in batch starting at relative index", i, error);
       currentIndicesBatch.forEach(idx => {
         if (results[idx]) results[idx].isProcessing = false;
       });
-      if (onBatchComplete) onBatchComplete(i, batch.map(s => s.translatedText || ""));
+      throw error; // Stop the whole process on error as per requirement v1.2.0
     }
   }
 

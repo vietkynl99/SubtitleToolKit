@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   Status, 
@@ -22,7 +21,7 @@ import {
   timeToSeconds
 } from './services/subtitleLogic';
 import { 
-  translateSegments, 
+  translateBatch,
   aiFixSegments,
   extractTitleFromFilename,
   translateTitle,
@@ -57,6 +56,15 @@ const App: React.FC = () => {
   const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
   const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
 
+  // v1.3.0: Detailed Translation State
+  const [translationState, setTranslationState] = useState<{
+    status: 'idle' | 'running' | 'stopped' | 'error' | 'completed';
+    processed: number;
+    total: number;
+  }>({ status: 'idle', processed: 0, total: 0 });
+  
+  const stopRequestedRef = useRef<boolean>(false);
+
   const dropzoneRef = useRef<HTMLLabelElement>(null);
 
   // Load settings on mount
@@ -71,7 +79,6 @@ const App: React.FC = () => {
   }, [settings]);
 
   // v1.7.5 logic: Process ALL segments to get enriched data and GLOBAL stats for Dashboard
-  // Dashboard must always reflect the total project state.
   const globalAnalysis = useMemo(() => {
     if (segments.length === 0) return null;
     return analyzeSegments(segments, 'translatedText', settings.cpsThreshold);
@@ -215,6 +222,7 @@ const App: React.FC = () => {
       }
       
       setTranslationPreset(null);
+      setTranslationState({ status: 'idle', processed: 0, total: 0 });
       setProgress(100);
       setStatus('success');
       setActiveTab('editor');
@@ -234,6 +242,7 @@ const App: React.FC = () => {
     setSegments([]);
     setGeneratedFiles([]);
     setTranslationPreset(null);
+    setTranslationState({ status: 'idle', processed: 0, total: 0 });
     setFileName('');
     setFileSize(0);
     setProgress(0);
@@ -290,44 +299,97 @@ const App: React.FC = () => {
     if (file) handleNewUploadTrigger(file);
   };
 
+  // v1.3.0: AI Translation Flow with Stop/Resume
   const handleTranslate = async () => {
     if (segments.length === 0) return;
+
+    // STEP 1: Check if all translated
     const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
     if (needingTranslation.length === 0) {
-      showToast("Tất cả segment đã có bản dịch.");
+      showToast("Tất cả các dòng đã được dịch. Không cần dịch thêm.");
+      setTranslationState(prev => ({ ...prev, status: 'completed' }));
+      return;
+    }
+
+    // STEP 2: Check Preset
+    if (!translationPreset) {
+      showToast("Vui lòng cấu hình Translation Style trước.");
+      setActiveTab('translation-style');
       return;
     }
 
     setStatus('processing');
-    setProgress(5);
+    stopRequestedRef.current = false;
+    
+    // Resume logic: total is total needing translation *at the start of this session*
+    // but progress should keep the context of existing translation if preferred.
+    // However, per v1.3.0, progress is based on segments needing translation in this session.
+    const totalToTranslateInSession = needingTranslation.length;
+    
+    setTranslationState({ 
+      status: 'running', 
+      processed: 0, 
+      total: totalToTranslateInSession 
+    });
+    setProgress(0);
+    
+    let completedInSession = 0;
+
     try {
-      await translateSegments(
-        segments, 
-        (startIndex, count) => {
-          setSegments(prev => {
-            const next = [...prev];
-            for (let i = startIndex; i < startIndex + count; i++) {
-              if (next[i] && (!next[i].translatedText || next[i].translatedText === '')) {
-                next[i] = { ...next[i], isProcessing: true };
-              }
-            }
-            return next;
-          });
-        },
-        (batchRelativeStart, translatedBatch) => {
-          const totalToTranslate = needingTranslation.length;
-          const processedCount = batchRelativeStart + translatedBatch.length;
-          setProgress(Math.floor((processedCount / totalToTranslate) * 100));
-        },
-        translationPreset || undefined
-      );
-      setProgress(100);
+      // STEP 3 & 5: Batching & Stop-on-Error Rule
+      const batchSize = 15;
+      for (let i = 0; i < needingTranslation.length; i += batchSize) {
+        // v1.3.0: Check for manual stop
+        if (stopRequestedRef.current) {
+          setTranslationState(prev => ({ ...prev, status: 'stopped' }));
+          showToast("Đã dừng quá trình dịch. Bạn có thể tiếp tục dịch phần còn lại.");
+          setStatus('success'); // Re-enable UI
+          return;
+        }
+
+        const currentBatch = needingTranslation.slice(i, i + batchSize);
+        
+        // Mark current batch as processing
+        setSegments(prev => prev.map(s => 
+          currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s
+        ));
+
+        // Process single batch
+        const translatedTexts = await translateBatch(currentBatch, translationPreset);
+        
+        // Update results realtime
+        setSegments(prev => prev.map(s => {
+          const batchIdx = currentBatch.findIndex(cb => cb.id === s.id);
+          if (batchIdx !== -1) {
+            return { 
+              ...s, 
+              translatedText: translatedTexts[batchIdx], 
+              isModified: true, 
+              isProcessing: false 
+            };
+          }
+          return s;
+        }));
+
+        completedInSession += currentBatch.length;
+        setTranslationState(prev => ({ ...prev, processed: completedInSession }));
+        setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
+      }
+      
+      setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setStatus('success');
       showToast("Dịch hoàn tất.");
-    } catch (err) {
+    } catch (err: any) {
       setStatus('error');
-      showToast("Có lỗi xảy ra khi dịch.");
+      setTranslationState(prev => ({ ...prev, status: 'error' }));
+      showToast(`Lỗi: ${err.message || 'Có lỗi xảy ra khi dịch.'}`);
+      setSegments(prev => prev.map(s => ({ ...s, isProcessing: false })));
     }
+  };
+
+  const handleStopTranslate = () => {
+    stopRequestedRef.current = true;
+    showToast("Đang dừng...");
   };
 
   const handleAiFix = async () => {
@@ -344,16 +406,6 @@ const App: React.FC = () => {
       setStatus('error');
       showToast("Lỗi AI Fix.");
     }
-  };
-
-  const handleLocalFixAll = () => {
-    const fixed = segments.map(s => ({
-      ...s,
-      translatedText: performLocalFix(s.translatedText || s.originalText || ""),
-      isModified: true
-    }));
-    setSegments(fixed);
-    showToast("Sửa nhanh định dạng hoàn tất.");
   };
 
   const downloadSRT = (segs: SubtitleSegment[], name: string, metadata?: SplitMetadata) => {
@@ -476,7 +528,6 @@ const App: React.FC = () => {
             <div className="overflow-hidden">
               <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
               <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                {/* Always show Global info for the file here */}
                 <span>{processedSegments.length} SEGMENTS</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                 <span>{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
@@ -541,16 +592,50 @@ const App: React.FC = () => {
               safeThreshold={settings.cpsThreshold.safeMax}
               criticalThreshold={settings.cpsThreshold.warningMax}
             />
+            
+            {/* Real-time Progress Bar (v1.3.0) */}
+            {translationState.status === 'running' && (
+              <div className="px-6 py-2 bg-slate-900 border-t border-slate-800 animate-in slide-in-from-bottom duration-300">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Đang xử lý: {translationState.processed} / {translationState.total} dòng</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-500">{progress}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-500" 
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                  <button onClick={handleTranslate} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-blue-500 disabled:opacity-50 shadow-lg shadow-blue-500/20">
-                    {status === 'processing' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate} AI Dịch Toàn Bộ
-                  </button>
+                  {translationState.status === 'running' ? (
+                    <button 
+                      onClick={handleStopTranslate} 
+                      className="flex items-center gap-2 px-6 py-2 bg-rose-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-rose-500 shadow-lg shadow-rose-500/20"
+                    >
+                      {ICONS.Delete} Stop AI Translation
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleTranslate} 
+                      disabled={status === 'processing'} 
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-blue-500 disabled:opacity-50 shadow-lg shadow-blue-500/20"
+                    >
+                      {status === 'processing' && translationState.status !== 'stopped' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate} 
+                      {translationState.status === 'stopped' ? 'Tiếp tục dịch' : 'AI Dịch Toàn Bộ'}
+                    </button>
+                  )}
+                  
                   <button onClick={handleAiFix} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 text-sm font-bold rounded-lg transition-all hover:bg-slate-700">
                     {ICONS.Fix} AI Tối Ưu
                   </button>
-                  <button onClick={handleLocalFixAll} className="px-4 py-2 border border-slate-700 text-slate-400 text-sm font-bold rounded-lg transition-all hover:bg-slate-800">Sửa Nhanh</button>
                 </div>
                 <button onClick={handleExport} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-500/20 hover:bg-emerald-500">
                   {ICONS.Export} Xuất File SRT
