@@ -92,8 +92,6 @@ const App: React.FC = () => {
     return segments;
   }, [segments, filter]);
 
-  const selectedSegment = useMemo(() => segments.find(s => s.id === selectedId), [segments, selectedId]);
-
   // Toast Helper
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -170,11 +168,7 @@ const App: React.FC = () => {
   // Clear Project Implementation (v1.5.0)
   const performClear = async (skipFeedback = false) => {
     setStatus('clearing');
-    
-    // Simulate short processing for visual feedback
     await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Reset Global State
     setSegments([]);
     setGeneratedFiles([]);
     setFileName('');
@@ -184,8 +178,6 @@ const App: React.FC = () => {
     setFilter('all');
     setSelectedId(null);
     setShowClearModal(false);
-
-    // UI Navigation & Feedback
     setActiveTab('upload');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!skipFeedback) showToast("Project đã được xóa.");
@@ -200,11 +192,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Project Replacement confirm (v1.6.0)
   const handleReplaceConfirm = async () => {
     if (!pendingFile) return;
     setShowReplaceModal(false);
-    await performClear(true); // Clear old one without "Cleared" toast
+    await performClear(true);
     processFile(pendingFile);
     setPendingFile(null);
   };
@@ -218,11 +209,9 @@ const App: React.FC = () => {
     }
   };
 
-  // Handlers
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleNewUploadTrigger(file);
-    // Clear the input value to allow the same file to be selected again if needed
     e.target.value = '';
   };
 
@@ -246,15 +235,47 @@ const App: React.FC = () => {
   const handleTranslate = async () => {
     if (segments.length === 0) return;
     setStatus('processing');
-    setProgress(0);
+    setProgress(5);
     
     try {
-      const translated = await translateSegments(segments);
-      setSegments(translated);
+      await translateSegments(
+        segments, 
+        (startIndex, count) => {
+          // Set isProcessing to true for the current batch
+          setSegments(prev => {
+            const next = [...prev];
+            for (let i = startIndex; i < startIndex + count; i++) {
+              if (next[i]) next[i] = { ...next[i], isProcessing: true };
+            }
+            return next;
+          });
+        },
+        (startIndex, translatedBatch) => {
+          setSegments(prev => {
+            const next = [...prev];
+            translatedBatch.forEach((text, i) => {
+              if (next[startIndex + i]) {
+                next[startIndex + i] = {
+                  ...next[startIndex + i],
+                  translatedText: text,
+                  isModified: true,
+                  isProcessing: false
+                };
+              }
+            });
+            return next;
+          });
+          const processedCount = startIndex + translatedBatch.length;
+          setProgress(Math.floor((processedCount / segments.length) * 100));
+        }
+      );
+      
       setProgress(100);
       setStatus('success');
+      showToast("Đã hoàn thành dịch toàn bộ.");
     } catch (err) {
       setStatus('error');
+      showToast("Có lỗi xảy ra khi dịch.");
     }
   };
 
@@ -268,8 +289,10 @@ const App: React.FC = () => {
       setSegments(fixed);
       setProgress(100);
       setStatus('success');
+      showToast("AI đã tối ưu xong.");
     } catch (err) {
       setStatus('error');
+      showToast("Lỗi AI Fix.");
     }
   };
 
@@ -280,6 +303,7 @@ const App: React.FC = () => {
       isModified: true
     }));
     setSegments(fixed);
+    showToast("Đã sửa nhanh định dạng.");
   };
 
   const downloadSRT = (segs: SubtitleSegment[], name: string, metadata?: SplitMetadata) => {
@@ -316,7 +340,6 @@ const App: React.FC = () => {
     downloadSRT(file.segments, file.fileName, file.metadata);
   };
 
-  // v1.6.0 Handle loading a split result back into the main project
   const handleLoadGenerated = (file: SplitResult) => {
     if (confirm(`Bạn có muốn tải file "${file.fileName}" vào Editor để làm việc không?\nProject hiện tại sẽ bị thay thế.`)) {
       setFileName(file.fileName);
@@ -364,7 +387,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* Confirmation Modals */}
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
@@ -373,60 +396,23 @@ const App: React.FC = () => {
               Bạn có chắc muốn xóa project hiện tại? Mọi thay đổi chưa export sẽ bị mất.
             </p>
             <div className="flex gap-3">
-              <button 
-                disabled={status === 'clearing'}
-                onClick={() => setShowClearModal(false)}
-                className="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
-              >
-                Hủy
-              </button>
-              <button 
-                disabled={status === 'clearing'}
-                onClick={() => performClear()}
-                className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                {status === 'clearing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                Xác nhận
-              </button>
+              <button disabled={status === 'clearing'} onClick={() => setShowClearModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl">Hủy</button>
+              <button disabled={status === 'clearing'} onClick={() => performClear()} className="flex-1 py-3 text-sm font-bold text-white bg-rose-600 rounded-xl">Xác nhận</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Replacement Modal (v1.6.0) */}
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
             <h3 className="text-xl font-bold mb-3">Tải lên file mới?</h3>
-            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50 mb-6">
-               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Project đang mở:</p>
-               <div className="flex items-center gap-3">
-                 <div className="text-blue-400">{ICONS.File}</div>
-                 <div className="overflow-hidden">
-                   <p className="text-xs font-bold text-slate-200 truncate">{fileName}</p>
-                   <p className="text-[10px] text-slate-500">{segments.length} segments</p>
-                 </div>
-               </div>
-            </div>
             <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-              Bạn đang có một project đang mở. Mọi thay đổi chưa export của file cũ sẽ bị mất hoàn toàn nếu bạn nạp file mới.
+              Bạn đang có một project đang mở. Mọi thay đổi chưa export sẽ bị mất nếu bạn nạp file mới.
             </p>
             <div className="flex gap-3">
-              <button 
-                disabled={status === 'clearing'}
-                onClick={() => { setShowReplaceModal(false); setPendingFile(null); }}
-                className="flex-1 py-3 text-sm font-bold text-slate-400 hover:text-slate-100 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
-              >
-                Hủy
-              </button>
-              <button 
-                disabled={status === 'clearing'}
-                onClick={handleReplaceConfirm}
-                className="flex-1 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                {status === 'clearing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                Confirm & Upload
-              </button>
+              <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 text-sm font-bold text-slate-400 bg-slate-800 rounded-xl">Hủy</button>
+              <button onClick={handleReplaceConfirm} className="flex-1 py-3 text-sm font-bold text-white bg-blue-600 rounded-xl">Confirm & Upload</button>
             </div>
           </div>
         </div>
@@ -441,181 +427,75 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Global File Header (v1.7.0) */}
+      {/* Global File Header */}
       {status === 'success' && segments.length > 0 && fileName && (
         <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 animate-in slide-in-from-top duration-300 z-20">
           <div className="flex items-center gap-4 overflow-hidden">
-            <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">
-              {ICONS.File}
-            </div>
+            <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
-              <h2 
-                className="text-sm font-bold text-slate-100 truncate cursor-pointer hover:text-blue-400 transition-colors flex items-center gap-2 group" 
-                title={`Click to copy: ${fileName}`}
-                onClick={() => copyToClipboard(fileName)}
-              >
-                {fileName.length > 40 ? fileName.substring(0, 37) + '...' : fileName}
-                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-slate-500 font-normal">(Click to copy)</span>
-              </h2>
+              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
               <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                <span className="flex items-center gap-1">{segments.length} segments</span>
+                <span>{segments.length} segments</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span className="flex items-center gap-1">{totalDurationStr}</span>
+                <span>{totalDurationStr}</span>
                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span className="flex items-center gap-1">UTF-8</span>
+                <span>UTF-8</span>
               </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tight">Active Project</span>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'upload' && (
-        <div 
-          className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50 transition-colors duration-300"
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
+        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
             <h1 className="text-4xl font-bold text-slate-100 mb-2 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-12 max-w-md mx-auto leading-relaxed">
-              Dịch và tối ưu phụ đề chuyên nghiệp với sự hỗ trợ của AI
-            </p>
-
-            <label 
-              ref={dropzoneRef}
-              className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer overflow-hidden ${
-                isDragging 
-                  ? 'bg-blue-600/10 border-blue-500 scale-[1.02] shadow-2xl shadow-blue-500/10' 
-                  : 'bg-slate-900/40 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60'
-              }`}
-            >
+            <p className="text-slate-400 mb-12">Dịch và tối ưu phụ đề chuyên nghiệp</p>
+            <label ref={dropzoneRef} className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl transition-all cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'}`}>
               <input type="file" accept=".srt" className="hidden" onChange={handleFileUpload} />
-              <div className={`p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6 transition-transform duration-300 ${isDragging ? 'scale-110 animate-bounce' : 'group-hover:scale-110'}`}>
-                {ICONS.Upload}
-              </div>
-              <div className="space-y-2">
-                <p className="text-xl font-bold text-slate-200">{isDragging ? 'Thả file để tải lên' : 'Kéo thả file SRT vào đây'}</p>
-                <p className="text-sm text-slate-500">Hoặc click để chọn file từ máy tính</p>
-              </div>
-
-              {(status === 'processing' || status === 'clearing') && (
-                <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-6">
-                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <p className="text-blue-400 font-bold">{status === 'clearing' ? 'Đang dọn dẹp project cũ...' : 'Đang xử lý file...'}</p>
-                  <div className="w-full max-w-xs bg-slate-800 h-1.5 rounded-full mt-4 overflow-hidden">
-                    <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                  </div>
-                </div>
-              )}
+              <div className="p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6">{ICONS.Upload}</div>
+              <p className="text-xl font-bold text-slate-200">Kéo thả file SRT hoặc click để chọn</p>
             </label>
-
-            <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-500 font-medium uppercase tracking-widest">
-              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Định dạng .SRT</span>
-              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tối đa 5MB</span>
-              <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-700"></div> Tự động nhận diện Encoding</span>
-            </div>
           </div>
         </div>
       )}
 
       {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden">
-          <div className="w-80 flex flex-col overflow-hidden">
+          {/* Main Content Area: Wide Segment Card List (Requirement v1.8.0) */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
             <SegmentList 
               segments={filteredSegments} 
               selectedId={selectedId} 
               onSelect={setSelectedId}
+              onUpdateText={updateSegmentText}
               filter={filter}
               onFilterChange={setFilter}
               safeThreshold={settings.safeThreshold}
               criticalThreshold={settings.criticalThreshold}
             />
-          </div>
 
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-            <div className="p-6 flex-1 flex flex-col">
-              {selectedSegment ? (
-                <div className="h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <h2 className="text-lg font-bold flex items-center gap-3">
-                        <span className="text-slate-500 font-mono">Segment #{selectedSegment.id}</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-xs text-slate-400 font-mono">{selectedSegment.startTime} - {selectedSegment.endTime}</span>
-                      </h2>
-                    </div>
-                    <div className="flex gap-2">
-                       <button className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors" title="Save changes">
-                         {ICONS.Save}
-                       </button>
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-8">
-                    <div className="space-y-3">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Original (CN)</label>
-                      <div className="w-full bg-slate-900/50 border border-slate-800 p-6 rounded-2xl text-xl text-slate-300 leading-relaxed min-h-[120px]">
-                        {selectedSegment.originalText}
-                      </div>
-                    </div>
-                    <div className="space-y-3 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-blue-500 uppercase tracking-widest">Translation (VN)</label>
-                        {selectedSegment.issueList.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            {selectedSegment.issueList.map((issue, idx) => (
-                              <span key={idx} className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[10px] font-bold border border-rose-500/20">
-                                {issue}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <textarea
-                        className="w-full flex-1 bg-slate-900 border border-blue-500/20 focus:border-blue-500/50 outline-none p-6 rounded-2xl text-xl text-blue-100 leading-relaxed resize-none transition-all placeholder:text-slate-700"
-                        placeholder="Translating or enter manual text..."
-                        value={selectedSegment.translatedText}
-                        onChange={(e) => updateSegmentText(selectedSegment.id, e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-600">
-                  <div className="mb-4 text-slate-800">{ICONS.File}</div>
-                  <p className="text-sm font-medium">Chọn một segment để bắt đầu biên tập</p>
-                  <div className="mt-8 p-4 bg-slate-900/50 border border-slate-800 rounded-xl max-w-xs text-center">
-                    <p className="text-xs text-slate-500">File: <span className="text-slate-400">{fileName}</span></p>
-                    <p className="text-xs text-slate-500 mt-1">Size: <span className="text-slate-400">{formatSize(fileSize)}</span></p>
-                  </div>
-                </div>
-              )}
-            </div>
-
+            {/* Bottom Actions Bar */}
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md">
               <div className="flex items-center justify-between">
                 <div className="flex gap-2">
-                  <button onClick={handleTranslate} disabled={status === 'processing' || status === 'clearing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all">
+                  <button onClick={handleTranslate} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg transition-all hover:bg-blue-500 disabled:opacity-50">
                     {status === 'processing' ? <div className="animate-spin">{ICONS.Retry}</div> : ICONS.Translate} AI Dịch Toàn Bộ
                   </button>
-                  <button onClick={handleAiFix} disabled={status === 'processing' || status === 'clearing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-lg transition-all">
+                  <button onClick={handleAiFix} disabled={status === 'processing'} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-200 text-sm font-bold rounded-lg transition-all hover:bg-slate-700">
                     {ICONS.Fix} AI Tối Ưu
                   </button>
-                  <button onClick={handleLocalFixAll} className="flex items-center gap-2 px-4 py-2 border border-slate-700 hover:bg-slate-800 text-slate-400 text-sm font-bold rounded-lg transition-all">Sửa Nhanh</button>
+                  <button onClick={handleLocalFixAll} className="px-4 py-2 border border-slate-700 text-slate-400 text-sm font-bold rounded-lg transition-all hover:bg-slate-800">Sửa Nhanh</button>
                 </div>
-                <button onClick={handleExport} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-500/20 transition-all">
+                <button onClick={handleExport} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-emerald-500">
                   {ICONS.Export} Xuất File SRT
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="w-80 flex flex-col border-l border-slate-800">
+          {/* Right Sidebar: Dashboard / Analyzer (Requirement v1.8.0) */}
+          <div className="w-80 flex flex-col border-l border-slate-800 bg-slate-900">
              <AnalyzerPanel 
                 data={analysis} 
                 activeFilter={filter} 
@@ -633,27 +513,19 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* History & Settings (Remain mostly same but layout clean up) */}
       {activeTab === 'history' && (
         <div className="flex-1 p-12 overflow-y-auto">
-          <h2 className="text-3xl font-bold mb-8 tracking-tight">Dự án gần đây</h2>
+          <h2 className="text-3xl font-bold mb-8">Dự án gần đây</h2>
           {history.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 p-12 rounded-3xl text-center">
-              <p className="text-slate-500 italic">Chưa có lịch sử dự án nào.</p>
-            </div>
+            <div className="bg-slate-900 border border-slate-800 p-12 rounded-3xl text-center text-slate-500">Chưa có lịch sử.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {history.map(item => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl hover:border-blue-500/30 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-blue-600/10 rounded-xl text-blue-500">{ICONS.File}</div>
-                    <button onClick={(e) => { e.stopPropagation(); const updated = history.filter(h => h.id !== item.id); setHistory(updated); localStorage.setItem('subtitle_history', JSON.stringify(updated)); }} className="text-slate-600 hover:text-rose-500 transition-colors">{ICONS.Delete}</button>
-                  </div>
-                  <h3 className="font-bold text-slate-100 mb-1 group-hover:text-blue-400 transition-colors">{item.name}</h3>
+                <div key={item.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl hover:border-blue-500/30 transition-all">
+                  <h3 className="font-bold text-slate-100 mb-1">{item.name}</h3>
                   <p className="text-xs text-slate-500 mb-4">{new Date(item.timestamp).toLocaleString()}</p>
-                  <div className="flex justify-between items-center pt-4 border-t border-slate-800/50">
-                    <span className="text-xs font-mono text-slate-400">{item.segments.length} segments</span>
-                    <button onClick={() => { setSegments(item.segments); setFileName(item.name); setActiveTab('editor'); setStatus('success'); }} className="text-xs font-bold text-blue-400 hover:underline">Tải Dự Án</button>
-                  </div>
+                  <button onClick={() => { setSegments(item.segments); setFileName(item.name); setActiveTab('editor'); setStatus('success'); }} className="text-xs font-bold text-blue-400 hover:underline">Tải Dự Án</button>
                 </div>
               ))}
             </div>
@@ -662,24 +534,18 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar">
-          <h2 className="text-3xl font-bold mb-8 tracking-tight">Cài đặt hệ thống</h2>
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden divide-y divide-slate-800 shadow-xl">
-            <div className="p-8">
-              <h3 className="font-bold mb-1">Ngưỡng An Toàn (Safe Threshold)</h3>
-              <p className="text-sm text-slate-500 mb-6">Mọi segment có CPS thấp hơn mức này được coi là Safe (🟢).</p>
-              <div className="flex items-center gap-6">
-                <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="flex-1 h-2 bg-slate-800 rounded-full appearance-none accent-emerald-500 cursor-pointer" />
-                <span className="w-16 text-center font-bold text-emerald-400 px-3 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">{settings.safeThreshold}</span>
-              </div>
+        <div className="flex-1 p-12 max-w-4xl overflow-y-auto">
+          <h2 className="text-3xl font-bold mb-8">Cài đặt</h2>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 space-y-8 shadow-xl">
+            <div>
+              <h3 className="font-bold mb-2">Safe Threshold</h3>
+              <input type="range" min="10" max="60" value={settings.safeThreshold} onChange={(e) => updateThreshold('safeThreshold', Number(e.target.value))} className="w-full" />
+              <span className="text-blue-400 font-bold">{settings.safeThreshold} CPS</span>
             </div>
-            <div className="p-8">
-              <h3 className="font-bold mb-1">Ngưỡng Nguy Hiểm (Critical Threshold)</h3>
-              <p className="text-sm text-slate-500 mb-6">Mọi segment có CPS cao hơn mức này được coi là Critical (🔴).</p>
-              <div className="flex items-center gap-6">
-                <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="flex-1 h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" />
-                <span className="w-16 text-center font-bold text-rose-400 px-3 py-1 bg-rose-500/10 rounded border border-rose-500/20">{settings.criticalThreshold}</span>
-              </div>
+            <div>
+              <h3 className="font-bold mb-2">Critical Threshold</h3>
+              <input type="range" min="15" max="80" value={settings.criticalThreshold} onChange={(e) => updateThreshold('criticalThreshold', Number(e.target.value))} className="w-full" />
+              <span className="text-rose-400 font-bold">{settings.criticalThreshold} CPS</span>
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ export interface SubtitleSegment {
   originalText: string;
   translatedText: string;
   isModified: boolean;
+  isProcessing?: boolean; // New: track AI progress
   errors: SubtitleError[];
   severity: Severity;
   cps: number;

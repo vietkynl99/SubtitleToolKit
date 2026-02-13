@@ -1,6 +1,6 @@
 # Subtitle Toolkit – Master Requirement
 
-Version: 1.6.0  
+Version: 1.7.0  
 Last Updated: 2026-02-13  
 
 ---
@@ -73,97 +73,56 @@ Khi upload file mới:
 
 # 4. Global File Header
 
-## Mục tiêu
+Hiển thị khi projectState === success.
 
-Luôn hiển thị tên file đang active để user biết mình đang xử lý file nào.
-
----
-
-## Điều kiện hiển thị
-
-Hiển thị khi:
-
-projectState === success
-
-Ẩn khi:
-
-- idle
-- uploading
-- clearing
-- error
-
----
-
-## Nội dung hiển thị
-
-Bắt buộc:
-
+Bắt buộc hiển thị:
 - Tên file
 
 Khuyến nghị:
-
-- Số segment
+- Tổng segment
 - Tổng thời lượng
+- Encoding
 
 Ví dụ:
 
-[📄] movie_ep1.srt  
-3311 segments | 102m 51s
+movie_ep1.srt  
+3311 segments | 120m 24s | UTF-8
 
----
-
-## Khi split
-
-Nếu file sau split:
-
-Tên phải cập nhật theo file mới:
-
-[split range 100 to 1000] movie_ep1.srt
-
----
-
-## Khi clear
-
+Khi Clear:
 activeFileName = null  
-Header phải biến mất hoàn toàn.
+Header phải biến mất.
 
 ---
 
-# 5. Clear Current Project
+# 5. Segment List Global Rule (NEW v1.7.0)
 
-## Mục tiêu
+Segment List phải hiển thị:
 
-Cho phép reset toàn bộ project về trạng thái như mới load trang.
+- Original text (CN)
+- Translation (VN) nếu có
 
----
+Không được yêu cầu click từng segment để xem bản dịch.
 
-## UI
+Nếu translation rỗng:
+- Không hiển thị placeholder.
+- Không hiển thị text tạm.
 
-Nút: Clear Current Project  
-Vị trí: File Control Area  
+Nếu translation tồn tại:
+- Hiển thị nguyên văn nội dung đã lưu.
 
----
-
-## Khi click
-
-Hiển thị modal:
-
-Bạn có chắc muốn xóa project hiện tại?  
-Mọi thay đổi chưa export sẽ bị mất.
-
-Buttons:
-
-- Cancel
-- Confirm
+Việc render translation phải realtime khi:
+- AI dịch xong
+- User chỉnh sửa
+- AI Fix thay đổi nội dung
 
 ---
 
-## Nếu Confirm
+# 6. Clear Current Project
 
-Bắt buộc thực hiện:
+Khi Confirm Clear:
 
-1. projectState → clearing  
-2. Reset toàn bộ:
+1. projectState → clearing
+2. Reset:
    - segments = []
    - analyzerData = null
    - histogram = null
@@ -171,53 +130,36 @@ Bắt buộc thực hiện:
    - splitFiles = []
    - progress = 0
 3. activeFileName = null
-4. Unmount:
-   - Editor
-   - Analyzer
-   - Histogram
-   - Split Panel
-5. Mount lại Upload View
-6. Scroll lên đầu trang
-7. Hiển thị toast: "Project đã được xóa"
+4. Unmount Editor / Analyzer / Histogram / Split
+5. Mount Upload View
+6. Scroll top
+7. Toast: "Project đã được xóa"
 
 Cuối cùng:
-
 projectState → idle
 
 ---
 
-# 6. Replace File Rule
+# 7. Replace File Rule
 
-Nếu đã có project active và user:
+Nếu đã có project active và user upload file mới:
 
-- Click Upload
-- Hoặc Drag & Drop file mới
-
-Phải hiển thị modal:
-
-Bạn đang có một project đang mở.  
-Bạn có muốn xóa file hiện tại và upload file mới không?
-
-Buttons:
-
-- Cancel
-- Confirm & Upload
+Phải hiển thị confirm modal.
 
 Nếu Confirm:
 
 1. Clear project
-2. Upload file mới
-3. Parse
+2. projectState → uploading
+3. Parse file mới
 4. Analyze
-5. Load Editor
-6. projectState → success
+5. projectState → success
+6. Set activeFileName = file mới
 
 ---
 
-# 7. Settings Persistence
+# 8. Settings Persistence
 
-Clear Project không được reset:
-
+Clear không được reset:
 - CPS threshold
 - AI model preference
 - History
@@ -225,7 +167,7 @@ Clear Project không được reset:
 
 ---
 
-# 8. Error Handling
+# 9. Error Handling
 
 Nếu upload hoặc parse lỗi:
 

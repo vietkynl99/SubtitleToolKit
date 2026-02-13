@@ -1,47 +1,117 @@
 # FEATURE: Subtitle Analyzer
-**Version:** 1.4.0  
-**Last Updated:** 2026-02-13  
-**Changelog:**
-- Thêm CPS Detailed Distribution (Histogram).
-- Bổ sung thống kê CPS theo khoảng giá trị.
-- Thêm biểu đồ phân phối CPS chi tiết.
-- Thêm quy tắc Trim Empty Edge Buckets (v1.4.0).
 
-## 1. Mục tiêu
-Định lượng chất lượng phụ đề và cung cấp trạng thái phân loại cho từng segment để phục vụ filter trong Editor dựa trên các ngưỡng có thể cấu hình và thống kê phân phối CPS.
+Version: 1.5.0  
+Last Updated: 2026-02-13  
 
-## 2. Logic Requirements (Updated v1.4.0)
-### CPS Detailed Distribution (Histogram)
-Ngoài phân loại Safe / Warning / Critical, hệ thống phải thống kê phân bố CPS theo khoảng giá trị cố định.
+Changelog:
+- v1.4.0: Thêm Detailed CPS Distribution + Trim Empty Edge Buckets.
+- v1.5.0: Đồng bộ Analyzer với Segment List hiển thị Translation.
 
-**Default CPS Buckets (Step 5):**
-0–5, 5–10, 10–15, 15–20, 20–25, 25–30, 30–35, 35–40, 40–45, 45+
+---
 
-### CPS Distribution – Rendering Rules (v1.4.0)
-**1. Trim Empty Edge Buckets**
-- Histogram không được hiển thị các bucket rỗng ở hai đầu biểu đồ.
-- Nếu dữ liệu chỉ tập trung ở dải 15–30, các bucket 0–15 và 30–45+ sẽ không được render.
-- **Không xóa bucket rỗng ở giữa:** Nếu dải dữ liệu là 10–30 nhưng bucket 15–20 rỗng, bucket đó vẫn phải hiển thị để giữ tính liên tục.
+# 1. Mục tiêu
 
-**2. Edge Cases**
-- Nếu chỉ có 1 bucket có dữ liệu: Chỉ hiển thị 1 cột duy nhất.
-- Nếu toàn bộ bucket rỗng: Hiển thị thông báo "Không có dữ liệu CPS để hiển thị."
+Định lượng chất lượng phụ đề và cung cấp:
 
-### Metadata bổ sung cho Analyzer
-Analyzer phải trả thêm:
-- `cpsHistogram` (object)
-- `minCPS`
-- `maxCPS`
-- `avgCPS`
-- `medianCPS`
+- Phân loại Safe / Warning / Critical
+- Histogram phân phối CPS
+- Thống kê min / max / avg / median
+- Dữ liệu phục vụ filter Segment List
 
-## 3. UI Requirements
-### Histogram Chart
-- Dạng: Vertical Bar Chart.
-- Trục X: CPS Range.
-- Trục Y: Số segment.
-- Tương tác: Click vào một bucket để filter Segment List theo CPS range đó.
-- Trục X tự động co lại theo số bucket thực tế (Trim logic).
+Analyzer không thay đổi nội dung text.
 
-## 4. Performance Requirement
-Histogram phải được tính trong ≤ 200ms với file 3000 segment. Trim logic phải O(n) theo số bucket.
+---
+
+# 2. CPS Classification Logic
+
+Mặc định:
+
+safe: <25  
+warning: 25–40  
+critical: >40  
+
+Ngưỡng này có thể thay đổi trong Settings.
+
+Analyzer phải đọc ngưỡng hiện tại từ Settings.
+
+---
+
+# 3. CPS Detailed Distribution (Histogram)
+
+Default Buckets (step 5):
+
+0–5  
+5–10  
+10–15  
+15–20  
+20–25  
+25–30  
+30–35  
+35–40  
+40–45  
+45+
+
+---
+
+# 4. Histogram Rendering Rules
+
+## 4.1 Trim Empty Edge Buckets
+
+- Không hiển thị bucket rỗng ở hai đầu.
+- Không xóa bucket rỗng ở giữa.
+- Nếu chỉ có 1 bucket có dữ liệu → chỉ render 1 cột.
+- Nếu toàn bộ rỗng → hiển thị:
+  "Không có dữ liệu CPS để hiển thị."
+
+---
+
+# 5. Analyzer Output Structure
+
+Analyzer phải trả:
+
+{
+  cpsHistogram: object,
+  minCPS: number,
+  maxCPS: number,
+  avgCPS: number,
+  medianCPS: number
+}
+
+---
+
+# 6. Integration with Segment List
+
+Analyzer không phụ thuộc vào việc segment có translation hay không.
+
+Filter theo:
+
+- Safe
+- Warning
+- Critical
+- CPS bucket
+
+Phải giữ nguyên translation đang hiển thị trong Segment List.
+
+Filter chỉ thay đổi danh sách segment được render, không thay đổi dữ liệu segment.
+
+---
+
+# 7. Performance Requirement
+
+- Tính histogram ≤ 200ms với 3000 segment.
+- Trim logic phải O(n) theo số bucket.
+- Không re-calc toàn bộ khi chỉ thay đổi translation text.
+
+---
+
+# 8. Click Behavior
+
+Click vào bucket trong histogram:
+
+- Filter Segment List theo CPS range.
+- Không reset scroll position nếu có thể.
+- Không mất translation đã hiển thị.
+
+---
+
+End of file.

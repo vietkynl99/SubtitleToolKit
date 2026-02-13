@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
 import { AnalysisResult, Severity } from '../types';
@@ -31,12 +32,6 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   onLoadGenerated,
   onDeleteGenerated
 }) => {
-  const chartData = [
-    { name: 'Safe', value: data.cpsGroups.safe, color: '#10b981', id: 'safe' },
-    { name: 'Warning', value: data.cpsGroups.warning, color: '#f59e0b', id: 'warning' },
-    { name: 'Critical', value: data.cpsGroups.critical, color: '#f43f5e', id: 'critical' },
-  ];
-
   const getBucketColor = (mid: number) => {
     if (mid > criticalThreshold) return '#f43f5e';
     if (mid >= safeThreshold) return '#f59e0b';
@@ -53,7 +48,17 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   return (
     <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-12">
       <section>
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Quality Dashboard</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Quality Dashboard</h3>
+          {activeFilter !== 'all' && (
+             <button 
+              onClick={() => onFilterTrigger('all')}
+              className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase"
+            >
+              Reset Filter
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <button 
             onClick={() => onFilterTrigger('safe')}
@@ -85,7 +90,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           <button 
             onClick={() => onFilterTrigger('all')}
             className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
+              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500 shadow-lg' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
             }`}
           >
             <span className="block text-2xl font-bold text-slate-100">{data.totalLines}</span>
@@ -117,7 +122,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                     if (active && payload && payload.length) {
                       const d = payload[0].payload;
                       return (
-                        <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg shadow-2xl">
+                        <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg shadow-2xl z-50">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Range: {d.range}</p>
                           <p className="text-sm font-bold text-blue-400">{d.count} Segments</p>
                           <p className="text-[10px] text-slate-500 font-medium">{d.percentage}% of total</p>
@@ -130,16 +135,18 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <Bar 
                   dataKey="count" 
                   radius={[3, 3, 0, 0]} 
-                  onClick={(d) => onFilterTrigger({ type: 'range', min: d.min, max: d.max, label: d.range })}
+                  // Fix: Property 'range' does not exist on type 'BarRectangleItem'. Added type assertion for event payload.
+                  onClick={(d: any) => onFilterTrigger({ type: 'range', min: d.min, max: d.max, label: d.range })}
                 >
                   {formattedHistogramData.map((entry, index) => {
                     const isActive = isFilterRange && activeFilter.label === entry.range;
+                    const isAll = activeFilter === 'all';
                     return (
                       <Cell 
                         key={`cell-h-${index}`} 
                         fill={entry.color} 
-                        fillOpacity={activeFilter === 'all' || isActive ? 0.8 : 0.2} 
-                        className="cursor-pointer transition-all duration-300" 
+                        fillOpacity={isAll || isActive ? 0.8 : 0.2} 
+                        className="cursor-pointer transition-all duration-300 hover:fill-opacity-100" 
                       />
                     );
                   })}
@@ -147,8 +154,9 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center">
-              <span className="text-xs text-slate-500 font-medium italic">Không có dữ liệu CPS để hiển thị.</span>
+            <div className="text-center p-6">
+              <span className="text-xs text-slate-500 font-medium italic block mb-2">Không có dữ liệu CPS để hiển thị.</span>
+              <p className="text-[10px] text-slate-600">Phân tích yêu cầu có nội dung văn bản.</p>
             </div>
           )}
         </div>
@@ -164,7 +172,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             { label: 'Avg', value: data.avgCPS.toFixed(1) },
             { label: 'Median', value: data.medianCPS.toFixed(1) },
           ].map((stat, idx) => (
-            <div key={idx} className="bg-slate-800/40 border border-slate-700/50 p-3 rounded-xl">
+            <div key={idx} className="bg-slate-800/40 border border-slate-700/50 p-3 rounded-xl transition-colors hover:border-slate-600">
               <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{stat.label}</span>
               <span className="text-lg font-bold text-slate-200">{stat.value}</span>
             </div>
@@ -223,7 +231,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         <div className="space-y-2">
           <button 
             onClick={onOpenSplit}
-            className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group"
+            className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group shadow-sm"
           >
             <div className="flex items-center gap-3">
               <span className="p-2 bg-blue-600/10 text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
@@ -259,7 +267,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-rose-400">{data.tooFastLines} segments too fast</p>
-              <p className="text-[10px] text-rose-400/60">CPS exceeds {criticalThreshold}. Readers may struggle.</p>
+              <p className="text-[10px] text-rose-400/60 leading-normal">CPS vượt ngưỡng {criticalThreshold}. Độc giả có thể gặp khó khăn khi theo dõi.</p>
             </div>
           </div>
         )}
@@ -268,7 +276,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
-              <p className="text-[10px] text-amber-400/60">Contains >2 lines or excessive characters.</p>
+              <p className="text-[10px] text-amber-400/60 leading-normal">Chứa quá 2 dòng hoặc vượt quá 45 ký tự mỗi dòng.</p>
             </div>
           </div>
         )}
