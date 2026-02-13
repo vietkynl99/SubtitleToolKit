@@ -1,14 +1,13 @@
-
 import React from 'react';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
 import { AnalysisResult, Severity } from '../types';
 import { ICONS } from '../constants';
 import { SplitResult } from '../services/subtitleLogic';
 
 interface AnalyzerPanelProps {
   data: AnalysisResult;
-  onFilterTrigger: (filter: 'all' | Severity) => void;
-  activeFilter: 'all' | Severity;
+  onFilterTrigger: (filter: any) => void;
+  activeFilter: any;
   safeThreshold: number;
   criticalThreshold: number;
   onOpenSplit: () => void;
@@ -33,6 +32,19 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
     { name: 'Warning', value: data.cpsGroups.warning, color: '#f59e0b', id: 'warning' },
     { name: 'Critical', value: data.cpsGroups.critical, color: '#f43f5e', id: 'critical' },
   ];
+
+  const getBucketColor = (mid: number) => {
+    if (mid > criticalThreshold) return '#f43f5e';
+    if (mid >= safeThreshold) return '#f59e0b';
+    return '#10b981';
+  };
+
+  const formattedHistogramData = data.cpsHistogram.map(b => ({
+    ...b,
+    color: getBucketColor(b.min + 2.5)
+  }));
+
+  const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
 
   return (
     <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar">
@@ -78,27 +90,85 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
         </div>
       </section>
 
+      {/* v1.4.0 CPS Histogram Chart with Trim Edge Logic */}
       <section>
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">CPS Distribution</h3>
-        <div className="h-48 w-full bg-slate-800/30 rounded-xl p-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
-                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-              />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]} onClick={(data) => onFilterTrigger(data.id as Severity)}>
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={activeFilter === 'all' || activeFilter === entry.id ? 0.8 : 0.2} className="cursor-pointer" />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Detailed CPS Distribution</h3>
+        <div className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 flex items-center justify-center">
+          {formattedHistogramData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={formattedHistogramData} margin={{ top: 5, right: 5, bottom: 20, left: -25 }}>
+                <XAxis 
+                  dataKey="range" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{fill: '#64748b', fontSize: 9}} 
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 9}} />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const d = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-lg shadow-2xl">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Range: {d.range}</p>
+                          <p className="text-sm font-bold text-blue-400">{d.count} Segments</p>
+                          <p className="text-[10px] text-slate-500 font-medium">{d.percentage}% of total</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar 
+                  dataKey="count" 
+                  radius={[3, 3, 0, 0]} 
+                  onClick={(d) => onFilterTrigger({ type: 'range', min: d.min, max: d.max, label: d.range })}
+                >
+                  {formattedHistogramData.map((entry, index) => {
+                    const isActive = isFilterRange && activeFilter.label === entry.range;
+                    return (
+                      <Cell 
+                        key={`cell-h-${index}`} 
+                        fill={entry.color} 
+                        fillOpacity={activeFilter === 'all' || isActive ? 0.8 : 0.2} 
+                        className="cursor-pointer transition-all duration-300" 
+                      />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center">
+              <span className="text-xs text-slate-500 font-medium italic">Không có dữ liệu CPS để hiển thị.</span>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* v1.3.0 Generated Files Section */}
+      {/* v1.3.0 CPS Statistics Box */}
+      <section>
+        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">CPS Statistics</h3>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: 'Min', value: isFinite(data.minCPS) ? data.minCPS.toFixed(1) : '0' },
+            { label: 'Max', value: isFinite(data.maxCPS) ? data.maxCPS.toFixed(1) : '0' },
+            { label: 'Avg', value: data.avgCPS.toFixed(1) },
+            { label: 'Median', value: data.medianCPS.toFixed(1) },
+          ].map((stat, idx) => (
+            <div key={idx} className="bg-slate-800/40 border border-slate-700/50 p-3 rounded-xl">
+              <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{stat.label}</span>
+              <span className="text-lg font-bold text-slate-200">{stat.value}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Generated Files List */}
       {generatedFiles.length > 0 && (
         <section>
           <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Generated Files</h3>
@@ -173,11 +243,6 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
               <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
               <p className="text-[10px] text-amber-400/60">Contains >2 lines or excessive characters.</p>
             </div>
-          </div>
-        )}
-        {data.cpsGroups.critical === 0 && data.cpsGroups.warning === 0 && (
-          <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-            <p className="text-xs font-medium text-emerald-400">Everything looks great! No issues detected.</p>
           </div>
         )}
       </section>

@@ -1,4 +1,4 @@
-import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata } from '../types';
+import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata, HistogramBucket } from '../types';
 
 export interface SplitResult {
   fileName: string;
@@ -103,7 +103,13 @@ export function analyzeSegments(
   let tooLongLines = 0;
   let tooFastLines = 0;
   let totalCPS = 0;
+  let minCPS = Infinity;
+  let maxCPS = -Infinity;
   const groups = { safe: 0, warning: 0, critical: 0 };
+  const allCPS: number[] = [];
+
+  // Histogram buckets: 0-5, 5-10, ..., 40-45, 45+
+  const histogramCounts = new Array(10).fill(0);
 
   segments.forEach(s => {
     const meta = getSegmentMetadata(s, textKey, safeThreshold, criticalThreshold);
@@ -112,19 +118,77 @@ export function analyzeSegments(
     s.issueList = meta.issueList;
 
     totalCPS += meta.cps;
+    allCPS.push(meta.cps);
+    if (meta.cps < minCPS) minCPS = meta.cps;
+    if (meta.cps > maxCPS) maxCPS = meta.cps;
 
     if (meta.issueList.some(i => i.includes('dòng'))) tooLongLines++;
     if (meta.cps > criticalThreshold) tooFastLines++;
 
     groups[meta.severity]++;
+
+    // Bucket calculation
+    const bucketIdx = Math.min(Math.floor(meta.cps / 5), 9);
+    histogramCounts[bucketIdx]++;
   });
 
+  const totalLines = segments.length;
+  if (totalLines === 0) {
+    return {
+      totalLines: 0,
+      tooLongLines: 0,
+      tooFastLines: 0,
+      avgCPS: 0,
+      minCPS: 0,
+      maxCPS: 0,
+      medianCPS: 0,
+      cpsGroups: { safe: 0, warning: 0, critical: 0 },
+      cpsHistogram: []
+    };
+  }
+
+  // Median
+  const sortedCPS = [...allCPS].sort((a, b) => a - b);
+  const mid = Math.floor(sortedCPS.length / 2);
+  const medianCPS = sortedCPS.length % 2 !== 0 ? sortedCPS[mid] : (sortedCPS[mid - 1] + sortedCPS[mid]) / 2;
+
+  // v1.4.0 Histogram Trim Edge Buckets Logic
+  let firstNonEmpty = histogramCounts.findIndex(count => count > 0);
+  let lastNonEmpty = -1;
+  for (let i = histogramCounts.length - 1; i >= 0; i--) {
+    if (histogramCounts[i] > 0) {
+      lastNonEmpty = i;
+      break;
+    }
+  }
+
+  const cpsHistogram: HistogramBucket[] = [];
+  if (firstNonEmpty !== -1) {
+    for (let i = firstNonEmpty; i <= lastNonEmpty; i++) {
+      const count = histogramCounts[i];
+      const min = i * 5;
+      const max = i === 9 ? Infinity : (i + 1) * 5;
+      const range = i === 9 ? '45+' : `${min}–${max}`;
+      cpsHistogram.push({
+        range,
+        min,
+        max,
+        count,
+        percentage: Math.round((count / totalLines) * 100)
+      });
+    }
+  }
+
   return {
-    totalLines: segments.length,
+    totalLines,
     tooLongLines,
     tooFastLines,
-    avgCPS: segments.length > 0 ? totalCPS / segments.length : 0,
-    cpsGroups: groups
+    avgCPS: totalCPS / totalLines,
+    minCPS,
+    maxCPS,
+    medianCPS,
+    cpsGroups: groups,
+    cpsHistogram
   };
 }
 

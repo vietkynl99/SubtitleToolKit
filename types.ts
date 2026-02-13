@@ -20,16 +20,28 @@ export interface SubtitleError {
   message: string;
 }
 
+export interface HistogramBucket {
+  range: string;
+  min: number;
+  max: number;
+  count: number;
+  percentage: number;
+}
+
 export interface AnalysisResult {
   totalLines: number;
   tooLongLines: number;
   tooFastLines: number;
   avgCPS: number;
+  minCPS: number;
+  maxCPS: number;
+  medianCPS: number;
   cpsGroups: {
     safe: number; 
     warning: number;
     critical: number;
   };
+  cpsHistogram: HistogramBucket[];
 }
 
 export interface ProjectHistory {
