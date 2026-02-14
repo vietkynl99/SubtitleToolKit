@@ -14,12 +14,15 @@ export async function translateBatch(
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
+  // v2.3.0 Style DNA integration
   const styleInstruction = preset ? `
-  Style Context:
-  - Genres: ${preset.genres.join(', ')}
-  - Tone: ${preset.tone.join(', ')}
-  - Humor Level: ${preset.humor_level}/10
-  Ensure consistent honorifics (nhân xưng) and vocabulary matching this creative direction.
+  --- STYLE DNA CONTEXT ---
+  Tác phẩm này thuộc thể loại: ${preset.genres.join(', ')}.
+  Tông giọng chủ đạo: ${preset.tone.join(', ')}.
+  Mức độ hài hước/giải trí: ${preset.humor_level}/10.
+  Yêu cầu: Sử dụng đại từ nhân xưng (xưng hô) và từ vựng phù hợp với phong cách trên. 
+  Nếu là phim hài, hãy dịch thoát ý, hóm hỉnh. Nếu là tiên hiệp, hãy dùng từ Hán Việt trang trọng đúng mực.
+  -------------------------
   ` : "";
 
   const contextPrompt = (contextBefore.length > 0 || contextAfter.length > 0) ? `
@@ -30,7 +33,8 @@ export async function translateBatch(
   ` : "";
 
   const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
-    Instruction: Use natural cinema style. ${styleInstruction}
+    Instruction: Use natural cinema style.
+    ${styleInstruction}
     ${contextPrompt}
     Return a JSON array of strings in the exact same order as the provided main segments.
     
@@ -95,7 +99,7 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Phân tích tiêu đề sau và xác định phong cách dịch (Version 2.2.0):
+    contents: `Phân tích tiêu đề sau và xác định phong cách dịch (Version 2.3.0):
     Tiêu đề: ${title}
 
     Hãy xác định:

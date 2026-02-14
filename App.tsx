@@ -19,7 +19,9 @@ import {
   splitByManual,
   splitByRange,
   SplitResult,
-  timeToSeconds
+  timeToSeconds,
+  parseFileName,
+  generateExportFileName
 } from './services/subtitleLogic';
 import { 
   translateBatch,
@@ -49,7 +51,12 @@ const App: React.FC = () => {
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  
+  // File Naming States (v1.0.0 Naming Rules)
   const [fileName, setFileName] = useState<string>('');
+  const [baseFileName, setBaseFileName] = useState<string>('');
+  const [editedCount, setEditedCount] = useState<number>(0);
+
   const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<any>('all');
@@ -77,12 +84,19 @@ const App: React.FC = () => {
 
   const dropzoneRef = useRef<HTMLLabelElement>(null);
 
+  // Sync displayed fileName state with internal naming states
+  // This shows what the *next* export filename will look like
+  useEffect(() => {
+    if (baseFileName) {
+      setFileName(generateExportFileName(baseFileName, editedCount));
+    }
+  }, [baseFileName, editedCount]);
+
   // Load settings on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('subtitle_settings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // Ensure new settings from v1.3.0+ are present
       setSettings({ ...DEFAULT_SETTINGS, ...parsed });
     }
   }, []);
@@ -231,7 +245,12 @@ const App: React.FC = () => {
       return;
     }
 
-    setFileName(file.name);
+    // v1.0.0 Naming Rules: Parse file name for base and existing count
+    const { baseName, editedCount: count } = parseFileName(file.name);
+    setBaseFileName(baseName);
+    setEditedCount(count);
+    // Note: useEffect will update fileName display automatically
+
     setFileSize(file.size);
     setStatus('processing');
     setProgress(20);
@@ -279,6 +298,8 @@ const App: React.FC = () => {
     setTranslationState({ status: 'idle', processed: 0, total: 0 });
     setApiUsage(INITIAL_USAGE);
     setFileName('');
+    setBaseFileName('');
+    setEditedCount(0);
     setFileSize(0);
     setProgress(0);
     setStatus('idle');
@@ -368,7 +389,6 @@ const App: React.FC = () => {
     let completedInSession = 0;
 
     try {
-      // v1.3.0: Use dynamic batch size from settings
       const batchSize = settings.translationBatchSize || 100;
       
       for (let i = 0; i < needingTranslation.length; i += batchSize) {
@@ -381,26 +401,19 @@ const App: React.FC = () => {
 
         const currentBatch = needingTranslation.slice(i, i + batchSize);
         
-        // v1.3.0: Calculate context (2 lines before and 2 lines after)
-        // Find indices in the MASTER segment list for context
         const firstSegId = currentBatch[0].id;
         const lastSegId = currentBatch[currentBatch.length - 1].id;
-        
         const firstIdx = segments.findIndex(s => s.id === firstSegId);
         const lastIdx = segments.findIndex(s => s.id === lastSegId);
-        
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
 
-        // Mark current batch as processing
         setSegments(prev => prev.map(s => 
           currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s
         ));
 
-        // Process single batch with context
         const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset);
         
-        // Update results realtime
         setSegments(prev => prev.map(s => {
           const batchIdx = currentBatch.findIndex(cb => cb.id === s.id);
           if (batchIdx !== -1) {
@@ -416,7 +429,6 @@ const App: React.FC = () => {
 
         completedInSession += currentBatch.length;
         
-        // Update API Usage
         setApiUsage(prev => ({
           ...prev,
           translate: {
@@ -481,7 +493,11 @@ const App: React.FC = () => {
   };
 
   const handleExport = () => {
-    downloadSRT(segments, `optimized_${fileName || 'subtitles.srt'}`);
+    // v1.0.0 Naming Rules: Apply [EditedX] prefix at export
+    const finalName = generateExportFileName(baseFileName, editedCount);
+    downloadSRT(segments, finalName);
+    // Increment the export counter for the next save session
+    setEditedCount(prev => prev + 1);
   };
 
   const handleSplitConfirm = async (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => {
@@ -499,12 +515,19 @@ const App: React.FC = () => {
   };
 
   const handleDownloadGenerated = (file: SplitResult) => {
-    downloadSRT(file.segments, file.fileName, file.metadata);
+    // Apply [Edited] logic to split files too
+    const { baseName, editedCount: count } = parseFileName(file.fileName);
+    const finalName = generateExportFileName(baseName, count);
+    downloadSRT(file.segments, finalName, file.metadata);
   };
 
   const handleLoadGenerated = (file: SplitResult) => {
     if (confirm(`Bạn có muốn tải file "${file.fileName}" vào Editor để làm việc không?\nProject hiện tại sẽ bị thay thế.`)) {
       setFileName(file.fileName);
+      const { baseName, editedCount: count } = parseFileName(file.fileName);
+      setBaseFileName(baseName);
+      setEditedCount(count);
+      
       setSegments(file.segments);
       setSelectedId(null);
       setFilter('all');
@@ -524,14 +547,11 @@ const App: React.FC = () => {
   const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
     setSettings(prev => {
       const newThreshold = { ...prev.cpsThreshold, [key]: val };
-      
-      // Auto-correct thresholds logic
       if (key === 'safeMax' && val >= newThreshold.warningMax - 5) {
         newThreshold.warningMax = val + 5;
       } else if (key === 'warningMax' && val <= newThreshold.safeMax + 5) {
         newThreshold.safeMax = Math.max(0, val - 5);
       }
-      
       return { ...prev, cpsThreshold: newThreshold };
     });
   };
@@ -819,7 +839,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* v1.3.0: AI Translation Settings */}
               <div className="pt-6 border-t border-slate-800 space-y-4">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">AI Translation Settings</h3>
                 <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl space-y-3">

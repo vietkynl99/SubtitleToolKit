@@ -1,4 +1,3 @@
-
 import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata, HistogramBucket } from '../types';
 
 export interface SplitResult {
@@ -8,6 +7,47 @@ export interface SplitResult {
 }
 
 const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
+
+/**
+ * Parses a filename to extract base name and the current edited count as per v1.0.0 naming rules.
+ * Recognizes [Edited] as count 1 and [EditedX] as count X.
+ */
+export function parseFileName(fileName: string): { baseName: string, editedCount: number } {
+  let name = fileName.replace(/\.srt$/i, '').trim();
+  let editedCount = 0;
+
+  // Pattern for [Edited] or [Edited2], [Edited345]...
+  const editedRegex = /^\[Edited(\d*)\]/;
+  const match = name.match(editedRegex);
+
+  if (match) {
+    const numPart = match[1];
+    if (numPart === "") {
+      editedCount = 1;
+    } else {
+      // Rule 5: No leading zero like [Edited01]
+      if (!numPart.startsWith('0')) {
+        editedCount = parseInt(numPart, 10);
+      } else {
+        // Invalid prefix format, treat as part of baseName
+        return { baseName: name, editedCount: 0 };
+      }
+    }
+    // BaseName is the rest after prefix
+    name = name.substring(match[0].length).trim();
+  }
+
+  return { baseName: name, editedCount };
+}
+
+/**
+ * Generates an export filename based on base name and the incremented edited count.
+ */
+export function generateExportFileName(baseName: string, currentCount: number): string {
+  const nextCount = currentCount + 1;
+  const prefix = nextCount === 1 ? '[Edited]' : `[Edited${nextCount}]`;
+  return `${prefix}${baseName}.srt`;
+}
 
 export function parseSRT(content: string): SubtitleSegment[] {
   const segments: SubtitleSegment[] = [];
