@@ -270,7 +270,7 @@ const App: React.FC = () => {
         } else {
           const res = parseSktProject(content);
           parsedSegments = res.segments;
-          preset = res.preset;
+          preset = res.preset || null;
           setProjectCreatedAt(null);
         }
         

@@ -102,9 +102,9 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
       {/* CPS Histogram Chart */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Detailed CPS Distribution</h3>
-        <div className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 flex items-center justify-center">
+        <div className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 relative">
           {formattedHistogramData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={formattedHistogramData} margin={{ top: 5, right: 5, bottom: 20, left: -25 }}>
                 <XAxis 
                   dataKey="range" 
@@ -153,7 +153,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center p-6">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
               <span className="text-xs text-slate-500 font-medium italic block mb-2">Không có dữ liệu CPS để hiển thị.</span>
               <p className="text-[10px] text-slate-600">Phân tích yêu cầu có nội dung văn bản.</p>
             </div>

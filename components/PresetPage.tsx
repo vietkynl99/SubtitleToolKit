@@ -95,8 +95,11 @@ const PresetPage: React.FC<PresetPageProps> = ({
     );
   }
 
+  // Robust check for whether a preset is considered "empty"
+  const isPresetEmpty = !preset || (typeof preset === 'object' && Object.keys(preset).length === 0);
+
   // Requirement 12.2: Case where title is NOT analyzed yet
-  if (!preset && !isLoading) {
+  if (isPresetEmpty && !isLoading) {
     return (
       <div className="flex-1 p-8 flex flex-col items-center justify-center bg-slate-950">
         <div className="max-w-xl w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
@@ -143,7 +146,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
           <div className="flex gap-3">
              <button 
               onClick={onExport}
-              disabled={isLoading || !preset}
+              disabled={isLoading || isPresetEmpty}
               className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-widest rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {ICONS.Export} Export JSON

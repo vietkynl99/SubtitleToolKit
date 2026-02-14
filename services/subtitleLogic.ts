@@ -109,7 +109,12 @@ export function parseSktProject(content: string): { segments: SubtitleSegment[],
     issueList: []
   }));
 
-  return { segments, preset: json.preset, title: json.original_title };
+  // Ensure preset is either a valid object or null
+  const preset = (json.preset && typeof json.preset === 'object' && Object.keys(json.preset).length > 0) 
+    ? json.preset 
+    : null;
+
+  return { segments, preset, title: json.original_title };
 }
 
 /**
