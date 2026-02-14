@@ -140,6 +140,15 @@ export function timeToSeconds(timeStr: string): number {
   return h * 3600 + m * 60 + s + Number(ms) / 1000;
 }
 
+export function secondsToTime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  const milliseconds = Math.round((totalSeconds % 1) * 1000);
+
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
+}
+
 export function formatDurationHMS(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

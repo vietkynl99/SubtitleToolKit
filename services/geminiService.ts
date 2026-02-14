@@ -140,13 +140,21 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
   return { preset, tokens };
 }
 
+/**
+ * AI Content Optimization as per v3.2.0.
+ * Focuses on shortening, cinematic flow, and better readability.
+ */
 export async function aiFixSegments(segments: SubtitleSegment[]): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-pro-preview';
 
-  const prompt = `Review and optimize the following Vietnamese subtitle segments. 
-  Fix: unnatural wording, wrong honorifics, or segments too long for their duration.
-  Keep it concise.
+  const prompt = `Review and optimize the following Vietnamese subtitle segments (Optimization v3.2.0).
+  Objectives:
+  - Make text shorter and more cinematic.
+  - Improve readability for high CPS (characters per second) lines.
+  - Maintain core meaning and natural flow.
+  - Do not be too literal; aim for professional movie subtitle quality.
+  
   Return a JSON array of objects with 'id' and 'fixedText'.
   
   Segments: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || s.originalText })))}`;

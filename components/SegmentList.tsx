@@ -1,11 +1,11 @@
-
 import React from 'react';
 import { SubtitleSegment, Severity } from '../types';
 
 interface SegmentListProps {
   segments: SubtitleSegment[];
-  selectedId: number | null;
-  onSelect: (id: number) => void;
+  selectedIds: Set<number>;
+  onToggleSelect: (id: number) => void;
+  onSelectAll: () => void;
   onUpdateText: (id: number, text: string) => void;
   filter: 'all' | Severity | any;
   onFilterChange: (filter: any) => void;
@@ -15,8 +15,9 @@ interface SegmentListProps {
 
 const SegmentList: React.FC<SegmentListProps> = ({ 
   segments, 
-  selectedId, 
-  onSelect, 
+  selectedIds, 
+  onToggleSelect,
+  onSelectAll,
   onUpdateText,
   filter, 
   onFilterChange,
@@ -44,23 +45,43 @@ const SegmentList: React.FC<SegmentListProps> = ({
   ];
 
   const isFilterRange = typeof filter === 'object' && filter?.type === 'range';
+  const allSelected = segments.length > 0 && segments.every(s => selectedIds.has(s.id));
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/50 h-full">
       {/* Header / Filter Toolbar */}
       <div className="sticky top-0 bg-slate-900 border-b border-slate-800 p-4 z-10 shrink-0 shadow-xl">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-            Segment Editor ({segments.length})
-          </h3>
-          {isFilterRange && (
+          <div className="flex items-center gap-4">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Segment Editor ({segments.length})
+            </h3>
             <button 
-              onClick={() => onFilterChange('all')}
-              className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase"
+              onClick={onSelectAll}
+              className={`text-[10px] font-bold uppercase px-3 py-1 rounded-lg transition-all border ${
+                allSelected 
+                  ? 'bg-blue-600 border-blue-500 text-white' 
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+              }`}
             >
-              Clear Range Filter
+              {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
             </button>
-          )}
+          </div>
+          <div className="flex items-center gap-4">
+            {selectedIds.size > 0 && (
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest animate-in fade-in slide-in-from-right-2">
+                Đã chọn {selectedIds.size} dòng
+              </span>
+            )}
+            {isFilterRange && (
+              <button 
+                onClick={() => onFilterChange('all')}
+                className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase"
+              >
+                Clear Range Filter
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {filters.map((f) => (
@@ -83,20 +104,26 @@ const SegmentList: React.FC<SegmentListProps> = ({
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
         {segments.map((seg) => {
           const colors = getSeverityClasses(seg.severity);
+          const isSelected = selectedIds.has(seg.id);
           
           return (
             <div
               key={seg.id}
-              onClick={() => onSelect(seg.id)}
               className={`w-full bg-slate-900 rounded-3xl border transition-all duration-200 overflow-hidden shadow-lg ${
-                selectedId === seg.id 
-                  ? 'border-blue-500/50 ring-1 ring-blue-500/20' 
+                isSelected 
+                  ? 'border-blue-500 ring-1 ring-blue-500/20' 
                   : 'border-slate-800 hover:border-slate-700'
               }`}
             >
               {/* Top Bar: Info & Timestamp */}
               <div className="px-5 py-3 bg-slate-900/80 border-b border-slate-800/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                  <input 
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleSelect(seg.id)}
+                    className="w-4 h-4 bg-slate-800 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
+                  />
                   <span className="px-2.5 py-1 bg-slate-800 rounded-lg text-[10px] font-bold font-mono text-slate-400">
                     #{seg.id}
                   </span>
@@ -105,7 +132,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                   {/* Unify text and dot color using the pre-calculated severity */}
                    <span className={`text-[10px] font-bold font-mono ${colors.text}`}>
                      {seg.cps.toFixed(1)} CPS
                    </span>

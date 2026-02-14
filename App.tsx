@@ -11,6 +11,7 @@ import {
   splitByRange,
   SplitResult,
   timeToSeconds,
+  secondsToTime,
   parseFileName,
   generateExportFileName
 } from './services/subtitleLogic';
@@ -51,7 +52,7 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<Status>('idle');
   const [progress, setProgress] = useState<number>(0);
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   
   const [fileName, setFileName] = useState<string>('');
@@ -59,7 +60,6 @@ const App: React.FC = () => {
   const [editedCount, setEditedCount] = useState<number>(0);
   const [projectCreatedAt, setProjectCreatedAt] = useState<string | null>(null);
 
-  const [fileSize, setFileSize] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<any>('all');
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
@@ -130,12 +130,29 @@ const App: React.FC = () => {
   
   const showToast = (message: string) => {
     setToast({ message, visible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     showToast("Đã copy tên file vào clipboard");
+  };
+
+  const handleToggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredSegments.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredSegments.map(s => s.id)));
+    }
   };
 
   const handleGeneratePreset = async (fName: string) => {
@@ -236,7 +253,6 @@ const App: React.FC = () => {
     setBaseFileName(baseName);
     setEditedCount(count);
 
-    setFileSize(file.size);
     setStatus('processing');
     setProgress(20);
 
@@ -277,6 +293,7 @@ const App: React.FC = () => {
         setActiveTab('editor');
         setGeneratedFiles([]);
         setFilter('all');
+        setSelectedIds(new Set());
       } catch (err) {
         alert('Lỗi khi parse file: ' + (err as Error).message);
         setStatus('error');
@@ -300,13 +317,12 @@ const App: React.FC = () => {
     setFileName('');
     setBaseFileName('');
     setEditedCount(0);
-    setFileSize(0);
     setProgress(0);
     setStatus('idle');
     setFilter('all');
-    setSelectedId(null);
     setShowClearModal(false);
     setActiveTab('upload');
+    setSelectedIds(new Set());
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!skipFeedback) showToast("Project has been cleared.");
   };
@@ -413,21 +429,62 @@ const App: React.FC = () => {
 
   const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Đang dừng..."); };
 
-  const handleAiFix = async () => {
-    if (segments.length === 0) return;
+  /**
+   * AI Optimization Implementation Version 3.2.0.
+   * Skips Safe segments.
+   * Optimizes Warning and Critical segments using AI Content editing.
+   */
+  const handleAiOptimize = async () => {
+    if (selectedIds.size === 0) return;
     setStatus('processing');
-    setProgress(50);
-    try {
-      const { segments: fixed, tokens } = await aiFixSegments(segments);
-      setSegments(fixed);
-      setApiUsage(prev => ({ ...prev, optimize: { requests: prev.optimize.requests + 1, tokens: prev.optimize.tokens + tokens } }));
-      setProgress(100);
-      setStatus('success');
-      showToast("AI Fix completed.");
-    } catch (err) {
-      setStatus('error');
-      showToast("Lỗi AI Fix.");
+    setProgress(0);
+
+    let safeCount = 0;
+    let optimizedCount = 0;
+
+    const currentSegments = [...segments];
+    const aiTargetSegments: SubtitleSegment[] = [];
+
+    // Step 1: Classification according to Version 3.2.0
+    for (const segId of Array.from(selectedIds)) {
+      const seg = currentSegments.find(s => s.id === segId);
+      if (!seg) continue;
+
+      // Re-evaluate severity to ensure accuracy
+      const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold);
+      const severity = meta.enrichedSegments[0].severity;
+
+      if (severity === 'safe') {
+        safeCount++;
+      } else {
+        // Warning or Critical -> AI Optimization
+        aiTargetSegments.push(seg);
+      }
     }
+
+    // Step 2: AI Content Optimization for non-Safe segments
+    if (aiTargetSegments.length > 0) {
+      setProgress(30);
+      try {
+        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments);
+        fixed.forEach(f => {
+          const idx = currentSegments.findIndex(s => s.id === f.id);
+          if (idx !== -1) {
+            currentSegments[idx] = { ...f, isModified: true };
+            optimizedCount++;
+          }
+        });
+        setApiUsage(prev => ({ ...prev, optimize: { requests: prev.optimize.requests + 1, tokens: prev.optimize.tokens + tokens } }));
+      } catch (err) {
+        showToast("Lỗi khi tối ưu AI.");
+      }
+    }
+
+    setSegments(currentSegments);
+    setProgress(100);
+    setStatus('success');
+    setSelectedIds(new Set());
+    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu (Warning/Critical).`);
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -486,7 +543,7 @@ const App: React.FC = () => {
       setBaseFileName(baseName);
       setEditedCount(count);
       setSegments(file.segments);
-      setSelectedId(null);
+      setSelectedIds(new Set());
       setFilter('all');
       setActiveTab('editor');
     }
@@ -520,7 +577,7 @@ const App: React.FC = () => {
 
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
             <h3 className="text-xl font-bold mb-3">Xóa dự án?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Hủy</button>
@@ -532,7 +589,7 @@ const App: React.FC = () => {
 
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
             <h3 className="text-xl font-bold mb-3">Tải lên file mới?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Hủy</button>
@@ -544,7 +601,7 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[40px] shadow-2xl p-10 animate-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 w-full max-lg rounded-[40px] shadow-2xl p-10 animate-in zoom-in duration-300">
             <h3 className="text-2xl font-bold mb-2">Tải xuống</h3>
             <p className="text-slate-500 text-sm mb-10">Chọn định dạng và phiên bản bạn muốn lưu trữ.</p>
             <div className="space-y-4">
@@ -617,7 +674,17 @@ const App: React.FC = () => {
       {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-            <SegmentList segments={filteredSegments} selectedId={selectedId} onSelect={setSelectedId} onUpdateText={updateSegmentText} filter={filter} onFilterChange={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} />
+            <SegmentList 
+              segments={filteredSegments} 
+              selectedIds={selectedIds} 
+              onToggleSelect={handleToggleSelect} 
+              onSelectAll={handleSelectAll}
+              onUpdateText={updateSegmentText} 
+              filter={filter} 
+              onFilterChange={setFilter} 
+              safeThreshold={settings.cpsThreshold.safeMax} 
+              criticalThreshold={settings.cpsThreshold.warningMax} 
+            />
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">
                 <div className="flex justify-between mb-1.5"><span className="text-[10px] font-bold text-blue-400">Đang dịch: {translationState.processed}/{translationState.total}</span><span>{progress}%</span></div>
@@ -626,8 +693,17 @@ const App: React.FC = () => {
             )}
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between">
               <div className="flex gap-2">
-                {translationState.status === 'running' ? <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Translation</button> : <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Dịch Toàn Bộ</button>}
-                <button onClick={handleAiFix} disabled={status === 'processing'} className="px-4 py-2 bg-slate-800 text-slate-200 rounded-lg font-bold">AI Tối Ưu</button>
+                {translationState.status === 'running' ? 
+                  <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Translation</button> : 
+                  <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Dịch Toàn Bộ</button>
+                }
+                <button 
+                  onClick={handleAiOptimize} 
+                  disabled={status === 'processing' || selectedIds.size === 0} 
+                  className="px-4 py-2 bg-slate-800 text-slate-200 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  AI Tối Ưu {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+                </button>
               </div>
               <button onClick={() => setShowExportModal(true)} className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20">{ICONS.Export} Tải Xuống</button>
             </div>
