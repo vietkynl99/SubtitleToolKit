@@ -146,16 +146,20 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
  */
 export async function aiFixSegments(segments: SubtitleSegment[]): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = 'gemini-3-pro-preview';
+  const model = 'gemini-3-flash-preview';
 
-  const prompt = `Review and optimize the following Vietnamese subtitle segments (Optimization v3.2.0).
-  Objectives:
-  - Make text shorter and more cinematic.
-  - Improve readability for high CPS (characters per second) lines.
-  - Maintain core meaning and natural flow.
-  - Do not be too literal; aim for professional movie subtitle quality.
-  
-  Return a JSON array of objects with 'id' and 'fixedText'.
+  const prompt = `Review and optimize the following Vietnamese subtitle segments.
+
+  Strict Requirements:
+  1. Shorten content where possible to reduce reading burden and improve CPS (Characters Per Second).
+  2. Ensure natural, punchy, and professional cinematic flow suitable for high-quality movie subtitles.
+  3. PRESERVE core meaning strictly. Do NOT add new information, do NOT change context, and do NOT remove essential plot details.
+  4. Avoid exaggeration; keep the tone natural and consistent with the original intent.
+  5. Only rewrite if it significantly improves readability, flow, or reduces excessive length.
+  6. The primary goal is improvement over the current state; the result does NOT strictly need to reach "safe" CPS levels if doing so sacrifices meaning.
+
+  Output Format:
+  - Return a JSON array of objects with 'id' and 'fixedText'.
   
   Segments: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || s.originalText })))}`;
 
