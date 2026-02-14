@@ -24,6 +24,21 @@ export interface SubtitleSegment {
   issueList: string[];
 }
 
+export interface SktProject {
+  version: string;
+  original_title: string;
+  created_at: string;
+  updated_at: string;
+  preset: TranslationPreset | null;
+  segments: {
+    id: number;
+    start: string;
+    end: string;
+    original: string;
+    translated: string;
+  }[];
+}
+
 export interface SubtitleError {
   type: 'local' | 'heavy';
   message: string;

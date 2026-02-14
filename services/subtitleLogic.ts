@@ -1,4 +1,4 @@
-import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata, HistogramBucket } from '../types';
+import { SubtitleSegment, AnalysisResult, SubtitleError, Severity, SplitMetadata, HistogramBucket, SktProject, TranslationPreset } from '../types';
 
 export interface SplitResult {
   fileName: string;
@@ -9,14 +9,12 @@ export interface SplitResult {
 const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
 
 /**
- * Parses a filename to extract base name and the current edited count as per v1.0.0 naming rules.
- * Recognizes [Edited] as count 1 and [EditedX] as count X.
+ * Parses a filename to extract base name and the current edited count.
  */
 export function parseFileName(fileName: string): { baseName: string, editedCount: number } {
-  let name = fileName.replace(/\.srt$/i, '').trim();
+  let name = fileName.replace(/\.srt$/i, '').replace(/\.sktproject$/i, '').trim();
   let editedCount = 0;
 
-  // Pattern for [Edited] or [Edited2], [Edited345]...
   const editedRegex = /^\[Edited(\d*)\]/;
   const match = name.match(editedRegex);
 
@@ -25,28 +23,22 @@ export function parseFileName(fileName: string): { baseName: string, editedCount
     if (numPart === "") {
       editedCount = 1;
     } else {
-      // Rule 5: No leading zero like [Edited01]
       if (!numPart.startsWith('0')) {
         editedCount = parseInt(numPart, 10);
       } else {
-        // Invalid prefix format, treat as part of baseName
         return { baseName: name, editedCount: 0 };
       }
     }
-    // BaseName is the rest after prefix
     name = name.substring(match[0].length).trim();
   }
 
   return { baseName: name, editedCount };
 }
 
-/**
- * Generates an export filename based on base name and the incremented edited count.
- */
-export function generateExportFileName(baseName: string, currentCount: number): string {
+export function generateExportFileName(baseName: string, currentCount: number, extension: string = '.srt'): string {
   const nextCount = currentCount + 1;
   const prefix = nextCount === 1 ? '[Edited]' : `[Edited${nextCount}]`;
-  return `${prefix}${baseName}.srt`;
+  return `${prefix}${baseName}${extension}`;
 }
 
 export function parseSRT(content: string): SubtitleSegment[] {
@@ -55,9 +47,9 @@ export function parseSRT(content: string): SubtitleSegment[] {
 
   blocks.forEach((block) => {
     const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '');
-    if (lines.length >= 3) {
+    if (lines.length >= 2) {
       const id = parseInt(lines[0]);
-      const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
+      const timeMatch = lines[1]?.match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
       
       if (timeMatch && !isNaN(id)) {
         const startTime = timeMatch[1];
@@ -97,6 +89,50 @@ export function parseSRT(content: string): SubtitleSegment[] {
   return segments;
 }
 
+/**
+ * Parses a .sktproject JSON content into SubtitleSegment[].
+ */
+export function parseSktProject(content: string): { segments: SubtitleSegment[], preset: TranslationPreset | null, title: string } {
+  const json: SktProject = JSON.parse(content);
+  if (json.version !== "1.0") throw new Error("Unsupported project version");
+
+  const segments: SubtitleSegment[] = json.segments.map(s => ({
+    id: s.id,
+    startTime: s.start,
+    endTime: s.end,
+    originalText: s.original || null,
+    translatedText: s.translated || null,
+    isModified: !!s.translated,
+    errors: [],
+    severity: 'safe',
+    cps: 0,
+    issueList: []
+  }));
+
+  return { segments, preset: json.preset, title: json.original_title };
+}
+
+/**
+ * Generates .sktproject JSON string.
+ */
+export function generateSktProject(segments: SubtitleSegment[], title: string, preset: TranslationPreset | null, createdAt?: string): string {
+  const project: SktProject = {
+    version: "1.0",
+    original_title: title,
+    created_at: createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    preset: preset,
+    segments: segments.map(s => ({
+      id: s.id,
+      start: s.startTime,
+      end: s.endTime,
+      original: s.originalText || "",
+      translated: s.translatedText || ""
+    }))
+  };
+  return JSON.stringify(project, null, 2);
+}
+
 export function timeToSeconds(timeStr: string): number {
   if (!timeStr) return 0;
   const [hms, ms] = timeStr.split(',');
@@ -128,7 +164,6 @@ export function getSegmentMetadata(
   const issueList: string[] = [];
   let severity: Severity = 'safe';
 
-  // STRICT CPS ONLY LOGIC
   if (cps > cpsThreshold.warningMax) {
     severity = 'critical';
     issueList.push(`CPS vượt quá ngưỡng Critical (> ${cpsThreshold.warningMax})`);
@@ -139,7 +174,6 @@ export function getSegmentMetadata(
     severity = 'safe';
   }
 
-  // Formatting issues are tracked for information but DO NOT affect severity color
   const lines = text.split('\n').filter(line => line.trim().length > 0);
   if (lines.length > 2) {
     issueList.push('Phụ đề quá 2 dòng');
@@ -269,14 +303,14 @@ export function performLocalFix(text: string): string {
   return fixed;
 }
 
-export function generateSRT(segments: SubtitleSegment[], metadata?: SplitMetadata): string {
+export function generateSRT(segments: SubtitleSegment[], mode: 'original' | 'translated' = 'translated', metadata?: SplitMetadata): string {
   let header = '';
   if (metadata) {
     header = `NOTE: Split Range Information\nRange: ${metadata.range}\nStart: ${metadata.start}\nEnd: ${metadata.end}\nSegments: ${metadata.segments}\nDuration: ${metadata.duration}\n\n`;
   }
   
   const content = segments.map((s, index) => {
-    const text = s.translatedText || s.originalText || "";
+    const text = mode === 'translated' ? (s.translatedText || "") : (s.originalText || "");
     return `${index + 1}\n${s.startTime} --> ${s.endTime}\n${text}\n`;
   }).join('\n');
 
