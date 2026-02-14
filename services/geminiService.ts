@@ -14,31 +14,33 @@ export async function translateBatch(
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
-  // v2.3.0 Style DNA integration
-  const styleInstruction = preset ? `
-  --- STYLE DNA CONTEXT ---
-  Tác phẩm này thuộc thể loại: ${preset.genres.join(', ')}.
-  Tông giọng chủ đạo: ${preset.tone.join(', ')}.
-  Mức độ hài hước/giải trí: ${preset.humor_level}/10.
-  Yêu cầu: Sử dụng đại từ nhân xưng (xưng hô) và từ vựng phù hợp với phong cách trên. 
-  Nếu là phim hài, hãy dịch thoát ý, hóm hỉnh. Nếu là tiên hiệp, hãy dùng từ Hán Việt trang trọng đúng mực.
-  -------------------------
-  ` : "";
+  let humorInstruction = "";
+  if (preset) {
+    const h = preset.humor_level;
+    if (h <= 3) humorInstruction = "Dịch sát nghĩa, giữ tông giọng trung tính và nghiêm túc.";
+    else if (h <= 6) humorInstruction = "Hành văn nhẹ nhàng, có chút hóm hỉnh duyên dáng.";
+    else if (h <= 8) humorInstruction = "Sử dụng từ ngữ sắc sảo, có chút mỉa mai hoặc châm biếm nhẹ.";
+    else humorInstruction = "Giữ tông dí dỏm, phá cách nhưng vẫn gọn gàng.";
+  }
 
-  const contextPrompt = (contextBefore.length > 0 || contextAfter.length > 0) ? `
-  Use the following context to ensure continuity and correct character address (xưng hô):
-  ${contextBefore.length > 0 ? `- Context Before: ${JSON.stringify(contextBefore)}` : ''}
-  ${contextAfter.length > 0 ? `- Context After: ${JSON.stringify(contextAfter)}` : ''}
-  (Note: Do NOT translate the context lines, only use them for reference.)
-  ` : "";
+  const styleContext = preset 
+    ? `Style: ${preset.genres.join(', ')} | ${preset.tone.join(', ')}. ${humorInstruction}` 
+    : "Style: Trung tính.";
 
-  const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
-    Instruction: Use natural cinema style.
-    ${styleInstruction}
-    ${contextPrompt}
-    Return a JSON array of strings in the exact same order as the provided main segments.
+  const contextBlock = (contextBefore.length > 0 || contextAfter.length > 0) 
+    ? `- Context (xưng hô): Trước: ${JSON.stringify(contextBefore)}, Sau: ${JSON.stringify(contextAfter)}` 
+    : "";
+
+  const prompt = `Translate Chinese subtitles to Vietnamese.
+   Requirements:
+    - Prioritize clarity and natural flow.
+    - Reading speed matters. Target ≤1.5x original length. Absolute cap 2x.
+    - Style DNA: ${styleContext} (Keep compact).
+    - No padding: Shortest natural phrasing; no literary fillers.
+    ${contextBlock}
     
-    Main Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
+    Output: JSON array of strings in order.
+    Segments: ${JSON.stringify(batch.map(s => s.originalText))}`;
 
   try {
     const response = await ai.models.generateContent({
