@@ -32,11 +32,12 @@ export async function translateBatch(
     : "";
 
   const prompt = `Translate Chinese subtitles to Vietnamese.
-   Requirements:
-    - Prioritize clarity and natural flow.
-    - Reading speed matters. Target ≤1.5x original length. Absolute cap 2x.
-    - Style DNA: ${styleContext} (Keep compact).
-    - No padding: Shortest natural phrasing; no literary fillers.
+    Requirements:
+    - Independent segments: Treat each line independently. No cross-inference or merging logic.
+    - No expansion: Do not infer beyond the given segment. Short inputs (≤4 chars) must result in short phrases.
+    - Reading speed: Target ≤1.5x original length. Absolute cap 2x.
+    - Clarity & Flow: Prioritize natural flow. No padding or literary fillers.
+    - Style DNA: ${styleContext}
     ${contextBlock}
     
     Output: JSON array of strings in order.
