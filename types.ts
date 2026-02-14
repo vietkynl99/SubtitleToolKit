@@ -76,3 +76,15 @@ export interface SplitMetadata {
   segments: number;
   duration: string;
 }
+
+export interface UsageStats {
+  requests: number;
+  tokens: number;
+  segments?: number;
+}
+
+export interface ApiUsage {
+  style: UsageStats;
+  translate: UsageStats;
+  optimize: UsageStats;
+}

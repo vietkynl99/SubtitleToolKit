@@ -3,16 +3,15 @@ import { SubtitleSegment, TranslationPreset } from "../types";
 
 /**
  * Translates a single batch of segments. 
- * This allows the UI to handle orchestration and stop-on-error requirements.
+ * Returns both translated texts and token usage.
  */
 export async function translateBatch(
   batch: SubtitleSegment[],
   preset?: TranslationPreset
-): Promise<string[]> {
+): Promise<{ translatedTexts: string[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
-  // v2.2.0 Style Context
   const styleInstruction = preset ? `
   Style Context:
   - Genres: ${preset.genres.join(', ')}
@@ -41,73 +40,19 @@ export async function translateBatch(
     });
 
     const translatedBatch = JSON.parse(response.text || "[]");
+    const tokens = response.usageMetadata?.totalTokenCount || 0;
+
     if (!Array.isArray(translatedBatch)) {
       throw new Error("Invalid response format from AI");
     }
-    return translatedBatch;
+    return { translatedTexts: translatedBatch, tokens };
   } catch (error) {
     console.error("Batch translation error:", error);
     throw error;
   }
 }
 
-/**
- * Legacy wrapper or helper if still needed. 
- * Note: App.tsx now handles the batching loop to fulfill v1.2.0 requirements.
- */
-export async function translateSegments(
-  segments: SubtitleSegment[], 
-  onBatchStart?: (startIndex: number, count: number) => void,
-  onBatchComplete?: (batchIndex: number, translatedTexts: string[]) => void,
-  preset?: TranslationPreset
-): Promise<SubtitleSegment[]> {
-  const segmentsToTranslateIndices = segments
-    .map((s, idx) => ({ s, idx }))
-    .filter(item => !item.s.translatedText || item.s.translatedText.trim() === '')
-    .map(item => item.idx);
-
-  if (segmentsToTranslateIndices.length === 0) {
-    return segments;
-  }
-
-  const batchSize = 15;
-  const results = [...segments];
-
-  for (let i = 0; i < segmentsToTranslateIndices.length; i += batchSize) {
-    const currentIndicesBatch = segmentsToTranslateIndices.slice(i, i + batchSize);
-    const batch = currentIndicesBatch.map(idx => segments[idx]);
-    
-    if (onBatchStart) {
-      onBatchStart(currentIndicesBatch[0], currentIndicesBatch.length);
-    }
-
-    try {
-      const translatedBatch = await translateBatch(batch, preset);
-      
-      translatedBatch.forEach((text: string, index: number) => {
-        const realIdx = currentIndicesBatch[index];
-        if (results[realIdx]) {
-          results[realIdx].translatedText = text;
-          results[realIdx].isModified = true;
-          results[realIdx].isProcessing = false;
-        }
-      });
-
-      if (onBatchComplete) {
-        onBatchComplete(i, translatedBatch);
-      }
-    } catch (error) {
-      currentIndicesBatch.forEach(idx => {
-        if (results[idx]) results[idx].isProcessing = false;
-      });
-      throw error; // Stop the whole process on error as per requirement v1.2.0
-    }
-  }
-
-  return results;
-}
-
-export async function extractTitleFromFilename(filename: string): Promise<string> {
+export async function extractTitleFromFilename(filename: string): Promise<{ title: string, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const cleaned = filename.replace(/\.srt$/i, '').trim();
   
@@ -120,19 +65,23 @@ export async function extractTitleFromFilename(filename: string): Promise<string
     Tên file: ${cleaned}`
   });
   
-  return response.text?.trim() || cleaned;
+  const title = response.text?.trim() || cleaned;
+  const tokens = response.usageMetadata?.totalTokenCount || 0;
+  return { title, tokens };
 }
 
-export async function translateTitle(title: string): Promise<string> {
+export async function translateTitle(title: string): Promise<{ title: string, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Dịch tiêu đề tác phẩm sau sang tiếng Việt tự nhiên, phù hợp ngữ cảnh phim ảnh: ${title}`
   });
-  return response.text?.trim() || title;
+  const translated = response.text?.trim() || title;
+  const tokens = response.usageMetadata?.totalTokenCount || 0;
+  return { title: translated, tokens };
 }
 
-export async function analyzeTranslationStyle(title: string, originalTitle: string): Promise<TranslationPreset> {
+export async function analyzeTranslationStyle(title: string, originalTitle: string): Promise<{ preset: TranslationPreset, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -168,10 +117,12 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
     }
   });
   
-  return JSON.parse(response.text || "{}") as TranslationPreset;
+  const preset = JSON.parse(response.text || "{}") as TranslationPreset;
+  const tokens = response.usageMetadata?.totalTokenCount || 0;
+  return { preset, tokens };
 }
 
-export async function aiFixSegments(segments: SubtitleSegment[]): Promise<SubtitleSegment[]> {
+export async function aiFixSegments(segments: SubtitleSegment[]): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-pro-preview';
 
@@ -203,12 +154,16 @@ export async function aiFixSegments(segments: SubtitleSegment[]): Promise<Subtit
     });
 
     const fixes = JSON.parse(response.text || "[]");
-    return segments.map(s => {
+    const tokens = response.usageMetadata?.totalTokenCount || 0;
+    
+    const updatedSegments = segments.map(s => {
       const fix = fixes.find((f: any) => f.id === s.id);
       return fix ? { ...s, translatedText: fix.fixedText, isModified: true } : s;
     });
+
+    return { segments: updatedSegments, tokens };
   } catch (error) {
     console.error("AI Fix error", error);
-    return segments;
+    return { segments, tokens: 0 };
   }
 }

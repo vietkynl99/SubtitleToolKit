@@ -6,7 +6,8 @@ import {
   AppSettings, 
   Severity,
   SplitMetadata,
-  TranslationPreset
+  TranslationPreset,
+  ApiUsage
 } from './types';
 import { 
   parseSRT, 
@@ -34,6 +35,12 @@ import FileToolsPage from './components/FileToolsPage';
 import PresetPage from './components/PresetPage';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
+const INITIAL_USAGE: ApiUsage = {
+  style: { requests: 0, tokens: 0 },
+  translate: { requests: 0, tokens: 0, segments: 0 },
+  optimize: { requests: 0, tokens: 0 }
+};
+
 const App: React.FC = () => {
   // State
   const [activeTab, setActiveTab] = useState<string>('upload');
@@ -52,6 +59,9 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
+  // API Usage Tracking
+  const [apiUsage, setApiUsage] = useState<ApiUsage>(INITIAL_USAGE);
+
   // Translation Style DNA State
   const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
   const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
@@ -125,18 +135,37 @@ const App: React.FC = () => {
   const handleGeneratePreset = async (fName: string) => {
     if (!fName) return;
     setIsPresetLoading(true);
+    let totalTokens = 0;
+    let totalRequests = 0;
+
     try {
-      const extracted = await extractTitleFromFilename(fName);
-      let originalTitle = extracted;
+      const { title: extracted, tokens: tokens1 } = await extractTitleFromFilename(fName);
+      totalTokens += tokens1;
+      totalRequests += 1;
+
       let titleVi = extracted;
       
       const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
       if (isChinese(extracted)) {
-        titleVi = await translateTitle(extracted);
+        const { title: translated, tokens: tokens2 } = await translateTitle(extracted);
+        titleVi = translated;
+        totalTokens += tokens2;
+        totalRequests += 1;
       }
       
-      const preset = await analyzeTranslationStyle(titleVi, originalTitle);
+      const { preset, tokens: tokens3 } = await analyzeTranslationStyle(titleVi, extracted);
+      totalTokens += tokens3;
+      totalRequests += 1;
+
       setTranslationPreset(preset);
+      setApiUsage(prev => ({
+        ...prev,
+        style: {
+          requests: prev.style.requests + totalRequests,
+          tokens: prev.style.tokens + totalTokens
+        }
+      }));
+
       showToast("Analyze Complete: Creative DNA initialized.");
     } catch (err) {
       console.error("Preset generation failed", err);
@@ -223,6 +252,7 @@ const App: React.FC = () => {
       
       setTranslationPreset(null);
       setTranslationState({ status: 'idle', processed: 0, total: 0 });
+      setApiUsage(INITIAL_USAGE);
       setProgress(100);
       setStatus('success');
       setActiveTab('editor');
@@ -243,6 +273,7 @@ const App: React.FC = () => {
     setGeneratedFiles([]);
     setTranslationPreset(null);
     setTranslationState({ status: 'idle', processed: 0, total: 0 });
+    setApiUsage(INITIAL_USAGE);
     setFileName('');
     setFileSize(0);
     setProgress(0);
@@ -321,9 +352,6 @@ const App: React.FC = () => {
     setStatus('processing');
     stopRequestedRef.current = false;
     
-    // Resume logic: total is total needing translation *at the start of this session*
-    // but progress should keep the context of existing translation if preferred.
-    // However, per v1.3.0, progress is based on segments needing translation in this session.
     const totalToTranslateInSession = needingTranslation.length;
     
     setTranslationState({ 
@@ -339,7 +367,6 @@ const App: React.FC = () => {
       // STEP 3 & 5: Batching & Stop-on-Error Rule
       const batchSize = 15;
       for (let i = 0; i < needingTranslation.length; i += batchSize) {
-        // v1.3.0: Check for manual stop
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
           showToast("Đã dừng quá trình dịch. Bạn có thể tiếp tục dịch phần còn lại.");
@@ -355,7 +382,7 @@ const App: React.FC = () => {
         ));
 
         // Process single batch
-        const translatedTexts = await translateBatch(currentBatch, translationPreset);
+        const { translatedTexts, tokens } = await translateBatch(currentBatch, translationPreset);
         
         // Update results realtime
         setSegments(prev => prev.map(s => {
@@ -372,6 +399,17 @@ const App: React.FC = () => {
         }));
 
         completedInSession += currentBatch.length;
+        
+        // Update API Usage
+        setApiUsage(prev => ({
+          ...prev,
+          translate: {
+            requests: prev.translate.requests + 1,
+            tokens: prev.translate.tokens + tokens,
+            segments: (prev.translate.segments || 0) + currentBatch.length
+          }
+        }));
+
         setTranslationState(prev => ({ ...prev, processed: completedInSession }));
         setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
       }
@@ -397,8 +435,15 @@ const App: React.FC = () => {
     setStatus('processing');
     setProgress(50);
     try {
-      const fixed = await aiFixSegments(segments);
+      const { segments: fixed, tokens } = await aiFixSegments(segments);
       setSegments(fixed);
+      setApiUsage(prev => ({
+        ...prev,
+        optimize: {
+          requests: prev.optimize.requests + 1,
+          tokens: prev.optimize.tokens + tokens
+        }
+      }));
       setProgress(100);
       setStatus('success');
       showToast("AI Fix completed.");
@@ -593,7 +638,6 @@ const App: React.FC = () => {
               criticalThreshold={settings.cpsThreshold.warningMax}
             />
             
-            {/* Real-time Progress Bar (v1.3.0) */}
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800 animate-in slide-in-from-bottom duration-300">
                 <div className="flex items-center justify-between mb-1.5">
@@ -662,77 +706,149 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 max-w-4xl overflow-y-auto">
+        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar">
           <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
-          <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl">
-            <div>
-              <h3 className="font-bold mb-2">Safe Max (CPS)</h3>
-              <input 
-                type="range" min="10" max="60" 
-                value={settings.cpsThreshold.safeMax} 
-                onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} 
-                className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" 
-              />
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-blue-400 font-bold">{settings.cpsThreshold.safeMax} CPS</span>
-                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Low Speed limit</span>
-              </div>
-            </div>
-            <div>
-              <h3 className="font-bold mb-2">Warning Max (CPS)</h3>
-              <input 
-                type="range" min="15" max="80" 
-                value={settings.cpsThreshold.warningMax} 
-                onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} 
-                className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" 
-              />
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-rose-400 font-bold">{settings.cpsThreshold.warningMax} CPS</span>
-                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed limit</span>
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-800 space-y-6">
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">AI & Automation</h3>
-              
-              <div className="flex flex-col gap-4">
-                <label className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl cursor-pointer group hover:bg-slate-800/50 transition-all">
-                  <div className="flex items-center gap-4">
-                    <input 
-                      type="checkbox" 
-                      checked={settings.autoFixOnUpload}
-                      onChange={(e) => setSettings({...settings, autoFixOnUpload: e.target.checked})}
-                      className="w-5 h-5 bg-slate-900 border-slate-700 rounded text-blue-500 focus:ring-blue-500 transition-all"
-                    />
-                    <div>
-                      <span className="block font-bold text-slate-200">Auto-fix on Upload</span>
-                      <span className="text-xs text-slate-500">Tự động sửa lỗi định dạng ngay khi nạp file.</span>
+          
+          <div className="space-y-8">
+            {/* API Usage Dashboard Section (Requirement v1.0.0) */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">API Usage Dashboard</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Translation Style Block */}
+                <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-3">Translation Style</div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Requests:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.style.requests}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Tokens:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.style.tokens.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                </label>
+                </div>
 
-                <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl space-y-3">
-                   <div className="text-sm font-bold text-slate-200">Optimization Mode</div>
-                   <div className="flex gap-2">
-                     {['safe', 'aggressive'].map((mode) => (
-                       <button
-                         key={mode}
-                         onClick={() => setSettings({...settings, optimizationMode: mode as any})}
-                         className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
-                           settings.optimizationMode === mode 
-                             ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10' 
-                             : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
-                         }`}
-                       >
-                         {mode}
-                       </button>
-                     ))}
-                   </div>
-                   <p className="text-[10px] text-slate-500 italic">
-                     {settings.optimizationMode === 'safe' 
-                        ? 'Chế độ Safe: Ưu tiên giữ nguyên ý nghĩa, chỉ tối ưu khi CPS quá cao.' 
-                        : 'Chế độ Aggressive: Ưu tiên trải nghiệm người dùng, ép CPS về vùng an toàn.'}
-                   </p>
+                {/* AI Translate Block */}
+                <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-3">AI Translate</div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Requests:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.translate.requests}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Tokens:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.translate.tokens.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-700/30">
+                        <span className="text-xs text-slate-500">Segments:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.translate.segments || 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Avg Tokens / Seg:</span>
+                        <span className="text-sm font-bold text-emerald-400">
+                          {apiUsage.translate.segments && apiUsage.translate.segments > 0 
+                            ? (apiUsage.translate.tokens / apiUsage.translate.segments).toFixed(1) 
+                            : '0'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Optimize Block */}
+                <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-3">AI Optimize</div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Requests:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.optimize.requests}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">Tokens:</span>
+                        <span className="text-sm font-bold text-slate-200">{apiUsage.optimize.tokens.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl">
+              <div>
+                <h3 className="font-bold mb-2">Safe Max (CPS)</h3>
+                <input 
+                  type="range" min="10" max="60" 
+                  value={settings.cpsThreshold.safeMax} 
+                  onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} 
+                  className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer" 
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-blue-400 font-bold">{settings.cpsThreshold.safeMax} CPS</span>
+                  <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Low Speed limit</span>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold mb-2">Warning Max (CPS)</h3>
+                <input 
+                  type="range" min="15" max="80" 
+                  value={settings.cpsThreshold.warningMax} 
+                  onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} 
+                  className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer" 
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-rose-400 font-bold">{settings.cpsThreshold.warningMax} CPS</span>
+                  <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed limit</span>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-800 space-y-6">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">AI & Automation</h3>
+                
+                <div className="flex flex-col gap-4">
+                  <label className="flex items-center justify-between p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl cursor-pointer group hover:bg-slate-800/50 transition-all">
+                    <div className="flex items-center gap-4">
+                      <input 
+                        type="checkbox" 
+                        checked={settings.autoFixOnUpload}
+                        onChange={(e) => setSettings({...settings, autoFixOnUpload: e.target.checked})}
+                        className="w-5 h-5 bg-slate-900 border-slate-700 rounded text-blue-500 focus:ring-blue-500 transition-all"
+                      />
+                      <div>
+                        <span className="block font-bold text-slate-200">Auto-fix on Upload</span>
+                        <span className="text-xs text-slate-500">Tự động sửa lỗi định dạng ngay khi nạp file.</span>
+                      </div>
+                    </div>
+                  </label>
+
+                  <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl space-y-3">
+                    <div className="text-sm font-bold text-slate-200">Optimization Mode</div>
+                    <div className="flex gap-2">
+                      {['safe', 'aggressive'].map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setSettings({...settings, optimizationMode: mode as any})}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition-all ${
+                            settings.optimizationMode === mode 
+                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/10' 
+                              : 'bg-slate-900/50 border-slate-800 text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-500 italic">
+                      {settings.optimizationMode === 'safe' 
+                          ? 'Chế độ Safe: Ưu tiên giữ nguyên ý nghĩa, chỉ tối ưu khi CPS quá cao.' 
+                          : 'Chế độ Aggressive: Ưu tiên trải nghiệm người dùng, ép CPS về vùng an toàn.'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
