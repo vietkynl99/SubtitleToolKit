@@ -80,7 +80,6 @@ const App: React.FC = () => {
   }>({ status: 'idle', processed: 0, total: 0 });
   
   const stopRequestedRef = useRef<boolean>(false);
-  const dropzoneRef = useRef<HTMLLabelElement>(null);
 
   useEffect(() => {
     if (baseFileName) {
@@ -256,7 +255,7 @@ const App: React.FC = () => {
           const res = parseSktProject(content);
           parsedSegments = res.segments;
           preset = res.preset;
-          setProjectCreatedAt(null); // Will use stored created_at on next save
+          setProjectCreatedAt(null);
         }
         
         if (parsedSegments.length === 0) {
@@ -493,7 +492,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Add missing handleDeleteGenerated function
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
     showToast("Đã xóa file tạm thời.");
@@ -506,8 +504,8 @@ const App: React.FC = () => {
   const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
     setSettings(prev => {
       const nt = { ...prev.cpsThreshold, [key]: val };
-      if (key === 'safeMax' && val >= nt.warningMax - 5) nt.warningMax = val + 5;
-      else if (key === 'warningMax' && val <= nt.safeMax + 5) nt.safeMax = Math.max(0, val - 5);
+      if (key === 'safeMax' && val >= nt.warningMax) nt.warningMax = val + 1;
+      else if (key === 'warningMax' && val <= nt.safeMax) nt.safeMax = Math.max(0, val - 1);
       return { ...prev, cpsThreshold: nt };
     });
   };
@@ -641,25 +639,140 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar">
-          <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
-          <div className="space-y-8">
+        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar pb-32">
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-blue-600/10 text-blue-500 rounded-2xl">{ICONS.Settings}</div>
+            <h2 className="text-3xl font-bold text-slate-100">Cài đặt hệ thống</h2>
+          </div>
+
+          <div className="space-y-10">
+            {/* 1.1 Ngưỡng CPS (Thresholds) */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">API Usage Dashboard</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {['Style', 'Translate', 'Optimize'].map(key => (
-                  <div key={key} className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl">
-                    <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-3">{key}</div>
-                    <div className="flex justify-between text-xs mb-1"><span>Req:</span><span>{(apiUsage as any)[key.toLowerCase()].requests}</span></div>
-                    <div className="flex justify-between text-xs"><span>Tokens:</span><span>{(apiUsage as any)[key.toLowerCase()].tokens.toLocaleString()}</span></div>
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-blue-500">{ICONS.Analyzer}</span>
+                <h3 className="text-lg font-bold text-slate-100">1.1 Ngưỡng CPS (Thresholds)</h3>
+              </div>
+              
+              <div className="space-y-10">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block font-bold text-slate-200">Safe Max</span>
+                      <span className="text-xs text-slate-500">Ngưỡng an toàn (Default: 25)</span>
+                    </div>
+                    <span className="text-lg font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-lg border border-emerald-400/20">{settings.cpsThreshold.safeMax}</span>
                   </div>
-                ))}
+                  <input 
+                    type="range" min="10" max="60" 
+                    value={settings.cpsThreshold.safeMax} 
+                    onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} 
+                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block font-bold text-slate-200">Warning Max</span>
+                      <span className="text-xs text-slate-500">Ngưỡng cảnh báo (Default: 40)</span>
+                    </div>
+                    <span className="text-lg font-bold text-rose-400 bg-rose-400/10 px-3 py-1 rounded-lg border border-rose-400/20">{settings.cpsThreshold.warningMax}</span>
+                  </div>
+                  <input 
+                    type="range" min="15" max="80" 
+                    value={settings.cpsThreshold.warningMax} 
+                    onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} 
+                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer"
+                  />
+                </div>
+                
+                <p className="text-[10px] text-slate-500 italic flex items-center gap-2">
+                  {ICONS.Time} Hệ thống tự động đảm bảo Safe Max luôn nhỏ hơn Warning Max.
+                </p>
               </div>
             </section>
-            <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl">
-              <div><h3 className="font-bold mb-2">Safe Max (CPS)</h3><input type="range" min="10" max="60" value={settings.cpsThreshold.safeMax} onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} className="w-full accent-blue-500" /></div>
-              <div><h3 className="font-bold mb-2">Warning Max (CPS)</h3><input type="range" min="15" max="80" value={settings.cpsThreshold.warningMax} onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} className="w-full accent-rose-500" /></div>
-            </div>
+
+            {/* 1.2 AI Translation */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-blue-500">{ICONS.Translate}</span>
+                <h3 className="text-lg font-bold text-slate-100">1.2 AI Translation</h3>
+              </div>
+
+              <div className="space-y-10">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block font-bold text-slate-200">Batch Size</span>
+                      <span className="text-xs text-slate-500">Số dòng trên mỗi yêu cầu (10 - 500 lines/request)</span>
+                    </div>
+                    <span className="text-lg font-bold text-blue-400 bg-blue-400/10 px-3 py-1 rounded-lg border border-blue-400/20">{settings.translationBatchSize}</span>
+                  </div>
+                  <input 
+                    type="range" min="10" max="500" step="10"
+                    value={settings.translationBatchSize} 
+                    onChange={(e) => setSettings(prev => ({ ...prev, translationBatchSize: Number(e.target.value) }))} 
+                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer"
+                  />
+                  <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                    Cấu hình linh hoạt tùy theo độ ổn định của kết nối. Batch lớn hơn tiết kiệm request nhưng có thể bị timeout hoặc lỗi context.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* 1.3 API Usage Dashboard */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-blue-500">{ICONS.Success}</span>
+                <h3 className="text-lg font-bold text-slate-100">1.3 API Usage Dashboard</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {['Style', 'Translate', 'Optimize'].map(key => {
+                  const stats = (apiUsage as any)[key.toLowerCase()];
+                  const segCount = stats.segments || 0;
+                  const avgTkn = segCount > 0 ? (stats.tokens / segCount).toFixed(1) : '0';
+
+                  const groupLabels: Record<string, string> = {
+                    'Style': 'Translation Style',
+                    'Translate': 'AI Translate',
+                    'Optimize': 'AI Optimize'
+                  };
+
+                  return (
+                    <div key={key} className="p-6 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
+                      <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-6">{groupLabels[key]}</div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Số yêu cầu (Req):</span>
+                          <span className="font-bold text-slate-200">{stats.requests}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Tổng Tokens:</span>
+                          <span className="font-bold text-slate-200">{stats.tokens.toLocaleString()}</span>
+                        </div>
+                        
+                        {key === 'Translate' && (
+                          <div className="pt-4 mt-4 border-t border-slate-700/50 space-y-3">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Số segment đã dịch:</span>
+                              <span className="font-bold text-emerald-400">{segCount}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-500">Token TB/segment:</span>
+                              <span className="font-bold text-blue-400">{avgTkn}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-6 italic">Dữ liệu Dashboard là Session-based. Reset khi Clear Project hoặc nạp file mới.</p>
+            </section>
           </div>
         </div>
       )}
