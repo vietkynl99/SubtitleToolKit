@@ -1,100 +1,33 @@
-# Upload Module
+# MODULE: Upload
 
-Version: 1.5.0  
-Last Updated: 2026-02-13  
-
----
-
-# 1. Upload Methods
-
-Cho phép:
-
-- Click chọn file
-- Drag & Drop file vào Dropzone
-
-Chỉ chấp nhận:
-
-- .srt
+Version: 2.0.0  
+Last Updated: 2026-02-14  
 
 ---
 
-# 2. Upload Flow
-
-Khi chưa có project:
-
-idle  
-→ uploading  
-→ analyzing  
-→ success  
+# 1. Thông số kỹ thuật
+- **Định dạng:** Chỉ chấp nhận `.srt`.
+- **Dung lượng:** Tối đa 5MB.
+- **Phương thức:** Drag & Drop hoặc Click to Select.
 
 ---
 
-# 3. Drag & Drop
-
-Dropzone phải:
-
-- Highlight khi drag vào
-- Validate file type
-- Hiển thị lỗi nếu không phải .srt
-
----
-
-# 4. Replace Existing Project
-
-Nếu segments.length > 0:
-
-Không được upload trực tiếp.
-
-Phải hiển thị modal xác nhận.
+# 2. Quy trình Parser (Pipeline)
+1. **Validation:** Kiểm tra đuôi file và kích thước.
+2. **Naming Logic:** 
+   - Sử dụng regex `^\[Edited(\d*)\]` để tách số lần đã sửa.
+   - Nếu là `[Edited]` -> count = 1.
+   - Nếu là `[Edited15]` -> count = 15.
+3. **Content Parsing:** 
+   - Tự động tách text Trung (Original) và Việt (Translated) dựa trên Regex ngôn ngữ.
+   - Khởi tạo CPS và Severity mặc định.
+4. **Auto-fix:** Nếu cài đặt `autoFixOnUpload` bật, hệ thống tự động chuẩn hóa space và ngắt dòng dài ngay lập tức.
 
 ---
 
-Modal:
-
-Bạn đang có một project đang mở.  
-Bạn có muốn xóa file hiện tại và upload file mới không?
-
----
-
-Nếu Cancel:
-
-Không làm gì.
-
----
-
-Nếu Confirm:
-
-1. Clear project
-2. projectState → uploading
-3. Parse file mới
-4. Analyze
-5. projectState → success
-6. Set activeFileName = file mới
-
----
-
-# 5. Sau Upload Thành Công
-
-Bắt buộc:
-
-- activeFileName = originalFile.name
-- Render Global File Header
-- Load Editor
-- Load Analyzer
-- Load Histogram
-
----
-
-# 6. Clear Integration
-
-Khi Clear Project được kích hoạt:
-
-Upload module phải:
-
-- Reset về idle
-- Hiển thị Dropzone trống
-- Không giữ tên file cũ
-- Không giữ metadata
+# 3. Ràng buộc
+- Khi có project đang active, upload file mới sẽ trigger **Replace Modal**.
+- Sau khi upload thành công, hệ thống tự động chuyển sang tab **Editor**.
 
 ---
 

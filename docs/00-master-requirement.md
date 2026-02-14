@@ -1,115 +1,43 @@
 # Subtitle Toolkit – Master Requirement
 
-Version: 1.7.0  
-Last Updated: 2026-02-13  
+Version: 2.0.0  
+Last Updated: 2026-02-14  
 
 ---
 
 # 1. Global Layout Structure
 
-Ứng dụng bao gồm:
-
-- Sidebar Navigation Menu
-- Global File Header
-- Clear Project Button
-- Global Progress Bar
-- Main Content Area
-
----
-
-# 2. Sidebar Navigation Structure (CRITICAL – DO NOT MERGE)
-
-Menu phải có cấu trúc PHẲNG (flat structure).
-
-Không có menu lồng nhau.
-
-Thứ tự bắt buộc:
-
-1. Upload
-2. Translation Style
-3. File Tools
-4. Editor
-5. Settings
+Ứng dụng sử dụng kiến trúc Sidebar cố định kết hợp với Main Content Area:
+- **Sidebar Navigation:** Chứa Menu điều hướng phẳng (Flat Menu).
+- **Global File Header:** Hiển thị Metadata của file hiện tại (Tên file, số Segment, CPS trung bình, Thời lượng).
+- **Control Bar (Sidebar Footer):** 
+  - Nút **Clear Project**: Xóa toàn bộ trạng thái hiện tại.
+  - **Global Progress Bar**: Theo dõi tiến trình các tác vụ AI dài hơi.
 
 ---
 
-# 3. Translation Style
+# 2. Sidebar Navigation Structure (STRICT)
 
-Translation Style là một menu độc lập.
-
-❌ Không nằm trong File Tools  
-❌ Không phải là tab của File Tools  
-❌ Không được render chung container với Split SRT  
-
-Khi click:
-
-→ Render nội dung của Translation Style module
+Menu bắt buộc tuân thủ thứ tự chức năng sau:
+1. **Upload:** Tiếp nhận file nguồn.
+2. **Translation Style:** Cấu hình DNA phong cách (Genre, Tone, Humor).
+3. **File Tools:** Các công cụ xử lý tệp tin (Split SRT).
+4. **Editor:** Giao diện chỉnh sửa chính và Analyzer.
+5. **Settings:** Cấu hình hệ thống và Dashboard thống kê API.
 
 ---
 
-# 4. File Tools
+# 3. Core Logic Rules
 
-File Tools là một menu độc lập.
+## 3.1 Project Lifecycle
+- **Active State:** Dự án được coi là active khi mảng `segments` có dữ liệu.
+- **Clear Project:** Reset toàn bộ state (segments, fileName, API usage) về mặc định.
+- **Replace Project:** Khi upload file mới đè lên file cũ, hệ thống phải hiển thị Modal xác nhận.
 
-Hiện tại File Tools chỉ chứa 1 công cụ:
-
-- Split SRT
-
-Trong trang File Tools:
-
-- Hiển thị tiêu đề: "File Tools"
-- Bên dưới hiển thị tool: Split SRT
-
-Không được hiển thị Translation Style ở đây.
-
----
-
-# 5. Clear Current Project Position
-
-Clear Project:
-
-- Không nằm trong Sidebar Menu
-- Không phải là 1 menu item
-
-Vị trí:
-
-- Nằm phía trên Progress Bar
-- Hiển thị khi projectState != idle
-
----
-
-# 6. Navigation Rules (Strict)
-
-Mỗi menu:
-
-- Có route riêng
-- Có component riêng
-- Không share layout content
-
-Sai cấu trúc nếu:
-
-- Translation Style và Split SRT chung 1 container
-- Hoặc File Tools có tab Translation Style
-
----
-
-# 7. Route Mapping Example
-
-/upload  
-/translation-style  
-/file-tools  
-/editor  
-/settings  
-
----
-
-# 8. Không được làm
-
-❌ Không lồng Translation Style vào File Tools  
-❌ Không tạo tab chung giữa 2 module  
-❌ Không render conditional tab trong cùng 1 page  
-
-Cấu trúc phải tách biệt hoàn toàn.
+## 3.2 File Naming Standard
+- Chỉ sử dụng một loại prefix duy nhất: `[EditedX]`.
+- X là số lần file đã được xuất.
+- Hệ thống tự động nhận diện prefix này khi upload để xác định phiên bản tệp.
 
 ---
 
