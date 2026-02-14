@@ -32,15 +32,16 @@ export async function translateBatch(
     : "";
 
   const prompt = `Translate Chinese subtitles to Vietnamese.
+    Strict Formatting:
+    - Output Vietnamese ONLY. Do NOT repeat original Chinese, include parentheses, or add notes.
+    - JSON array of strings in order. Each item must contain only one translated sentence.
     Requirements:
-    - Independent segments: Treat each line independently. No cross-inference or merging logic.
-    - No expansion: Do not infer beyond the given segment. Short inputs (≤4 chars) must result in short phrases.
+    - Independent segments: No cross-inference. Short inputs (≤4 chars) = short phrases.
     - Reading speed: Target ≤1.5x original length. Absolute cap 2x.
-    - Clarity & Flow: Prioritize natural flow. No padding or literary fillers.
+    - Clarity & Flow: Natural flow, no padding, no literary expansion.
     - Style DNA: ${styleContext}
     ${contextBlock}
     
-    Output: JSON array of strings in order.
     Segments: ${JSON.stringify(batch.map(s => s.originalText))}`;
 
   try {
