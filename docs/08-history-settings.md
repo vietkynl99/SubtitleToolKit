@@ -1,7 +1,11 @@
 # FEATURE: Settings
 
-Version: 1.7.0  
-Last Updated: 2026-02-13  
+Version: 1.8.0  
+Last Updated: 2026-02-14  
+
+Changelog:
+- v1.8.0: Thêm cấu hình AI Translation Batch Size (mặc định 100).
+- v1.7.0: Cấu hình CPS Threshold và Optimization Mode.
 
 ---
 
@@ -12,8 +16,9 @@ Cho phép người dùng cấu hình các thông số hệ thống để tối �
 - Phân loại CPS
 - Auto Fix
 - Optimization
+- AI Translation batching
 
-❌ Không có History
+❌ Không có History  
 ❌ Không lưu project history
 
 ---
@@ -33,22 +38,49 @@ critical: cps > warningMax
 
 ---
 
-# 3. State Structure
+# 3. AI Translation Settings (NEW – v1.8.0)
 
-settingsState ví dụ:
+## 3.1 Batch Size
 
-{
-  cpsThreshold: {
-    safeMax: number,
-    warningMax: number
-  },
-  autoFixOnUpload: boolean,
-  optimizationMode: "safe" | "aggressive"
-}
+Cho phép cấu hình:
+
+- translationBatchSize (mặc định: 100)
+
+Giới hạn hợp lệ:
+
+- Tối thiểu: 10
+- Tối đa: 500
+- Chỉ chấp nhận số nguyên
+- Không chấp nhận giá trị rỗng
+- Không chấp nhận số âm hoặc 0
+
+## 3.2 Ảnh hưởng
+
+Batch Size được áp dụng khi click "AI Dịch Toàn Bộ".
+Không thay đổi batch đang chạy.
+Chỉ áp dụng cho lần dịch mới.
 
 ---
 
-# 4. Recalculation Rule (STRICT)
+# 4. State Structure
+
+settingsState ví dụ:
+
+```json
+{
+  "cpsThreshold": {
+    "safeMax": 25,
+    "warningMax": 40
+  },
+  "autoFixOnUpload": false,
+  "optimizationMode": "safe",
+  "translationBatchSize": 100
+}
+```
+
+---
+
+# 5. Recalculation Rule (STRICT)
 
 Khi user thay đổi CPS Threshold:
 
@@ -66,11 +98,12 @@ Không được giữ level cũ.
 
 ---
 
-# 5. Không được làm
+# 6. Không được làm
 
 ❌ Không chỉ đổi màu UI mà không re-classify  
 ❌ Không cache level theo threshold cũ  
 ❌ Không yêu cầu user reload file  
+❌ Không tự động thay đổi batch size nếu user đã cấu hình  
 
 Re-analyze phải diễn ra realtime.
 

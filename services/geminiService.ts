@@ -2,11 +2,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset } from "../types";
 
 /**
- * Translates a single batch of segments. 
+ * Translates a single batch of segments with surrounding context. 
  * Returns both translated texts and token usage.
  */
 export async function translateBatch(
   batch: SubtitleSegment[],
+  contextBefore: string[],
+  contextAfter: string[],
   preset?: TranslationPreset
 ): Promise<{ translatedTexts: string[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -20,11 +22,19 @@ export async function translateBatch(
   Ensure consistent honorifics (nhân xưng) and vocabulary matching this creative direction.
   ` : "";
 
+  const contextPrompt = (contextBefore.length > 0 || contextAfter.length > 0) ? `
+  Use the following context to ensure continuity and correct character address (xưng hô):
+  ${contextBefore.length > 0 ? `- Context Before: ${JSON.stringify(contextBefore)}` : ''}
+  ${contextAfter.length > 0 ? `- Context After: ${JSON.stringify(contextAfter)}` : ''}
+  (Note: Do NOT translate the context lines, only use them for reference.)
+  ` : "";
+
   const prompt = `Translate the following Chinese subtitle segments to natural, modern Vietnamese.
     Instruction: Use natural cinema style. ${styleInstruction}
-    Return a JSON array of strings in the exact same order as the provided segments.
+    ${contextPrompt}
+    Return a JSON array of strings in the exact same order as the provided main segments.
     
-    Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
+    Main Segments to translate: ${JSON.stringify(batch.map(s => s.originalText))}`;
 
   try {
     const response = await ai.models.generateContent({

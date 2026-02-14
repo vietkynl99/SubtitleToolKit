@@ -80,7 +80,11 @@ const App: React.FC = () => {
   // Load settings on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('subtitle_settings');
-    if (savedSettings) setSettings(JSON.parse(savedSettings));
+    if (savedSettings) {
+      const parsed = JSON.parse(savedSettings);
+      // Ensure new settings from v1.3.0+ are present
+      setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+    }
   }, []);
 
   // Save settings when changed
@@ -330,7 +334,7 @@ const App: React.FC = () => {
     if (file) handleNewUploadTrigger(file);
   };
 
-  // v1.3.0: AI Translation Flow with Stop/Resume
+  // v1.3.0: AI Translation Flow with Stop/Resume and Dynamic Batching
   const handleTranslate = async () => {
     if (segments.length === 0) return;
 
@@ -364,8 +368,9 @@ const App: React.FC = () => {
     let completedInSession = 0;
 
     try {
-      // STEP 3 & 5: Batching & Stop-on-Error Rule
-      const batchSize = 15;
+      // v1.3.0: Use dynamic batch size from settings
+      const batchSize = settings.translationBatchSize || 100;
+      
       for (let i = 0; i < needingTranslation.length; i += batchSize) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
@@ -376,13 +381,24 @@ const App: React.FC = () => {
 
         const currentBatch = needingTranslation.slice(i, i + batchSize);
         
+        // v1.3.0: Calculate context (2 lines before and 2 lines after)
+        // Find indices in the MASTER segment list for context
+        const firstSegId = currentBatch[0].id;
+        const lastSegId = currentBatch[currentBatch.length - 1].id;
+        
+        const firstIdx = segments.findIndex(s => s.id === firstSegId);
+        const lastIdx = segments.findIndex(s => s.id === lastSegId);
+        
+        const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
+        const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
+
         // Mark current batch as processing
         setSegments(prev => prev.map(s => 
           currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s
         ));
 
-        // Process single batch
-        const { translatedTexts, tokens } = await translateBatch(currentBatch, translationPreset);
+        // Process single batch with context
+        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset);
         
         // Update results realtime
         setSegments(prev => prev.map(s => {
@@ -710,11 +726,9 @@ const App: React.FC = () => {
           <h2 className="text-3xl font-bold mb-8">Cài đặt hệ thống</h2>
           
           <div className="space-y-8">
-            {/* API Usage Dashboard Section (Requirement v1.0.0) */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">API Usage Dashboard</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Translation Style Block */}
                 <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
                   <div>
                     <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-3">Translation Style</div>
@@ -731,7 +745,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* AI Translate Block */}
                 <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
                   <div>
                     <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-3">AI Translate</div>
@@ -760,7 +773,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* AI Optimize Block */}
                 <div className="p-5 bg-slate-800/40 border border-slate-700/50 rounded-2xl flex flex-col justify-between">
                   <div>
                     <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-3">AI Optimize</div>
@@ -804,6 +816,33 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-rose-400 font-bold">{settings.cpsThreshold.warningMax} CPS</span>
                   <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">High Speed limit</span>
+                </div>
+              </div>
+
+              {/* v1.3.0: AI Translation Settings */}
+              <div className="pt-6 border-t border-slate-800 space-y-4">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">AI Translation Settings</h3>
+                <div className="p-4 bg-slate-800/30 border border-slate-700/50 rounded-2xl space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block font-bold text-slate-200">Batch Size</span>
+                      <span className="text-xs text-slate-500">Số lượng segment gửi mỗi lần gọi API.</span>
+                    </div>
+                    <div className="text-xl font-bold text-blue-400">{settings.translationBatchSize}</div>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="10" 
+                    max="500" 
+                    step="1"
+                    value={settings.translationBatchSize}
+                    onChange={(e) => setSettings({...settings, translationBatchSize: parseInt(e.target.value)})}
+                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+                    <span>MIN (10)</span>
+                    <span>MAX (500)</span>
+                  </div>
                 </div>
               </div>
 

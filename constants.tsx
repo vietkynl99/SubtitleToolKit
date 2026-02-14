@@ -44,5 +44,6 @@ export const DEFAULT_SETTINGS = {
     warningMax: 40
   },
   autoFixOnUpload: false,
-  optimizationMode: 'safe' as const
+  optimizationMode: 'safe' as const,
+  translationBatchSize: 100
 };

@@ -67,6 +67,7 @@ export interface AppSettings {
   };
   autoFixOnUpload: boolean;
   optimizationMode: 'safe' | 'aggressive';
+  translationBatchSize: number;
 }
 
 export interface SplitMetadata {
