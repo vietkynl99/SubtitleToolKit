@@ -78,6 +78,7 @@ const App: React.FC = () => {
     status: 'idle' | 'running' | 'stopped' | 'error' | 'completed';
     processed: number;
     total: number;
+    customText?: string;
   }>({ status: 'idle', processed: 0, total: 0 });
   
   const stopRequestedRef = useRef<boolean>(false);
@@ -135,7 +136,7 @@ const App: React.FC = () => {
   
   const showToast = (message: string) => {
     setToast({ message, visible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
   };
 
   const copyToClipboard = (text: string) => {
@@ -435,9 +436,10 @@ const App: React.FC = () => {
   const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Đang dừng..."); };
 
   /**
-   * AI Optimization Implementation Version 3.2.0.
+   * AI Optimization Implementation Version 3.3.0.
    * Skips Safe segments.
    * Optimizes Warning and Critical segments using AI Content editing.
+   * Uses batching (20 segments / request).
    */
   const handleAiOptimize = async () => {
     if (selectedIds.size === 0) return;
@@ -446,42 +448,69 @@ const App: React.FC = () => {
 
     let safeCount = 0;
     let optimizedCount = 0;
+    let requestCount = 0;
 
     const currentSegments = [...segments];
     const aiTargetSegments: SubtitleSegment[] = [];
 
-    // Step 1: Classification according to Version 3.2.0
+    // Step 1: Classification
     for (const segId of Array.from(selectedIds)) {
       const seg = currentSegments.find(s => s.id === segId);
       if (!seg) continue;
 
-      // Re-evaluate severity to ensure accuracy
       const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold);
       const severity = meta.enrichedSegments[0].severity;
 
       if (severity === 'safe') {
         safeCount++;
       } else {
-        // Warning or Critical -> AI Optimization
         aiTargetSegments.push(seg);
       }
     }
 
-    // Step 2: AI Content Optimization for non-Safe segments
+    // Step 2: Batch AI Content Optimization (20 segments per batch)
     if (aiTargetSegments.length > 0) {
-      setProgress(30);
-      try {
-        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments, settings.optimizationMode, settings.aiModel);
-        fixed.forEach(f => {
-          const idx = currentSegments.findIndex(s => s.id === f.id);
-          if (idx !== -1) {
-            currentSegments[idx] = { ...f, isModified: true };
-            optimizedCount++;
-          }
-        });
-        setApiUsage(prev => ({ ...prev, optimize: { requests: prev.optimize.requests + 1, tokens: prev.optimize.tokens + tokens } }));
-      } catch (err) {
-        showToast("Lỗi khi tối ưu AI.");
+      const batchSize = 20;
+      const totalBatches = Math.ceil(aiTargetSegments.length / batchSize);
+      
+      setTranslationState({ 
+        status: 'running', 
+        processed: 0, 
+        total: aiTargetSegments.length,
+        customText: `Batch 1/${totalBatches} (${Math.min(batchSize, aiTargetSegments.length)} segments)` 
+      });
+
+      for (let i = 0; i < aiTargetSegments.length; i += batchSize) {
+        const currentBatch = aiTargetSegments.slice(i, i + batchSize);
+        const batchIdx = Math.floor(i / batchSize) + 1;
+        
+        setTranslationState(prev => ({ 
+          ...prev, 
+          customText: `Batch ${batchIdx}/${totalBatches} (${currentBatch.length} segments)` 
+        }));
+
+        try {
+          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.optimizationMode, settings.aiModel);
+          requestCount++;
+          
+          fixed.forEach(f => {
+            const idx = currentSegments.findIndex(s => s.id === f.id);
+            if (idx !== -1) {
+              currentSegments[idx] = { ...f, isModified: true };
+              optimizedCount++;
+            }
+          });
+          
+          setApiUsage(prev => ({ 
+            ...prev, 
+            optimize: { requests: prev.optimize.requests + 1, tokens: prev.optimize.tokens + tokens } 
+          }));
+        } catch (err) {
+          console.error(`Error processing batch ${batchIdx}`, err);
+        }
+
+        const progressPercent = Math.floor(((i + currentBatch.length) / aiTargetSegments.length) * 100);
+        setProgress(progressPercent);
       }
     }
 
@@ -489,7 +518,9 @@ const App: React.FC = () => {
     setProgress(100);
     setStatus('success');
     setSelectedIds(new Set());
-    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu (${settings.optimizationMode.toUpperCase()} Mode).`);
+    setTranslationState(prev => ({ ...prev, status: 'completed', customText: undefined }));
+    
+    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu. Số request thực hiện: ${requestCount}.`);
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -692,14 +723,14 @@ const App: React.FC = () => {
             />
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">
-                <div className="flex justify-between mb-1.5"><span className="text-[10px] font-bold text-blue-400">Đang dịch: {translationState.processed}/{translationState.total}</span><span>{progress}%</span></div>
+                <div className="flex justify-between mb-1.5"><span className="text-[10px] font-bold text-blue-400">{translationState.customText || `Đang xử lý: ${translationState.processed}/${translationState.total}`}</span><span>{progress}%</span></div>
                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${progress}%` }}></div></div>
               </div>
             )}
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between">
               <div className="flex gap-2">
                 {translationState.status === 'running' ? 
-                  <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Translation</button> : 
+                  <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Task</button> : 
                   <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Dịch Toàn Bộ</button>
                 }
                 <button 

@@ -141,8 +141,8 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
 }
 
 /**
- * AI Content Optimization as per v3.2.0.
- * Focuses on shortening, cinematic flow, and better readability.
+ * AI Content Optimization as per v3.3.0.
+ * Focuses on independent segment optimization without cross-inference.
  */
 export async function aiFixSegments(
   segments: SubtitleSegment[], 
@@ -160,13 +160,20 @@ export async function aiFixSegments(
   Optimization Mode: ${mode.toUpperCase()}
   ${modeInstruction}
 
-  Strict Requirements: 
+  STRICT INDEPENDENCE RULE: 
+  - Each segment in the list is an isolated unit of meaning. 
+  - DO NOT use neighboring segments as context. 
+  - DO NOT link logic between different IDs.
+  - DO NOT infer characters or dialogue flow from the list.
+  - DO NOT rewrite them as a continuous conversation.
+  - DO NOT merge or split segments.
+
+  Requirements: 
   1. Shorten content where possible to reduce reading burden and improve CPS (Characters Per Second). 
   2. Ensure natural, punchy, and professional cinematic flow suitable for high-quality movie subtitles. 
   3. PRESERVE core meaning strictly. Do NOT add new information, do NOT change context, and do NOT remove essential plot details. 
   4. Avoid exaggeration; keep the tone natural and consistent with the original intent. 
   5. Only rewrite if it significantly improves readability, flow, or reduces excessive length. 
-  6. The primary goal is improvement over the current state; the result does NOT strictly need to reach "safe" CPS levels if doing so sacrifices meaning.
 
   Output Format:
   - Return a JSON array of objects with 'id' and 'fixedText'.
