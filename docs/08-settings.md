@@ -1,6 +1,6 @@
 # MODULE: Settings
 
-Version: 3.0.0
+Version: 3.1.0
 Last Updated: 2026-02-15
 
 ---
@@ -8,6 +8,13 @@ Last Updated: 2026-02-15
 # 1. Persistence
 
 Toàn bộ cài đặt và dữ liệu thống kê được lưu trữ tại `localStorage` dưới key `subtitle_settings`.
+
+Cấu trúc bao gồm:
+- CPS Thresholds
+- AI Translation configuration
+- AI Mode
+- Automation options
+- API Usage session statistics
 
 ---
 
@@ -23,7 +30,19 @@ Toàn bộ cài đặt và dữ liệu thống kê được lưu trữ tại `lo
 ## 2.2 AI Translation
 - **Batch Size:** 10 – 500 dòng/request. Cấu hình linh hoạt tùy theo độ ổn định kết nối và rate limit của model.
 
-## 2.3 Automation
+## 2.3 AI Mode
+Cho phép người dùng lựa chọn model sử dụng cho toàn bộ tính năng AI (Translate, Optimize, Style Analysis).
+- **Danh sách model:**
+  - `gemini-2.5-flash` (Default)
+  - `gemini-2.5-pro`
+  - `gemini-3-flash-preview`
+  - `gemini-3-pro-preview`
+- **Hành vi hệ thống:**
+  - Model được áp dụng cho: AI Translate, AI Optimize, Translation Style (DNA analysis).
+  - Khi thay đổi model: Không reset API Usage, chỉ áp dụng cho các request tiếp theo.
+  - Model được lưu trong `subtitle_settings`.
+
+## 2.4 Automation
 - **Auto-fix on Upload:** Tự động chuẩn hóa format SRT khi nạp file.
 - **Optimization Mode:**
   - **Safe:** Ưu tiên giữ nghĩa, hạn chế việc thay đổi quá mức nếu không cần thiết.

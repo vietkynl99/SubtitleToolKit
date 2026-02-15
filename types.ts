@@ -2,6 +2,8 @@ export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-su
 
 export type Severity = 'safe' | 'warning' | 'critical';
 
+export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
+
 export interface TranslationPreset {
   title_original: string;
   title_vi: string;
@@ -83,6 +85,7 @@ export interface AppSettings {
   autoFixOnUpload: boolean;
   optimizationMode: 'safe' | 'aggressive';
   translationBatchSize: number;
+  aiModel: AiModel;
 }
 
 export interface SplitMetadata {

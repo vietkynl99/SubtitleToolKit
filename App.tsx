@@ -24,7 +24,8 @@ import {
   Severity,
   SplitMetadata,
   TranslationPreset,
-  ApiUsage
+  ApiUsage,
+  AiModel
 } from './types';
 import { 
   translateBatch,
@@ -90,8 +91,12 @@ const App: React.FC = () => {
   useEffect(() => {
     const savedSettings = localStorage.getItem('subtitle_settings');
     if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      try {
+        const parsed = JSON.parse(savedSettings);
+        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+      } catch (e) {
+        console.error("Error parsing saved settings", e);
+      }
     }
   }, []);
 
@@ -162,20 +167,20 @@ const App: React.FC = () => {
     let totalRequests = 0;
 
     try {
-      const { title: extracted, tokens: tokens1 } = await extractTitleFromFilename(fName);
+      const { title: extracted, tokens: tokens1 } = await extractTitleFromFilename(fName, settings.aiModel);
       totalTokens += tokens1;
       totalRequests += 1;
 
       let titleVi = extracted;
       const isCn = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
       if (isCn(extracted)) {
-        const { title: translated, tokens: tokens2 } = await translateTitle(extracted);
+        const { title: translated, tokens: tokens2 } = await translateTitle(extracted, settings.aiModel);
         titleVi = translated;
         totalTokens += tokens2;
         totalRequests += 1;
       }
       
-      const { preset, tokens: tokens3 } = await analyzeTranslationStyle(titleVi, extracted);
+      const { preset, tokens: tokens3 } = await analyzeTranslationStyle(titleVi, extracted, settings.aiModel);
       totalTokens += tokens3;
       totalRequests += 1;
 
@@ -405,7 +410,7 @@ const App: React.FC = () => {
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
         setSegments(prev => prev.map(s => currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
-        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset);
+        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel);
         setSegments(prev => prev.map(s => {
           const bIdx = currentBatch.findIndex(cb => cb.id === s.id);
           if (bIdx !== -1) return { ...s, translatedText: translatedTexts[bIdx], isModified: true, isProcessing: false };
@@ -466,7 +471,7 @@ const App: React.FC = () => {
     if (aiTargetSegments.length > 0) {
       setProgress(30);
       try {
-        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments, settings.optimizationMode);
+        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments, settings.optimizationMode, settings.aiModel);
         fixed.forEach(f => {
           const idx = currentSegments.findIndex(s => s.id === f.id);
           if (idx !== -1) {
@@ -796,11 +801,42 @@ const App: React.FC = () => {
               </div>
             </section>
 
-            {/* 1.3 Automation & Mode */}
+            {/* 1.3 AI Mode (v3.1.0) - Dropdown Selection */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
                 <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.3 Automation & Mode</h3>
+                <h3 className="text-lg font-bold text-slate-100">1.3 AI Mode (Model Selection)</h3>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Chọn Model Gemini
+                  </label>
+                  <select 
+                    id="ai-model-select"
+                    value={settings.aiModel}
+                    onChange={(e) => setSettings(prev => ({ ...prev, aiModel: e.target.value as AiModel }))}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer font-bold text-sm"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2rem' }}
+                  >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Efficient)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Balanced)</option>
+                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Latest Fast)</option>
+                    <option value="gemini-3-pro-preview">Gemini 3 Pro Preview (Highest Quality)</option>
+                  </select>
+                </div>
+                <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                  Thay đổi model sẽ ảnh hưởng đến chất lượng dịch và tối ưu của các yêu cầu tiếp theo.
+                </p>
+              </div>
+            </section>
+
+            {/* 1.4 Automation & Mode */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-blue-500">{ICONS.Fix}</span>
+                <h3 className="text-lg font-bold text-slate-100">1.4 Automation & Optimization</h3>
               </div>
 
               <div className="space-y-10">
@@ -842,11 +878,11 @@ const App: React.FC = () => {
               </div>
             </section>
 
-            {/* 1.4 API Usage Dashboard (Session-Based) */}
+            {/* 1.5 API Usage Dashboard (Session-Based) */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
                 <span className="text-blue-500">{ICONS.Success}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.4 API Usage Dashboard</h3>
+                <h3 className="text-lg font-bold text-slate-100">1.5 API Usage Dashboard</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { SubtitleSegment, TranslationPreset } from "../types";
+import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
 
 /**
  * Translates a single batch of segments with surrounding context. 
@@ -9,10 +9,10 @@ export async function translateBatch(
   batch: SubtitleSegment[],
   contextBefore: string[],
   contextAfter: string[],
-  preset?: TranslationPreset
+  preset: TranslationPreset | null,
+  model: AiModel
 ): Promise<{ translatedTexts: string[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = 'gemini-3-flash-preview';
 
   let humorInstruction = "";
   if (preset) {
@@ -70,12 +70,12 @@ export async function translateBatch(
   }
 }
 
-export async function extractTitleFromFilename(filename: string): Promise<{ title: string, tokens: number }> {
+export async function extractTitleFromFilename(filename: string, model: AiModel): Promise<{ title: string, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const cleaned = filename.replace(/\.srt$/i, '').trim();
   
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model,
     contents: `Tên file sau có thể chứa nhiều thông tin không liên quan (tags, websites, groups).
     Hãy trích xuất phần có khả năng cao nhất là tiêu đề tác phẩm.
     Chỉ trả về duy nhất tiêu đề, không giải thích.
@@ -88,10 +88,10 @@ export async function extractTitleFromFilename(filename: string): Promise<{ titl
   return { title, tokens };
 }
 
-export async function translateTitle(title: string): Promise<{ title: string, tokens: number }> {
+export async function translateTitle(title: string, model: AiModel): Promise<{ title: string, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model,
     contents: `Dịch tiêu đề tác phẩm sau sang tiếng Việt tự nhiên, phù hợp ngữ cảnh phim ảnh: ${title}`
   });
   const translated = response.text?.trim() || title;
@@ -99,10 +99,10 @@ export async function translateTitle(title: string): Promise<{ title: string, to
   return { title: translated, tokens };
 }
 
-export async function analyzeTranslationStyle(title: string, originalTitle: string): Promise<{ preset: TranslationPreset, tokens: number }> {
+export async function analyzeTranslationStyle(title: string, originalTitle: string, model: AiModel): Promise<{ preset: TranslationPreset, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model,
     contents: `Phân tích tiêu đề sau và xác định phong cách dịch (Version 2.3.0):
     Tiêu đề: ${title}
 
@@ -146,10 +146,10 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
  */
 export async function aiFixSegments(
   segments: SubtitleSegment[], 
-  mode: 'safe' | 'aggressive' = 'safe'
+  mode: 'safe' | 'aggressive' = 'safe',
+  model: AiModel
 ): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = 'gemini-3-flash-preview';
 
   const modeInstruction = mode === 'aggressive'
     ? "PRIORITY: Reduce CPS strongly. Be bold in shortening sentences to improve reading speed, even if some stylistic nuance is lost."
