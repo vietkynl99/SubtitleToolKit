@@ -108,7 +108,7 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
 
     Hãy xác định:
     1. genres: Danh sách các thể loại (Tu tiên, Tiên hiệp, Đô thị, Xuyên không, Hành động, Hài hước, v.v.)
-    2. tone: Danh sách các phong cách dịch (Trang trọng, Huyền ảo, Hài hước, Kịch tính, Bí ẩn, v.v.)
+    2. tone: Danh sách các phong cách dịch (Trang trọng, Huyền ảo, Hài hước, kịch tính, Bí ẩn, v.v.)
     3. humor_level: Mức độ hài hước từ 0 đến 10.
 
     Trả về JSON đúng format.
@@ -144,11 +144,21 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
  * AI Content Optimization as per v3.2.0.
  * Focuses on shortening, cinematic flow, and better readability.
  */
-export async function aiFixSegments(segments: SubtitleSegment[]): Promise<{ segments: SubtitleSegment[], tokens: number }> {
+export async function aiFixSegments(
+  segments: SubtitleSegment[], 
+  mode: 'safe' | 'aggressive' = 'safe'
+): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = 'gemini-3-flash-preview';
 
-  const prompt = `Review and optimize the following Vietnamese subtitle segments 
+  const modeInstruction = mode === 'aggressive'
+    ? "PRIORITY: Reduce CPS strongly. Be bold in shortening sentences to improve reading speed, even if some stylistic nuance is lost."
+    : "PRIORITY: Maintain meaning and tone strictly. Only rewrite if it significantly improves readability without sacrificing plot nuance.";
+
+  const prompt = `Review and optimize the following Vietnamese subtitle segments.
+
+  Optimization Mode: ${mode.toUpperCase()}
+  ${modeInstruction}
 
   Strict Requirements: 
   1. Shorten content where possible to reduce reading burden and improve CPS (Characters Per Second). 

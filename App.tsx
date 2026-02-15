@@ -466,7 +466,7 @@ const App: React.FC = () => {
     if (aiTargetSegments.length > 0) {
       setProgress(30);
       try {
-        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments);
+        const { segments: fixed, tokens } = await aiFixSegments(aiTargetSegments, settings.optimizationMode);
         fixed.forEach(f => {
           const idx = currentSegments.findIndex(s => s.id === f.id);
           if (idx !== -1) {
@@ -484,7 +484,7 @@ const App: React.FC = () => {
     setProgress(100);
     setStatus('success');
     setSelectedIds(new Set());
-    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu (Warning/Critical).`);
+    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu (${settings.optimizationMode.toUpperCase()} Mode).`);
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -700,7 +700,9 @@ const App: React.FC = () => {
                 <button 
                   onClick={handleAiOptimize} 
                   disabled={status === 'processing' || selectedIds.size === 0} 
-                  className="px-4 py-2 bg-slate-800 text-slate-200 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className={`px-4 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
+                    settings.optimizationMode === 'aggressive' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-200'
+                  }`}
                 >
                   AI Tối Ưu {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
                 </button>
@@ -790,18 +792,61 @@ const App: React.FC = () => {
                     onChange={(e) => setSettings(prev => ({ ...prev, translationBatchSize: Number(e.target.value) }))} 
                     className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer"
                   />
-                  <p className="text-[10px] text-slate-500 leading-relaxed italic">
-                    Cấu hình linh hoạt tùy theo độ ổn định của kết nối. Batch lớn hơn tiết kiệm request nhưng có thể bị timeout hoặc lỗi context.
-                  </p>
                 </div>
               </div>
             </section>
 
-            {/* 1.3 API Usage Dashboard */}
+            {/* 1.3 Automation & Mode */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-blue-500">{ICONS.Fix}</span>
+                <h3 className="text-lg font-bold text-slate-100">1.3 Automation & Mode</h3>
+              </div>
+
+              <div className="space-y-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="block font-bold text-slate-200">Auto-fix on Upload</span>
+                    <span className="text-xs text-slate-500">Chuẩn hóa format SRT ngay khi nạp file.</span>
+                  </div>
+                  <button 
+                    onClick={() => setSettings(prev => ({ ...prev, autoFixOnUpload: !prev.autoFixOnUpload }))}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoFixOnUpload ? 'bg-blue-600' : 'bg-slate-800'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.autoFixOnUpload ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="block font-bold text-slate-200">Optimization Mode</span>
+                      <span className="text-xs text-slate-500">Chế độ xử lý của AI Fix (Safe / Aggressive).</span>
+                    </div>
+                    <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                      <button 
+                        onClick={() => setSettings(prev => ({ ...prev, optimizationMode: 'safe' }))}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${settings.optimizationMode === 'safe' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
+                      >
+                        Safe
+                      </button>
+                      <button 
+                        onClick={() => setSettings(prev => ({ ...prev, optimizationMode: 'aggressive' }))}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${settings.optimizationMode === 'aggressive' ? 'bg-rose-600 text-white' : 'text-slate-500'}`}
+                      >
+                        Aggressive
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 1.4 API Usage Dashboard (Session-Based) */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
                 <span className="text-blue-500">{ICONS.Success}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.3 API Usage Dashboard</h3>
+                <h3 className="text-lg font-bold text-slate-100">1.4 API Usage Dashboard</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
