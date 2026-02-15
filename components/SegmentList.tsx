@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { SubtitleSegment, Severity } from '../types';
+import { ICONS } from '../constants';
 
 interface SegmentListProps {
   segments: SubtitleSegment[];
@@ -11,7 +13,11 @@ interface SegmentListProps {
   onFilterChange: (filter: any) => void;
   safeThreshold: number;
   criticalThreshold: number;
+  currentPage: number;
+  onPageChange: (page: number) => void;
 }
+
+const PAGE_SIZE = 30;
 
 const SegmentList: React.FC<SegmentListProps> = ({ 
   segments, 
@@ -22,7 +28,9 @@ const SegmentList: React.FC<SegmentListProps> = ({
   filter, 
   onFilterChange,
   safeThreshold,
-  criticalThreshold
+  criticalThreshold,
+  currentPage,
+  onPageChange
 }) => {
   // Helper to get color classes based on segment severity
   const getSeverityClasses = (severity: Severity) => {
@@ -46,6 +54,38 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
   const isFilterRange = typeof filter === 'object' && filter?.type === 'range';
   const allSelected = segments.length > 0 && segments.every(s => selectedIds.has(s.id));
+
+  // Pagination Logic
+  const totalPages = Math.ceil(segments.length / PAGE_SIZE);
+  const pagedSegments = segments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(
+        <button
+          key={i}
+          onClick={() => onPageChange(i)}
+          className={`w-8 h-8 rounded-lg text-[10px] font-bold transition-all ${
+            currentPage === i 
+              ? 'bg-blue-600 text-white shadow-lg' 
+              : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+          }`}
+        >
+          {i}
+        </button>
+      );
+    }
+    return pages;
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/50 h-full">
@@ -102,7 +142,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
       
       {/* Card List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-        {segments.map((seg) => {
+        {pagedSegments.map((seg) => {
           const colors = getSeverityClasses(seg.severity);
           const isSelected = selectedIds.has(seg.id);
           
@@ -130,6 +170,11 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   <span className="text-[11px] font-bold font-mono text-slate-500">
                     {seg.startTime} → {seg.endTime}
                   </span>
+                  {seg.isModified && (
+                    <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] font-bold text-blue-400 uppercase tracking-tighter">
+                      Edited
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                    <span className={`text-[10px] font-bold font-mono ${colors.text}`}>
@@ -164,7 +209,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                     </div>
                   ) : (
                     <textarea
-                      className="w-full bg-transparent border-none outline-none resize-none text-base text-blue-100 font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic"
+                      className={`w-full bg-transparent border-none outline-none resize-none text-base font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic ${seg.isModified ? 'text-blue-300' : 'text-blue-100'}`}
                       placeholder="Chưa có bản dịch..."
                       rows={Math.max(2, (seg.translatedText || '').split('\n').length)}
                       value={seg.translatedText || ''}
@@ -182,6 +227,34 @@ const SegmentList: React.FC<SegmentListProps> = ({
           </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="bg-slate-900 border-t border-slate-800 p-4 flex items-center justify-between shrink-0">
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            Page {currentPage} / {totalPages}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              <span className="rotate-180 block">{ICONS.Next}</span>
+            </button>
+            <div className="flex items-center gap-1 mx-2">
+              {renderPageNumbers()}
+            </div>
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              {ICONS.Next}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

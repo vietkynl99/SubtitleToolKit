@@ -1,11 +1,13 @@
+
 import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
-import { AnalysisResult, Severity } from '../types';
+import { AnalysisResult, Severity, SubtitleSegment } from '../types';
 import { ICONS } from '../constants';
 import { SplitResult } from '../services/subtitleLogic';
 
 interface AnalyzerPanelProps {
   data: AnalysisResult;
+  segments: SubtitleSegment[]; // Pass segments for additional stats like modified count
   onFilterTrigger: (filter: any) => void;
   activeFilter: any;
   safeThreshold: number;
@@ -20,6 +22,7 @@ interface AnalyzerPanelProps {
 
 const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({ 
   data, 
+  segments,
   onFilterTrigger, 
   activeFilter,
   safeThreshold,
@@ -44,6 +47,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   }));
 
   const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
+
+  // Requirement: Tỷ lệ segment đã chỉnh sửa
+  const modifiedCount = segments.filter(s => s.isModified).length;
+  const modifiedPercentage = segments.length > 0 ? Math.round((modifiedCount / segments.length) * 100) : 0;
 
   return (
     <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-12">
@@ -87,15 +94,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <span className="block text-2xl font-bold text-rose-400">{data.cpsGroups.critical}</span>
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Critical</span>
           </button>
-          <button 
-            onClick={() => onFilterTrigger('all')}
-            className={`p-4 rounded-xl border text-left transition-all ${
-              activeFilter === 'all' ? 'bg-blue-500/20 border-blue-500 shadow-lg shadow-blue-500/10' : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800'
-            }`}
-          >
-            <span className="block text-2xl font-bold text-slate-100">{data.totalLines}</span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Total Lines</span>
-          </button>
+          <div className="p-4 rounded-xl border border-slate-700/50 bg-slate-800/30 flex flex-col justify-center">
+            <span className="block text-lg font-bold text-blue-400">{modifiedPercentage}%</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Edited by User</span>
+          </div>
         </div>
       </section>
 

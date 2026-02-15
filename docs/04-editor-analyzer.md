@@ -1,14 +1,16 @@
 # MODULE: Editor & Analyzer
 
-Version: 2.0.0  
-Last Updated: 2026-02-14  
+Version: 2.1.0
+Last Updated: 2026-02-15
 
 ---
 
 # 1. Editor (Segment List)
-- Sử dụng **Virtual List** để render mượt mà hàng nghìn dòng.
-- Hiển thị đồng thời 2 cột: Gốc (CN) và Dịch (VN).
-- Trạng thái **isModified** được đánh dấu khi user chỉnh sửa text.
+- **Cơ chế hiển thị:** Sử dụng **Pagination (Phân trang)** với 30 segments mỗi trang để đảm bảo hiệu năng render mượt mà và giao diện gọn gàng.
+- **Cấu trúc:** Hiển thị đồng thời 2 cột: Gốc (CN) và Dịch (VN).
+- **Trạng thái [Edited]:** 
+  - Segment hiển thị Badge **"Edited"** khi người dùng can thiệp chỉnh sửa nội dung dịch thủ công.
+  - **Lưu ý:** Các tác vụ từ AI (Translate/Optimize) sẽ cập nhật nội dung nhưng KHÔNG kích hoạt Badge này (chỉ dành cho user-intervention).
 
 ---
 
@@ -21,17 +23,20 @@ Hệ thống phân tích dựa trên ngưỡng CPS từ `Settings`:
 ---
 
 # 3. Visualization Tools
-- **Quality Dashboard:** Thống kê nhanh số lượng dòng theo Severity.
-- **CPS Histogram:** Biểu đồ phân phối mật độ CPS. Click vào các cột biểu đồ để lọc (filter) segments tương ứng.
-- **Issue Alerts:** Cảnh báo các dòng quá 2 line hoặc vượt quá 50 ký tự/dòng.
+- **Quality Dashboard:** 
+  - Thống kê nhanh số lượng dòng theo Severity (Safe/Warning/Critical).
+  - **User Intervention Stat:** Hiển thị tỷ lệ phần trăm (%) các câu đã được người dùng chỉnh sửa thủ công so với tổng số dòng.
+- **CPS Histogram:** Biểu đồ phân phối mật độ CPS. 
+  - Hỗ trợ tương tác: Click vào các cột biểu đồ để lọc (filter) segments thuộc phạm vi CPS tương ứng.
+- **Issue Alerts:** Cảnh báo các dòng quá 2 line hoặc vượt quá ngưỡng CPS nguy hiểm.
 
 ---
 
 # 4. Filter System
-Hỗ trợ lọc theo:
-- Severity (An toàn/Cảnh báo/Nguy hiểm).
-- Range (theo bucket của Histogram).
-- Trạng thái chưa dịch.
+Hỗ trợ lọc linh hoạt:
+- **Theo mức độ nghiêm trọng (Severity):** All, Safe, Warning, Critical.
+- **Theo phạm vi CPS (Range Filter):** Kích hoạt khi click vào Histogram.
+- **Reset:** Nút "Clear/Reset Filter" để quay về trạng thái hiển thị đầy đủ.
 
 ---
 
