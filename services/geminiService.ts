@@ -3,7 +3,7 @@ import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
 
 /**
  * Translates a single batch of segments with surrounding context. 
- * Token-optimized prompt design for cost and performance.
+ * Tolerant to partial AI responses for improved reliability.
  */
 export async function translateBatch(
   batch: SubtitleSegment[],
@@ -49,8 +49,10 @@ Data: ${JSON.stringify(batch.map(s => s.originalText))}`;
 
     const translatedBatch = JSON.parse(response.text?.trim() || "[]");
 
-    if (!Array.isArray(translatedBatch) || translatedBatch.length !== batch.length) {
-      throw new Error("Batch size or format mismatch.");
+    // Format validation: must be an array. 
+    // Length equality check removed to allow partial responses (quota/truncation tolerance).
+    if (!Array.isArray(translatedBatch)) {
+      throw new Error("Invalid response format: Expected a JSON array.");
     }
 
     return { 
