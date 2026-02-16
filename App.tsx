@@ -1,4 +1,3 @@
-
 import { 
   parseSRT, 
   parseSktProject,
@@ -423,8 +422,6 @@ const App: React.FC = () => {
         const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel);
         setSegments(prev => prev.map(s => {
           const bIdx = currentBatch.findIndex(cb => cb.id === s.id);
-          // Requirement: AI results should NOT be marked as isModified (user-edited) initially.
-          // Spec 04 v2.1.1 1.3: "isModified: Khi user chỉnh sửa nội dung dịch -> segment được đánh dấu đã chỉnh sửa."
           if (bIdx !== -1) return { ...s, translatedText: translatedTexts[bIdx], isProcessing: false };
           return s;
         }));
@@ -446,12 +443,6 @@ const App: React.FC = () => {
 
   const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Đang dừng..."); };
 
-  /**
-   * AI Optimization Implementation Version 3.3.0.
-   * Skips Safe segments.
-   * Optimizes Warning and Critical segments using AI Content editing.
-   * Uses batching (20 segments / request).
-   */
   const handleAiOptimize = async () => {
     if (selectedIds.size === 0) return;
     setStatus('processing');
@@ -464,7 +455,6 @@ const App: React.FC = () => {
     const currentSegments = [...segments];
     const aiTargetSegments: SubtitleSegment[] = [];
 
-    // Step 1: Classification
     for (const segId of Array.from(selectedIds)) {
       const seg = currentSegments.find(s => s.id === segId);
       if (!seg) continue;
@@ -479,7 +469,6 @@ const App: React.FC = () => {
       }
     }
 
-    // Step 2: Batch AI Content Optimization (20 segments per batch)
     if (aiTargetSegments.length > 0) {
       const batchSize = 20;
       const totalBatches = Math.ceil(aiTargetSegments.length / batchSize);
@@ -507,7 +496,6 @@ const App: React.FC = () => {
           fixed.forEach(f => {
             const idx = currentSegments.findIndex(s => s.id === f.id);
             if (idx !== -1) {
-              // Spec 04 v2.1.1 1.3: AI Optimization is NOT considered user-intervention modification
               currentSegments[idx] = { ...f }; 
               optimizedCount++;
             }
@@ -604,7 +592,6 @@ const App: React.FC = () => {
   };
 
   const updateSegmentText = (id: number, text: string) => {
-    // Spec 04 v2.1.1 1.3: "Khi user chỉnh sửa nội dung dịch -> segment được đánh dấu đã chỉnh sửa."
     setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text, isModified: true } : s));
   };
 
@@ -763,7 +750,7 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="w-80 border-l border-slate-800 bg-slate-900">
-             <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} onOpenSplit={() => setActiveTab('file-tools')} onClearProject={handleClearProjectRequest} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+             <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
           </div>
         </div>
       )}

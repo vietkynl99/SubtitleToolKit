@@ -6,13 +6,11 @@ import { SplitResult } from '../services/subtitleLogic';
 
 interface AnalyzerPanelProps {
   data: AnalysisResult;
-  segments: SubtitleSegment[]; // Pass segments for additional stats like modified count
+  segments: SubtitleSegment[];
   onFilterTrigger: (filter: any) => void;
   activeFilter: any;
   safeThreshold: number;
   criticalThreshold: number;
-  onOpenSplit: () => void;
-  onClearProject: () => void;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
   onLoadGenerated?: (file: SplitResult) => void;
@@ -26,15 +24,12 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   activeFilter,
   safeThreshold,
   criticalThreshold,
-  onOpenSplit,
-  onClearProject,
   generatedFiles,
   onDownloadGenerated,
   onLoadGenerated,
   onDeleteGenerated
 }) => {
   const getBucketColor = (mid: number) => {
-    // Sync with v1.7.0 classification
     if (mid > criticalThreshold) return '#f43f5e'; // rose-500
     if (mid >= safeThreshold) return '#f59e0b'; // amber-500
     return '#10b981'; // emerald-500
@@ -224,40 +219,6 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
           </div>
         </section>
       )}
-
-      {/* File Tools */}
-      <section>
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">File Tools</h3>
-        <div className="space-y-2">
-          <button 
-            onClick={onOpenSplit}
-            className="w-full flex items-center justify-between p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl hover:bg-slate-800 hover:border-slate-700 transition-all group shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <span className="p-2 bg-blue-600/10 text-blue-400 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all">
-                {ICONS.Split}
-              </span>
-              <div className="text-left">
-                <span className="block text-xs font-bold text-slate-200">Split SRT</span>
-                <span className="text-[10px] text-slate-500">Chia nhỏ file thành nhiều phần</span>
-              </div>
-            </div>
-            <span className="text-slate-600 group-hover:text-slate-400 transition-all">
-              {ICONS.Next}
-            </span>
-          </button>
-        </div>
-      </section>
-
-      {/* Global Reset */}
-      <section className="pt-4 border-t border-slate-800/50">
-        <button 
-          onClick={onClearProject}
-          className="w-full flex items-center justify-center gap-2 p-3 bg-slate-800/30 border border-slate-700/30 rounded-xl hover:bg-rose-500/10 hover:border-rose-500/30 hover:text-rose-400 text-slate-500 text-xs font-bold transition-all"
-        >
-          {ICONS.Delete} Clear Current Project
-        </button>
-      </section>
 
       {/* Alerts */}
       <section className="space-y-3">
