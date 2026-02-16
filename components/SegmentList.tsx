@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SubtitleSegment, Severity } from '../types';
 import { ICONS } from '../constants';
@@ -170,11 +169,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   <span className="text-[11px] font-bold font-mono text-slate-500">
                     {seg.startTime} → {seg.endTime}
                   </span>
-                  {seg.isModified && (
-                    <span className="px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[9px] font-bold text-blue-400 uppercase tracking-tighter">
-                      Edited
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-3">
                    <span className={`text-[10px] font-bold font-mono ${colors.text}`}>
@@ -209,7 +203,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                     </div>
                   ) : (
                     <textarea
-                      className={`w-full bg-transparent border-none outline-none resize-none text-base font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic ${seg.isModified ? 'text-blue-300' : 'text-blue-100'}`}
+                      className={`w-full bg-transparent border-none outline-none resize-none text-base font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic text-blue-100`}
                       placeholder="Chưa có bản dịch..."
                       rows={Math.max(2, (seg.translatedText || '').split('\n').length)}
                       value={seg.translatedText || ''}

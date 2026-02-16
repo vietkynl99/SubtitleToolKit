@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
 import { AnalysisResult, Severity, SubtitleSegment } from '../types';
@@ -48,9 +47,9 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
 
   const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
 
-  // Requirement: Tỷ lệ segment đã chỉnh sửa
-  const modifiedCount = segments.filter(s => s.isModified).length;
-  const modifiedPercentage = segments.length > 0 ? Math.round((modifiedCount / segments.length) * 100) : 0;
+  // Requirement: Translation Progress (v2.2.0)
+  const translatedCount = segments.filter(s => s.translatedText && s.translatedText.trim() !== '').length;
+  const translationPercentage = segments.length > 0 ? Math.round((translatedCount / segments.length) * 100) : 0;
 
   return (
     <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-12">
@@ -95,8 +94,8 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Critical</span>
           </button>
           <div className="p-4 rounded-xl border border-slate-700/50 bg-slate-800/30 flex flex-col justify-center">
-            <span className="block text-lg font-bold text-blue-400">{modifiedPercentage}%</span>
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Edited by User</span>
+            <span className="block text-lg font-bold text-blue-400">{translationPercentage}%</span>
+            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Translated ({translatedCount}/{segments.length})</span>
           </div>
         </div>
       </section>
