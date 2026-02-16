@@ -115,8 +115,8 @@ export async function analyzeTranslationStyle(title: string, originalTitle: stri
 }
 
 /**
- * AI Content Optimization as per v3.3.0.
- * Focuses on independent segment optimization without cross-inference.
+ * AI Subtitle Optimization v3.3.1.
+ * Optimized for aggressive CPS reduction and token efficiency.
  */
 export async function aiFixSegments(
   segments: SubtitleSegment[], 
@@ -125,29 +125,16 @@ export async function aiFixSegments(
 ): Promise<{ segments: SubtitleSegment[], tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const modeInstruction = mode === 'aggressive'
-    ? "PRIORITY: Reduce CPS strongly. Shorten sentences aggressively."
-    : "PRIORITY: Improve flow while maintaining original nuance.";
+  const instruction = mode === 'aggressive'
+    ? "AGGRESSIVE: Shorten maximally. Remove particles/softeners. Blunt synonyms. Brevity > Nuance. Min CPS."
+    : "SAFE: Flow improvement. Tighten slightly. Keep nuance.";
 
-  const prompt = `Optimize these Vietnamese subtitle segments for CPS.
-  Mode: ${mode.toUpperCase()}
-  ${modeInstruction}
-
-  STRICT INDEPENDENCE: Each segment in the list is an isolated unit. 
-  - DO NOT use neighboring segments as context. 
-  - DO NOT link logic between different IDs.
-  - DO NOT merge or split segments.
-
-  Requirements: 
-  1. Shorten content where possible to reduce reading burden. 
-  2. Ensure natural cinematic flow. 
-  3. PRESERVE core meaning strictly. 
-  4. Avoid exaggeration.
-
-  Output Format:
-  - Return a JSON array of objects with 'id' and 'fixedText'.
-  
-  Segments: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || s.originalText })))}`;
+  const prompt = `Optimize Vietnamese subtitles. ${instruction}
+Rules:
+- Units: Independent. No cross-context, merging, or splitting.
+- Meaning: Exact core. No fluff.
+- Format: JSON [{id, fixedText}].
+Data: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || s.originalText })))}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -179,7 +166,7 @@ export async function aiFixSegments(
 
     return { segments: updatedSegments, tokens };
   } catch (error) {
-    console.error("AI Fix error", error);
+    console.error("AI Fix error:", error);
     return { segments, tokens: 0 };
   }
 }
