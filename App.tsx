@@ -30,8 +30,6 @@ import {
 import { 
   translateBatch,
   aiFixSegments,
-  extractTitleFromFilename,
-  translateTitle,
   analyzeTranslationStyle
 } from './services/geminiService';
 import Layout from './components/Layout';
@@ -167,43 +165,25 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGeneratePreset = async (fName: string) => {
-    if (!fName) return;
+  const handleDNAAnalyze = async (input: string) => {
+    if (!input.trim()) return;
     setIsPresetLoading(true);
-    let totalTokens = 0;
-    let totalRequests = 0;
-
     try {
-      const { title: extracted, tokens: tokens1 } = await extractTitleFromFilename(fName, settings.aiModel);
-      totalTokens += tokens1;
-      totalRequests += 1;
-
-      let titleVi = extracted;
-      const isCn = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
-      if (isCn(extracted)) {
-        const { title: translated, tokens: tokens2 } = await translateTitle(extracted, settings.aiModel);
-        titleVi = translated;
-        totalTokens += tokens2;
-        totalRequests += 1;
-      }
+      const { preset, tokens } = await analyzeTranslationStyle(input, settings.aiModel);
       
-      const { preset, tokens: tokens3 } = await analyzeTranslationStyle(titleVi, extracted, settings.aiModel);
-      totalTokens += tokens3;
-      totalRequests += 1;
-
       setTranslationPreset(preset);
       setApiUsage(prev => ({
         ...prev,
         style: {
-          requests: prev.style.requests + totalRequests,
-          tokens: prev.style.tokens + totalTokens
+          requests: prev.style.requests + 1,
+          tokens: prev.style.tokens + tokens
         }
       }));
 
-      showToast("Analyze Complete: Creative DNA initialized.");
+      showToast("DNA Analysis Complete: Translation Style initialized.");
     } catch (err) {
-      console.error("Preset generation failed", err);
-      showToast("Không thể phân tích phong cách tự động.");
+      console.error("DNA Analysis failed", err);
+      showToast("Không thể phân tích DNA phong cách.");
     } finally {
       setIsPresetLoading(false);
     }
@@ -215,7 +195,7 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `[Preset] ${translationPreset.title_original}.json`;
+    a.download = `[DNA] ${translationPreset.reference.title_or_summary.slice(0, 20)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -227,20 +207,19 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        const isValid = json.title_original && 
-                        json.title_vi && 
+        const isValid = json.reference?.title_or_summary && 
                         Array.isArray(json.genres) && 
                         Array.isArray(json.tone) && 
                         typeof json.humor_level === 'number';
 
         if (isValid) {
           setTranslationPreset(json);
-          showToast("Preset DNA successfully imported.");
+          showToast("DNA Preset successfully imported.");
         } else {
-          showToast("File preset không hợp lệ hoặc sai Version.");
+          showToast("File DNA không hợp lệ hoặc sai Version.");
         }
       } catch (err) {
-        showToast("Lỗi khi đọc file preset.");
+        showToast("Lỗi khi đọc file DNA.");
       }
     };
     reader.readAsText(file);
@@ -305,7 +284,7 @@ const App: React.FC = () => {
         setActiveTab('editor');
         setGeneratedFiles([]);
         setFilter('all');
-        setCurrentPage(1); // Reset to page 1 on upload
+        setCurrentPage(1); 
         setSelectedIds(new Set());
       } catch (err) {
         alert('Lỗi khi parse file: ' + (err as Error).message);
@@ -701,7 +680,7 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'translation-style' && (
-        <PresetPage preset={translationPreset} isLoading={isPresetLoading} onReAnalyze={() => handleGeneratePreset(fileName)} onExport={handleExportPreset} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
+        <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onExport={handleExportPreset} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
       )}
 
       {activeTab === 'file-tools' && (
@@ -926,7 +905,7 @@ const App: React.FC = () => {
                   const avgTkn = segCount > 0 ? (stats.tokens / segCount).toFixed(1) : '0';
 
                   const groupLabels: Record<string, string> = {
-                    'Style': 'Translation Style',
+                    'Style': 'DNA Analysis',
                     'Translate': 'AI Translate',
                     'Optimize': 'AI Optimize'
                   };
