@@ -65,6 +65,8 @@ const App: React.FC = () => {
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [segmentToDelete, setSegmentToDelete] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
@@ -571,7 +573,26 @@ const App: React.FC = () => {
   };
 
   const updateSegmentText = (id: number, text: string) => {
-    setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text, isModified: true } : s));
+    setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text } : s));
+  };
+
+  const deleteSegment = (id: number) => {
+    setSegmentToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (segmentToDelete === null) return;
+    
+    setSegments(prev => {
+      const filtered = prev.filter(s => s.id !== segmentToDelete);
+      // Re-indexing: Bắt đầu từ 1, liên tục, không khoảng trống.
+      return filtered.map((s, index) => ({ ...s, id: index + 1 }));
+    });
+    setSelectedIds(new Set()); // Clear selection to avoid ID mismatch after re-indexing
+    setShowDeleteModal(false);
+    setSegmentToDelete(null);
+    showToast("Đã xoá segment và đánh lại số thứ tự.");
   };
 
   const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
@@ -610,6 +631,22 @@ const App: React.FC = () => {
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Hủy</button>
               <button onClick={handleReplaceConfirm} className="flex-1 py-3 bg-blue-600 rounded-xl">Confirm & Upload</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+            <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mb-6 mx-auto">
+              {ICONS.Delete}
+            </div>
+            <h3 className="text-xl font-bold mb-2 text-center">Xoá segment?</h3>
+            <p className="text-slate-400 text-sm text-center mb-8">Bạn có chắc muốn xoá segment này không? Hành động này sẽ đánh lại số thứ tự toàn bộ file.</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowDeleteModal(false); setSegmentToDelete(null); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Hủy</button>
+              <button onClick={confirmDelete} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 rounded-xl font-bold transition-colors">Xác nhận xoá</button>
             </div>
           </div>
         </div>
@@ -696,6 +733,7 @@ const App: React.FC = () => {
               onToggleSelect={handleToggleSelect} 
               onSelectAll={handleSelectAll}
               onUpdateText={updateSegmentText} 
+              onDeleteSegment={deleteSegment}
               filter={filter} 
               onFilterChange={setFilter} 
               safeThreshold={settings.cpsThreshold.safeMax} 

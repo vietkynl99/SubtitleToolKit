@@ -19,7 +19,6 @@ export interface SubtitleSegment {
   endTime: string;
   originalText: string | null; // Nullable for VN-only segments
   translatedText: string | null; // Nullable for CN-only segments
-  isModified: boolean;
   isProcessing?: boolean;
   errors: SubtitleError[];
   severity: Severity;

@@ -237,7 +237,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
-              <p className="text-[10px] text-amber-400/60 leading-normal">Chứa quá 2 dòng hoặc vượt quá 45 ký tự mỗi dòng.</p>
+              <p className="text-[10px] text-amber-400/60 leading-normal">Vượt quá 2 dòng. Độc giả có thể gặp khó khăn khi đọc nhanh.</p>
             </div>
           </div>
         )}

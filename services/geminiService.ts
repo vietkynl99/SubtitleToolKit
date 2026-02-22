@@ -171,7 +171,7 @@ Data: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || 
     
     const updatedSegments = segments.map(s => {
       const fix = fixes.find((f: any) => f.id === s.id);
-      return fix ? { ...s, translatedText: fix.fixedText, isModified: true } : s;
+      return fix ? { ...s, translatedText: fix.fixedText } : s;
     });
 
     return { segments: updatedSegments, tokens };

@@ -76,7 +76,6 @@ export function parseSRT(content: string): SubtitleSegment[] {
           endTime,
           originalText,
           translatedText,
-          isModified: translatedText !== null,
           errors: [],
           severity: 'safe',
           cps: 0,
@@ -102,7 +101,6 @@ export function parseSktProject(content: string): { segments: SubtitleSegment[],
     endTime: s.end,
     originalText: s.original || null,
     translatedText: s.translated || null,
-    isModified: !!s.translated,
     errors: [],
     severity: 'safe',
     cps: 0,
@@ -190,10 +188,7 @@ export function getSegmentMetadata(
 
   const lines = text.split('\n').filter(line => line.trim().length > 0);
   if (lines.length > 2) {
-    issueList.push('Phụ đề quá 2 dòng');
-  }
-  if (lines.some(l => l.length > 50)) {
-    issueList.push('Dòng phụ đề quá dài (> 50 ký tự)');
+    issueList.push('Phụ đề vượt quá 2 dòng');
   }
 
   return { severity, cps, issueList };

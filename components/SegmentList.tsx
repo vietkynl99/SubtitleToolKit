@@ -8,6 +8,7 @@ interface SegmentListProps {
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
   onUpdateText: (id: number, text: string) => void;
+  onDeleteSegment: (id: number) => void;
   filter: 'all' | Severity | any;
   onFilterChange: (filter: any) => void;
   safeThreshold: number;
@@ -24,6 +25,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
   onToggleSelect,
   onSelectAll,
   onUpdateText,
+  onDeleteSegment,
   filter, 
   onFilterChange,
   safeThreshold,
@@ -175,6 +177,14 @@ const SegmentList: React.FC<SegmentListProps> = ({
                      {seg.cps.toFixed(1)} CPS
                    </span>
                    <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
+                   <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDeleteSegment(seg.id); }}
+                    className="ml-2 p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                    title="Xoá segment"
+                   >
+                    {ICONS.Delete}
+                   </button>
                 </div>
               </div>
 
