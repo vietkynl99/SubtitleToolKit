@@ -28,6 +28,18 @@ const SUGGESTED_TONES = [
   "Hài hước", "Mỉa mai", "Châm biếm", "Kịch tính", "Nghiêm túc"
 ];
 
+const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
+  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-full text-[13px] font-medium text-blue-400 group animate-in zoom-in duration-200">
+    {label}
+    <button 
+      onClick={onRemove}
+      className="text-blue-500/50 hover:text-rose-500 transition-colors"
+    >
+      ✕
+    </button>
+  </span>
+);
+
 const PresetPage: React.FC<PresetPageProps> = ({ 
   preset, 
   onAnalyze, 
@@ -38,36 +50,55 @@ const PresetPage: React.FC<PresetPageProps> = ({
   fileName, 
   totalSegments 
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [titleInput, setTitleInput] = useState('');
+  const [genreInput, setGenreInput] = useState('');
+  const [toneInput, setToneInput] = useState('');
+  const [warning, setWarning] = useState<string | null>(null);
 
-  // Update local state when preset changes (e.g. from Import)
   useEffect(() => {
     if (preset?.reference.title_or_summary) {
       setTitleInput(preset.reference.title_or_summary);
     }
   }, [preset]);
 
-  useEffect(() => {
-    if (!isLoading && isEditing) {
-      setIsEditing(false);
+  const handleAddTag = (type: 'genres' | 'tone', value: string, taxonomy: string[]) => {
+    if (!preset) return;
+    const cleanValue = value.trim();
+    if (!cleanValue) return;
+
+    if (preset[type].length >= 5) {
+      setWarning(`Tối đa 5 ${type === 'genres' ? 'thể loại' : 'tông giọng'}.`);
+      return;
     }
-  }, [isLoading]);
 
-  const toggleItem = (list: string[], item: string) => {
-    return list.includes(item) 
-      ? list.filter(i => i !== item) 
-      : [...list, item];
+    if (preset[type].includes(cleanValue)) {
+      setGenreInput('');
+      setToneInput('');
+      return;
+    }
+
+    // Taxonomy check
+    if (!taxonomy.includes(cleanValue)) {
+      setWarning(`"${cleanValue}" không nằm trong taxonomy. Vui lòng chọn từ gợi ý.`);
+      return;
+    }
+
+    onUpdatePreset({
+      ...preset,
+      [type]: [...preset[type], cleanValue]
+    });
+    
+    if (type === 'genres') setGenreInput('');
+    else setToneInput('');
+    setWarning(null);
   };
 
-  const handleToggleGenre = (genre: string) => {
+  const handleRemoveTag = (type: 'genres' | 'tone', index: number) => {
     if (!preset) return;
-    onUpdatePreset({ ...preset, genres: toggleItem(preset.genres, genre) });
-  };
-
-  const handleToggleTone = (toneItem: string) => {
-    if (!preset) return;
-    onUpdatePreset({ ...preset, tone: toggleItem(preset.tone, toneItem) });
+    const newList = [...preset[type]];
+    newList.splice(index, 1);
+    onUpdatePreset({ ...preset, [type]: newList });
+    setWarning(null);
   };
 
   const handleHumorChange = (val: number) => {
@@ -166,13 +197,10 @@ const PresetPage: React.FC<PresetPageProps> = ({
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> STYLE CONFIGS
               </h3>
-              {preset && !isLoading && (
-                <button 
-                  onClick={() => setIsEditing(!isEditing)}
-                  className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isEditing ? 'text-emerald-400' : 'text-slate-400 hover:text-slate-200'}`}
-                >
-                  {isEditing ? 'Done Editing' : 'Edit Style'}
-                </button>
+              {warning && (
+                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest animate-pulse">
+                  {warning}
+                </span>
               )}
             </div>
 
@@ -185,63 +213,63 @@ const PresetPage: React.FC<PresetPageProps> = ({
               <div className="space-y-8 flex-1 animate-in fade-in duration-500">
                 {/* Genres */}
                 <div className="space-y-3">
-                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Genres</div>
-                  <div className={`flex flex-wrap gap-2 ${isEditing ? 'max-h-40 overflow-y-auto no-scrollbar pr-1' : ''}`}>
-                    {isEditing ? (
-                      SUGGESTED_GENRES.map((g) => {
-                        const isActive = preset.genres.includes(g);
-                        return (
-                          <button
-                            key={g}
-                            onClick={() => handleToggleGenre(g)}
-                            className={`px-[12px] py-[6px] rounded-full text-[12px] font-medium transition-all ${
-                              isActive 
-                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                                : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300'
-                            }`}
-                          >
-                            {g}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      preset.genres.length ? preset.genres.map(g => (
-                        <span key={g} className="px-[12px] py-[6px] bg-blue-600/10 border border-blue-500/20 rounded-full text-[12px] font-medium text-blue-400">
-                          {g}
-                        </span>
-                      )) : <span className="text-[11px] text-slate-600 italic">Chưa xác định thể loại</span>
-                    )}
+                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Genres (Max 5)</div>
+                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 bg-slate-800/50 rounded-2xl border border-slate-800 focus-within:border-blue-500/30 transition-colors">
+                    {preset.genres.map((g, idx) => (
+                      <TagChip key={g} label={g} onRemove={() => handleRemoveTag('genres', idx)} />
+                    ))}
+                    <input 
+                      type="text"
+                      placeholder={preset.genres.length < 5 ? "Thêm thể loại..." : ""}
+                      value={genreInput}
+                      onChange={(e) => setGenreInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput, SUGGESTED_GENRES)}
+                      disabled={preset.genres.length >= 5}
+                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[100px]"
+                    />
+                  </div>
+                  {/* Taxonomy Suggestions */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_GENRES.filter(g => !preset.genres.includes(g) && g.toLowerCase().includes(genreInput.toLowerCase())).slice(0, 8).map(g => (
+                      <button 
+                        key={g} 
+                        onClick={() => handleAddTag('genres', g, SUGGESTED_GENRES)}
+                        className="text-[10px] px-2 py-1 bg-slate-800 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
+                      >
+                        + {g}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* Tones */}
                 <div className="space-y-3">
-                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Tones</div>
-                  <div className={`flex flex-wrap gap-2 ${isEditing ? 'max-h-40 overflow-y-auto no-scrollbar pr-1' : ''}`}>
-                    {isEditing ? (
-                      SUGGESTED_TONES.map((t) => {
-                        const isActive = preset.tone.includes(t);
-                        return (
-                          <button
-                            key={t}
-                            onClick={() => handleToggleTone(t)}
-                            className={`px-[12px] py-[6px] rounded-full text-[12px] font-medium transition-all ${
-                              isActive 
-                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' 
-                                : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300'
-                            }`}
-                          >
-                            {t}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      preset.tone.length ? preset.tone.map(t => (
-                        <span key={t} className="px-[12px] py-[6px] bg-purple-600/10 border border-purple-500/20 rounded-full text-[12px] font-medium text-purple-400">
-                          {t}
-                        </span>
-                      )) : <span className="text-[11px] text-slate-600 italic">Chưa xác định tông giọng</span>
-                    )}
+                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Tones (Max 5)</div>
+                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 bg-slate-800/50 rounded-2xl border border-slate-800 focus-within:border-purple-500/30 transition-colors">
+                    {preset.tone.map((t, idx) => (
+                      <TagChip key={t} label={t} onRemove={() => handleRemoveTag('tone', idx)} />
+                    ))}
+                    <input 
+                      type="text"
+                      placeholder={preset.tone.length < 5 ? "Thêm tông giọng..." : ""}
+                      value={toneInput}
+                      onChange={(e) => setToneInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('tone', toneInput, SUGGESTED_TONES)}
+                      disabled={preset.tone.length >= 5}
+                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[100px]"
+                    />
+                  </div>
+                  {/* Taxonomy Suggestions */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_TONES.filter(t => !preset.tone.includes(t) && t.toLowerCase().includes(toneInput.toLowerCase())).slice(0, 8).map(t => (
+                      <button 
+                        key={t} 
+                        onClick={() => handleAddTag('tone', t, SUGGESTED_TONES)}
+                        className="text-[10px] px-2 py-1 bg-slate-800 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
+                      >
+                        + {t}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

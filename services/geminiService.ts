@@ -82,9 +82,29 @@ export async function extractTitleFromFilename(filename: string, model: AiModel)
 
 export async function analyzeTranslationStyle(titleOrSummary: string, model: AiModel): Promise<{ preset: TranslationPreset, tokens: number }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const taxonomy = {
+    genres: [
+      "Tu tiên", "Tiên hiệp", "Huyền huyễn", "Hệ thống", "Xuyên không", 
+      "Trọng sinh", "Dị giới", "Dị năng", "Thần thoại", "Quỷ dị", 
+      "Huyền nghi", "Mạt thế", "Đô thị", "Tổng tài", "Thương chiến", 
+      "Hắc đạo", "Gia đấu", "Học đường", "Showbiz", "Hành động", 
+      "Chiến đấu", "Sinh tồn", "Báo thù", "Trinh thám", "Kịch tính", 
+      "Hài hước", "Hài hước đen", "Parody", "Châm biếm"
+    ],
+    tone: [
+      "Trang trọng", "Hào hùng", "Huyền ảo", "Bí ẩn", "U ám", 
+      "Lạnh lùng", "Kiêu ngạo", "Thực tế", "Đời thường", "Phóng khoáng", 
+      "Hài hước", "Mỉa mai", "Châm biếm", "Kịch tính", "Nghiêm túc"
+    ]
+  };
+
   const response = await ai.models.generateContent({
     model,
-    contents: `Phân tích thể loại và tông giọng dịch dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}`,
+    contents: `Phân tích thể loại và tông giọng dịch dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}.
+Chỉ được phép chọn từ danh sách sau:
+Genres: ${taxonomy.genres.join(', ')}
+Tone: ${taxonomy.tone.join(', ')}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -93,12 +113,12 @@ export async function analyzeTranslationStyle(titleOrSummary: string, model: AiM
           genres: { 
             type: Type.ARRAY, 
             items: { type: Type.STRING },
-            description: "1-5 thể loại phù hợp (ví dụ: Tu tiên, Đô thị, Trả thù...)"
+            description: "1-5 thể loại phù hợp nhất từ danh sách."
           },
           tone: { 
             type: Type.ARRAY, 
             items: { type: Type.STRING },
-            description: "Các tông giọng phù hợp (ví dụ: Nghiêm túc, Bi tráng, Hài hước...)"
+            description: "1-5 tông giọng phù hợp nhất từ danh sách."
           },
           humor_level: { 
             type: Type.NUMBER,
