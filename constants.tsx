@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS = {
     warningMax: 40
   },
   autoFixOnUpload: false,
-  optimizationMode: 'safe' as const,
+  optimizationMode: 'aggressive' as const,
   translationBatchSize: 100,
   aiModel: 'gemini-2.5-flash' as const
 };

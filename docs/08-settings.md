@@ -44,7 +44,7 @@ Cho phép người dùng lựa chọn model sử dụng cho toàn bộ tính nă
 
 ## 2.4 Automation
 - **Auto-fix on Upload:** Tự động chuẩn hóa format SRT khi nạp file.
-- **Optimization Mode:**
+- **Optimization Mode:** (Default: Aggressive)
   - **Safe:** Ưu tiên giữ nghĩa, hạn chế việc thay đổi quá mức nếu không cần thiết.
   - **Aggressive:** Ưu tiên giảm CPS mạnh, chấp nhận viết lại câu ngắn gọn nhất có thể.
 
