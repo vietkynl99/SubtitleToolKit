@@ -803,89 +803,12 @@ const App: React.FC = () => {
 
       {activeTab === 'settings' && (
         <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar pb-32">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="p-3 bg-blue-600/10 text-blue-500 rounded-2xl">{ICONS.Settings}</div>
-            <h2 className="text-3xl font-bold text-slate-100">Cài đặt hệ thống</h2>
-          </div>
-
           <div className="space-y-10">
-            {/* 1.1 Ngưỡng CPS (Thresholds) */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-8">
-                <span className="text-blue-500">{ICONS.Analyzer}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.1 Ngưỡng CPS (Thresholds)</h3>
-              </div>
-              
-              <div className="space-y-10">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="block font-bold text-slate-200">Safe Max</span>
-                      <span className="text-xs text-slate-500">Ngưỡng an toàn (Default: 25)</span>
-                    </div>
-                    <span className="text-lg font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-lg border border-emerald-400/20">{settings.cpsThreshold.safeMax}</span>
-                  </div>
-                  <input 
-                    type="range" min="10" max="60" 
-                    value={settings.cpsThreshold.safeMax} 
-                    onChange={(e) => updateThreshold('safeMax', Number(e.target.value))} 
-                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-emerald-500 cursor-pointer"
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="block font-bold text-slate-200">Warning Max</span>
-                      <span className="text-xs text-slate-500">Ngưỡng cảnh báo (Default: 40)</span>
-                    </div>
-                    <span className="text-lg font-bold text-rose-400 bg-rose-400/10 px-3 py-1 rounded-lg border border-rose-400/20">{settings.cpsThreshold.warningMax}</span>
-                  </div>
-                  <input 
-                    type="range" min="15" max="80" 
-                    value={settings.cpsThreshold.warningMax} 
-                    onChange={(e) => updateThreshold('warningMax', Number(e.target.value))} 
-                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-rose-500 cursor-pointer"
-                  />
-                </div>
-                
-                <p className="text-[10px] text-slate-500 italic flex items-center gap-2">
-                  {ICONS.Time} Hệ thống tự động đảm bảo Safe Max luôn nhỏ hơn Warning Max.
-                </p>
-              </div>
-            </section>
-
-            {/* 1.2 AI Translation */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-8">
-                <span className="text-blue-500">{ICONS.Translate}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.2 AI Translation</h3>
-              </div>
-
-              <div className="space-y-10">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="block font-bold text-slate-200">Batch Size</span>
-                      <span className="text-xs text-slate-500">Số dòng trên mỗi yêu cầu (10 - 500 lines/request)</span>
-                    </div>
-                    <span className="text-lg font-bold text-blue-400 bg-blue-400/10 px-3 py-1 rounded-lg border border-blue-400/20">{settings.translationBatchSize}</span>
-                  </div>
-                  <input 
-                    type="range" min="10" max="500" step="10"
-                    value={settings.translationBatchSize} 
-                    onChange={(e) => setSettings(prev => ({ ...prev, translationBatchSize: Number(e.target.value) }))} 
-                    className="w-full h-2 bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer"
-                  />
-                </div>
-              </div>
-            </section>
-
-            {/* 1.3 AI Mode (v3.1.0) - Dropdown Selection */}
+            {/* AI Mode (v3.1.0) - Dropdown Selection */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
                 <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.3 AI Mode (Model Selection)</h3>
+                <h3 className="text-lg font-bold text-slate-100">AI Mode</h3>
               </div>
 
               <div className="space-y-6">
@@ -936,63 +859,14 @@ const App: React.FC = () => {
                   </p>
                 </div>
 
-                <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                  Thay đổi model hoặc API Key sẽ ảnh hưởng đến chất lượng và quyền truy cập của các yêu cầu AI tiếp theo.
-                </p>
               </div>
             </section>
 
-            {/* 1.4 Automation & Mode */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-8">
-                <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.4 Automation & Optimization</h3>
-              </div>
-
-              <div className="space-y-10">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="block font-bold text-slate-200">Auto-fix on Upload</span>
-                    <span className="text-xs text-slate-500">Chuẩn hóa format SRT ngay khi nạp file.</span>
-                  </div>
-                  <button 
-                    onClick={() => setSettings(prev => ({ ...prev, autoFixOnUpload: !prev.autoFixOnUpload }))}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${settings.autoFixOnUpload ? 'bg-blue-600' : 'bg-slate-800'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.autoFixOnUpload ? 'left-7' : 'left-1'}`} />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="block font-bold text-slate-200">Optimization Mode</span>
-                      <span className="text-xs text-slate-500">Chế độ xử lý của AI Fix (Safe / Aggressive).</span>
-                    </div>
-                    <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
-                      <button 
-                        onClick={() => setSettings(prev => ({ ...prev, optimizationMode: 'safe' }))}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${settings.optimizationMode === 'safe' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
-                      >
-                        Safe
-                      </button>
-                      <button 
-                        onClick={() => setSettings(prev => ({ ...prev, optimizationMode: 'aggressive' }))}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${settings.optimizationMode === 'aggressive' ? 'bg-rose-600 text-white' : 'text-slate-500'}`}
-                      >
-                        Aggressive
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* 1.5 API Usage Dashboard (Session-Based) */}
+            {/* API Usage Dashboard (Session-Based) */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
                 <span className="text-blue-500">{ICONS.Success}</span>
-                <h3 className="text-lg font-bold text-slate-100">1.5 API Usage Dashboard</h3>
+                <h3 className="text-lg font-bold text-slate-100">API Usage Dashboard</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
