@@ -553,13 +553,13 @@ const App: React.FC = () => {
       showToast("Project saved.");
     } else if (type === 'srt-orig') {
       const srt = generateSRT(segments, 'original');
-      const name = generateExportFileName(baseFileName, editedCount, '.srt');
+      const name = `[Origin]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
       setEditedCount(prev => prev + 1);
       showToast("Original SRT exported.");
     } else if (type === 'srt-tran') {
       const srt = generateSRT(segments, 'translated');
-      const name = generateExportFileName(baseFileName, editedCount, '.srt');
+      const name = `[Translated]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
       setEditedCount(prev => prev + 1);
       showToast("Translated SRT exported.");
