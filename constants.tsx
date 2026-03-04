@@ -46,5 +46,6 @@ export const DEFAULT_SETTINGS = {
   autoFixOnUpload: false,
   optimizationMode: 'aggressive' as const,
   translationBatchSize: 100,
-  aiModel: 'gemini-2.5-flash' as const
+  aiModel: 'gemini-2.5-flash' as const,
+  apiKey: ''
 };

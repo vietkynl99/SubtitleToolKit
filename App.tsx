@@ -52,7 +52,28 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState<number>(0);
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const savedSettings = localStorage.getItem('subtitle_settings');
+      const savedApiKey = localStorage.getItem('subtitle_api_key');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        const merged: AppSettings = {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          apiKey: savedApiKey ?? parsed.apiKey ?? ''
+        };
+        return merged;
+      }
+      if (savedApiKey) {
+        const fromKey: AppSettings = { ...DEFAULT_SETTINGS, apiKey: savedApiKey };
+        return fromKey;
+      }
+    } catch {
+      // ignore localStorage/parse errors and fall back to defaults
+    }
+    return DEFAULT_SETTINGS;
+  });
   
   const [fileName, setFileName] = useState<string>('');
   const [baseFileName, setBaseFileName] = useState<string>('');
@@ -81,7 +102,7 @@ const App: React.FC = () => {
     total: number;
     customText?: string;
   }>({ status: 'idle', processed: 0, total: 0 });
-  
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const stopRequestedRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -91,19 +112,12 @@ const App: React.FC = () => {
   }, [baseFileName, editedCount]);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('subtitle_settings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-      } catch (e) {
-        console.error("Error parsing saved settings", e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
     localStorage.setItem('subtitle_settings', JSON.stringify(settings));
+    if (typeof settings.apiKey === 'string' && settings.apiKey.trim()) {
+      localStorage.setItem('subtitle_api_key', settings.apiKey);
+    } else {
+      localStorage.removeItem('subtitle_api_key');
+    }
   }, [settings]);
 
   // Reset pagination when filter changes
@@ -168,10 +182,15 @@ const App: React.FC = () => {
   };
 
   const handleDNAAnalyze = async (input: string) => {
+    if (!settings.apiKey?.trim()) {
+      showToast("Vui lòng nhập Gemini API Key");
+      setActiveTab('settings');
+      return;
+    }
     if (!input.trim()) return;
     setIsPresetLoading(true);
     try {
-      const { preset, tokens } = await analyzeTranslationStyle(input, settings.aiModel);
+      const { preset, tokens } = await analyzeTranslationStyle(input, settings.aiModel, settings.apiKey);
       
       setTranslationPreset(preset);
       setApiUsage(prev => ({
@@ -367,6 +386,11 @@ const App: React.FC = () => {
   };
 
   const handleTranslate = async () => {
+    if (!settings.apiKey?.trim()) {
+      showToast("Vui lòng nhập Gemini API Key");
+      setActiveTab('settings');
+      return;
+    }
     if (segments.length === 0) return;
     const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
     if (needingTranslation.length === 0) {
@@ -400,7 +424,7 @@ const App: React.FC = () => {
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
         setSegments(prev => prev.map(s => currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
-        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel);
+        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel, settings.apiKey);
         setSegments(prev => prev.map(s => {
           const bIdx = currentBatch.findIndex(cb => cb.id === s.id);
           if (bIdx !== -1) return { ...s, translatedText: translatedTexts[bIdx], isProcessing: false };
@@ -425,6 +449,11 @@ const App: React.FC = () => {
   const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Đang dừng..."); };
 
   const handleAiOptimize = async () => {
+    if (!settings.apiKey?.trim()) {
+      showToast("Vui lòng nhập Gemini API Key");
+      setActiveTab('settings');
+      return;
+    }
     if (selectedIds.size === 0) return;
     setStatus('processing');
     setProgress(0);
@@ -471,7 +500,7 @@ const App: React.FC = () => {
         }));
 
         try {
-          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.optimizationMode, settings.aiModel);
+          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.optimizationMode, settings.aiModel, settings.apiKey);
           requestCount++;
           
           fixed.forEach(f => {
@@ -859,7 +888,7 @@ const App: React.FC = () => {
                 <h3 className="text-lg font-bold text-slate-100">1.3 AI Mode (Model Selection)</h3>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                     Chọn Model Gemini
@@ -877,8 +906,38 @@ const App: React.FC = () => {
                     <option value="gemini-3-pro-preview">Gemini 3 Pro Preview (Highest Quality)</option>
                   </select>
                 </div>
+
+                <div className="flex flex-col gap-2 relative">
+                  <label htmlFor="ai-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Gemini API Key
+                  </label>
+                  <input
+                    id="ai-api-key-input"
+                    type="text"
+                    placeholder="Nhập Gemini API Key của bạn"
+                    value={settings.apiKey || ''}
+                    onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
+                    autoComplete="off"
+                    name="gemini_api_key"
+                    inputMode="text"
+                    spellCheck={false}
+                    style={showApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(prev => !prev)}
+                    className="absolute right-3 top-9 text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-widest"
+                  >
+                    {showApiKey ? 'Ẩn' : 'Hiện'}
+                  </button>
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                    Khoá này được lưu cục bộ trong trình duyệt (localStorage) và không được gửi ra ngoài trừ khi gọi trực tiếp tới API của Google.
+                  </p>
+                </div>
+
                 <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                  Thay đổi model sẽ ảnh hưởng đến chất lượng dịch và tối ưu của các yêu cầu tiếp theo.
+                  Thay đổi model hoặc API Key sẽ ảnh hưởng đến chất lượng và quyền truy cập của các yêu cầu AI tiếp theo.
                 </p>
               </div>
             </section>

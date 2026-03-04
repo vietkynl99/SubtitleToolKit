@@ -86,6 +86,7 @@ export interface AppSettings {
   optimizationMode: 'safe' | 'aggressive';
   translationBatchSize: number;
   aiModel: AiModel;
+  apiKey: string;
 }
 
 export interface SplitMetadata {

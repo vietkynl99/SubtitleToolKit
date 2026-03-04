@@ -10,9 +10,10 @@ export async function translateBatch(
   contextBefore: string[],
   contextAfter: string[],
   preset: TranslationPreset | null,
-  model: AiModel
+  model: AiModel,
+  apiKey: string
 ): Promise<{ translatedTexts: string[], tokens: number }> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
 
   let h = "";
   if (preset) {
@@ -66,8 +67,8 @@ Data: ${JSON.stringify(batch.map(s => s.originalText))}`;
   }
 }
 
-export async function extractTitleFromFilename(filename: string, model: AiModel): Promise<{ title: string, tokens: number }> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function extractTitleFromFilename(filename: string, model: AiModel, apiKey: string): Promise<{ title: string, tokens: number }> {
+  const ai = new GoogleGenAI({ apiKey });
   const cleaned = filename.replace(/\.srt$/i, '').trim();
   
   const response = await ai.models.generateContent({
@@ -80,8 +81,8 @@ export async function extractTitleFromFilename(filename: string, model: AiModel)
   return { title, tokens };
 }
 
-export async function analyzeTranslationStyle(titleOrSummary: string, model: AiModel): Promise<{ preset: TranslationPreset, tokens: number }> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export async function analyzeTranslationStyle(titleOrSummary: string, model: AiModel, apiKey: string): Promise<{ preset: TranslationPreset, tokens: number }> {
+  const ai = new GoogleGenAI({ apiKey });
   
   const taxonomy = {
     genres: [
@@ -151,9 +152,10 @@ Tone: ${taxonomy.tone.join(', ')}`,
 export async function aiFixSegments(
   segments: SubtitleSegment[], 
   mode: 'safe' | 'aggressive' = 'safe',
-  model: AiModel
+  model: AiModel,
+  apiKey: string
 ): Promise<{ segments: SubtitleSegment[], tokens: number }> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
 
   const instruction = mode === 'aggressive'
     ? "AGGRESSIVE: Shorten maximally. Remove particles/softeners. Blunt synonyms. Brevity > Nuance. Min CPS."
