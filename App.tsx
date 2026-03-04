@@ -555,13 +555,11 @@ const App: React.FC = () => {
       const srt = generateSRT(segments, 'original');
       const name = `[Origin]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
-      setEditedCount(prev => prev + 1);
       showToast("Original SRT exported.");
     } else if (type === 'srt-tran') {
       const srt = generateSRT(segments, 'translated');
       const name = `[Translated]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
-      setEditedCount(prev => prev + 1);
       showToast("Translated SRT exported.");
     }
   };
