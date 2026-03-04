@@ -178,17 +178,17 @@ export function getSegmentMetadata(
 
   if (cps > cpsThreshold.warningMax) {
     severity = 'critical';
-    issueList.push(`CPS vượt quá ngưỡng Critical (> ${cpsThreshold.warningMax})`);
+    issueList.push(`CPS exceeds critical threshold (> ${cpsThreshold.warningMax})`);
   } else if (cps >= cpsThreshold.safeMax) {
     severity = 'warning';
-    issueList.push(`CPS nằm trong vùng cảnh báo (${cpsThreshold.safeMax}-${cpsThreshold.warningMax})`);
+    issueList.push(`CPS is in the warning range (${cpsThreshold.safeMax}-${cpsThreshold.warningMax})`);
   } else {
     severity = 'safe';
   }
 
   const lines = text.split('\n').filter(line => line.trim().length > 0);
   if (lines.length > 2) {
-    issueList.push('Phụ đề vượt quá 2 dòng');
+    issueList.push('Subtitle has more than 2 lines');
   }
 
   return { severity, cps, issueList };
@@ -224,7 +224,7 @@ export function analyzeSegments(
     if (meta.cps < minCPS) minCPS = meta.cps;
     if (meta.cps > maxCPS) maxCPS = meta.cps;
 
-    if (meta.issueList.some(i => i.toLowerCase().includes('dòng'))) tooLongLines++;
+    if (meta.issueList.some(i => i.toLowerCase().includes('subtitle has more than 2 lines'.toLowerCase()))) tooLongLines++;
     if (meta.severity === 'critical') tooFastLines++;
 
     groups[meta.severity]++;

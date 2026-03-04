@@ -44,10 +44,10 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
     if (rangeType === 'startToN') s = 1;
     if (rangeType === 'nToEnd') e = totalSegments;
 
-    if (isNaN(s) || isNaN(e)) return { valid: false, error: 'Vui lòng nhập số' };
-    if (s < 1) return { valid: false, error: 'Index bắt đầu phải >= 1' };
-    if (e > totalSegments) return { valid: false, error: `Index kết thúc tối đa là ${totalSegments}` };
-    if (s >= e) return { valid: false, error: 'Index bắt đầu phải nhỏ hơn kết thúc' };
+    if (isNaN(s) || isNaN(e)) return { valid: false, error: 'Please enter valid numbers.' };
+    if (s < 1) return { valid: false, error: 'Start index must be >= 1.' };
+    if (e > totalSegments) return { valid: false, error: `End index cannot exceed ${totalSegments}.` };
+    if (s >= e) return { valid: false, error: 'Start index must be less than end index.' };
     
     return { valid: true, error: '' };
   }, [mode, rangeType, rangeStart, rangeEnd, totalSegments]);
@@ -55,9 +55,9 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
   const previewData = useMemo(() => {
     if (mode !== 'range') {
       let text = '';
-      if (mode === 'duration') text = `Dự kiến chia mỗi ${duration} phút`;
-      if (mode === 'count') text = `Dự kiến tạo ~${Math.ceil(totalSegments / count)} file`;
-      if (mode === 'manual') text = `Dự kiến tạo ${manual.split('\n').filter(l => l.trim()).length + 1} file`;
+      if (mode === 'duration') text = `Estimated split: every ${duration} minutes`;
+      if (mode === 'count') text = `Estimated files: ~${Math.ceil(totalSegments / count)}`;
+      if (mode === 'manual') text = `Estimated files: ${manual.split('\n').filter(l => l.trim()).length + 1}`;
       return { text, valid: true };
     }
 
@@ -71,7 +71,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
     const startSeg = segments[s - 1];
     const endSeg = segments[e - 1];
     
-    if (!startSeg || !endSeg) return { text: 'Không tìm thấy segment', valid: false };
+    if (!startSeg || !endSeg) return { text: 'Segments not found for selected range', valid: false };
 
     const diff = timeToSeconds(endSeg.endTime) - timeToSeconds(startSeg.startTime);
     
@@ -115,24 +115,24 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold flex items-center gap-3">
               <span className="p-2 bg-blue-600/10 text-blue-400 rounded-xl">{ICONS.Split}</span>
-              Cấu hình chia phụ đề
+              Configure Split Options
             </h2>
             {status === 'success' && (
               <span className="flex items-center gap-2 text-emerald-400 text-xs font-bold animate-in fade-in slide-in-from-top duration-300">
-                {ICONS.Success} Split thành công
+                {ICONS.Success} Split completed
               </span>
             )}
           </div>
-          <p className="text-slate-500 text-sm mt-2">Chia nhỏ file SRT thành các phần dựa trên tiêu chí cụ thể.</p>
+          <p className="text-slate-500 text-sm mt-2">Split the SRT file into multiple parts based on specific criteria.</p>
         </div>
 
         <div className="p-8 space-y-6">
           <div className={`grid grid-cols-4 gap-2 transition-opacity ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
             {[
-              { id: 'duration', label: 'Thời lượng', desc: 'Theo Phút' },
-              { id: 'count', label: 'Số dòng', desc: 'Theo Segment' },
-              { id: 'manual', label: 'Thủ công', desc: 'Timestamp' },
-              { id: 'range', label: 'Range', desc: 'Theo Index' },
+              { id: 'duration', label: 'Duration', desc: 'By Minutes' },
+              { id: 'count', label: 'Line Count', desc: 'By Segments' },
+              { id: 'manual', label: 'Manual', desc: 'By Timestamp' },
+              { id: 'range', label: 'Range', desc: 'By Index' },
             ].map((opt) => (
               <button
                 key={opt.id}
@@ -153,7 +153,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
           <div className={`space-y-4 pt-2 transition-opacity ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
             {mode === 'duration' && (
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Thời lượng mỗi file (Phút)</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Duration per file (minutes)</label>
                 <div className="flex items-center gap-4">
                   <input 
                     type="range" min="1" max="60" value={duration}
@@ -168,7 +168,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
 
             {mode === 'count' && (
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Số segment mỗi file</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Segments per file</label>
                 <input 
                   type="number" min="10" max="5000" value={count}
                   disabled={isLocked}
@@ -180,7 +180,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
 
             {mode === 'manual' && (
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nhập mốc thời gian (Mỗi dòng 1 mốc)</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Enter timestamps (one per line)</label>
                 <textarea 
                   placeholder="00:10:00,000&#10;00:20:00,000"
                   value={manual}
@@ -194,7 +194,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
             {mode === 'range' && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Kiểu chia phạm vi</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Range mode</label>
                   <select 
                     value={rangeType}
                     disabled={isLocked}
@@ -209,7 +209,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Index Bắt Đầu (A)</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Start Index (A)</label>
                     <input 
                       type="number"
                       readOnly={rangeType === 'startToN' || isLocked}
@@ -219,7 +219,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Index Kết Thúc (B)</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">End Index (B)</label>
                     <input 
                       type="number"
                       readOnly={rangeType === 'nToEnd' || isLocked}
@@ -240,7 +240,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
               <div className="flex justify-between items-center mb-3">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Preview Information</span>
                 {previewData.valid && mode === 'range' && previewData.isFull && (
-                  <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Range bao phủ toàn file</span>
+                  <span className="text-[9px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Range covers the entire file</span>
                 )}
               </div>
               
@@ -252,19 +252,19 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
               ) : mode === 'range' ? (
                 <div className="grid grid-cols-2 gap-y-2 text-xs">
                   <div className="flex justify-between border-r border-slate-800 pr-4">
-                    <span className="text-slate-500">Bắt đầu:</span>
+                    <span className="text-slate-500">Start:</span>
                     <span className="text-blue-400 font-mono font-bold">{previewData.start}</span>
                   </div>
                   <div className="flex justify-between pl-4">
-                    <span className="text-slate-500">Kết thúc:</span>
+                    <span className="text-slate-500">End:</span>
                     <span className="text-blue-400 font-mono font-bold">{previewData.end}</span>
                   </div>
                   <div className="flex justify-between border-r border-slate-800 pr-4">
-                    <span className="text-slate-500">Số segment:</span>
+                    <span className="text-slate-500">Segments:</span>
                     <span className="text-blue-100 font-bold">{previewData.count}</span>
                   </div>
                   <div className="flex justify-between pl-4">
-                    <span className="text-slate-500">Thời lượng:</span>
+                    <span className="text-slate-500">Duration:</span>
                     <span className="text-blue-100 font-bold">{previewData.duration}</span>
                   </div>
                 </div>
@@ -285,7 +285,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
                   onChange={(e) => setIncludeMetadata(e.target.checked)}
                   className="w-4 h-4 bg-slate-900 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
                 />
-                <label htmlFor="includeMetadata" className="text-xs font-medium text-slate-300 cursor-pointer">Include Split Metadata Header</label>
+                <label htmlFor="includeMetadata" className="text-xs font-medium text-slate-300 cursor-pointer">Include split metadata header</label>
               </div>
               <span className="text-[10px] text-slate-500 italic">Recommended</span>
             </div>
@@ -298,7 +298,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
             onClick={onClose}
             className="px-6 py-2.5 text-sm font-bold text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-xl transition-all disabled:opacity-30"
           >
-            Hủy
+            Cancel
           </button>
           <button 
             disabled={!previewData.valid || isLocked}
@@ -306,7 +306,7 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
             className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
           >
             {status === 'processing' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-            {status === 'success' ? ICONS.Success : 'Xác nhận Split'}
+            {status === 'success' ? ICONS.Success : 'Confirm Split'}
           </button>
         </div>
       </div>

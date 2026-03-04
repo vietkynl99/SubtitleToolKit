@@ -67,7 +67,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
     if (!cleanValue) return;
 
     if (preset[type].length >= 5) {
-      setWarning(`Tối đa 5 ${type === 'genres' ? 'thể loại' : 'tông giọng'}.`);
+      setWarning(`Maximum 5 ${type === 'genres' ? 'genres' : 'tones'}.`);
       return;
     }
 
@@ -79,7 +79,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
 
     // Taxonomy check
     if (!taxonomy.includes(cleanValue)) {
-      setWarning(`"${cleanValue}" không nằm trong taxonomy. Vui lòng chọn từ gợi ý.`);
+      setWarning(`"${cleanValue}" is not in the taxonomy. Please choose from the suggestions.`);
       return;
     }
 
@@ -119,7 +119,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
             {ICONS.Fix}
           </div>
           <h2 className="text-2xl font-bold text-slate-200">No Project Loaded</h2>
-          <p className="text-slate-500">Vui lòng upload file SRT trước khi cấu hình Translation Preset.</p>
+          <p className="text-slate-500">Please upload an SRT file before configuring the Translation Preset.</p>
         </div>
       </div>
     );
@@ -143,7 +143,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
               disabled={isLoading || !preset}
               className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-widest rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              {ICONS.Export} Export JSON
+              {ICONS.Export} Export
             </button>
             <label className={`flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20 ${isLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
               {ICONS.Upload} Import
@@ -161,7 +161,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
             
             <div className="space-y-4 flex-1 flex flex-col">
               <textarea 
-                placeholder="Nhập tiêu đề hoặc tóm tắt nội dung phim để AI phân tích phong cách..."
+                placeholder="Enter a title or plot summary for the AI to analyze the style..."
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 disabled={isLoading}
@@ -207,7 +207,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
             {isLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-300">
                 <div className="w-8 h-8 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                <div className="text-[13px] font-medium text-slate-400">AI đang phân tích DNA phong cách...</div>
+                  <div className="text-[13px] font-medium text-slate-400">AI is analyzing style DNA...</div>
               </div>
             ) : preset ? (
               <div className="space-y-8 flex-1 animate-in fade-in duration-500">
@@ -220,7 +220,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
                     ))}
                     <input 
                       type="text"
-                      placeholder={preset.genres.length < 5 ? "Thêm thể loại..." : ""}
+                      placeholder={preset.genres.length < 5 ? "Add genre..." : ""}
                       value={genreInput}
                       onChange={(e) => setGenreInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput, SUGGESTED_GENRES)}
@@ -251,7 +251,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
                     ))}
                     <input 
                       type="text"
-                      placeholder={preset.tone.length < 5 ? "Thêm tông giọng..." : ""}
+                      placeholder={preset.tone.length < 5 ? "Add tone..." : ""}
                       value={toneInput}
                       onChange={(e) => setToneInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag('tone', toneInput, SUGGESTED_TONES)}
@@ -290,8 +290,8 @@ const PresetPage: React.FC<PresetPageProps> = ({
                       className="w-full h-[4px] bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer focus:ring-4 focus:ring-blue-500/10 custom-range-slider"
                     />
                     <div className="flex justify-between text-[11px] font-bold text-slate-500 opacity-50 uppercase tracking-widest">
-                      <span>Nghiêm túc (0-2)</span>
-                      <span>Hài hước (9-10)</span>
+                      <span>Serious (0-2)</span>
+                      <span>Comedic (9-10)</span>
                     </div>
                   </div>
                 </div>
@@ -301,7 +301,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
                 <div className="p-4 bg-slate-800 rounded-2xl text-slate-600">
                   {ICONS.Analyzer}
                 </div>
-                <p className="text-sm text-slate-500 italic">Nhập Title / Summary và bấm Analyze để bắt đầu.</p>
+                <p className="text-sm text-slate-500 italic">Enter a title/summary and click Analyze to get started.</p>
               </div>
             )}
           </div>
@@ -311,7 +311,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
         {!isLoading && preset && (
           <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 text-center animate-in slide-in-from-bottom duration-500">
             <p className="text-[12px] text-slate-500 font-medium italic opacity-80">
-              DNA v3.1.0 cung cấp ngữ cảnh nền tảng cho AI. Title/Summary sẽ được dùng làm context reference cho mọi batch dịch.
+              DNA v3.1.0 provides a contextual baseline for the AI. Title/Summary will be used as a context reference for every translation batch.
             </p>
           </div>
         )}

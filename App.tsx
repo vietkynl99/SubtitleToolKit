@@ -161,7 +161,7 @@ const App: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    showToast("Đã copy tên file vào clipboard");
+    showToast("File name copied to clipboard");
   };
 
   const handleToggleSelect = (id: number) => {
@@ -183,7 +183,7 @@ const App: React.FC = () => {
 
   const handleDNAAnalyze = async (input: string) => {
     if (!settings.apiKey?.trim()) {
-      showToast("Vui lòng nhập Gemini API Key");
+      showToast("Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -201,10 +201,10 @@ const App: React.FC = () => {
         }
       }));
 
-      showToast("DNA Analysis Complete: Translation Style initialized.");
+      showToast("DNA analysis complete. Translation style initialized.");
     } catch (err) {
-      console.error("DNA Analysis failed", err);
-      showToast("Không thể phân tích DNA phong cách.");
+      console.error("DNA analysis failed", err);
+      showToast("Failed to analyze translation style.");
     } finally {
       setIsPresetLoading(false);
     }
@@ -235,12 +235,12 @@ const App: React.FC = () => {
 
         if (isValid) {
           setTranslationPreset(json);
-          showToast("DNA Preset successfully imported.");
+          showToast("DNA preset imported successfully.");
         } else {
-          showToast("File DNA không hợp lệ hoặc sai Version.");
+          showToast("Invalid DNA file or incompatible version.");
         }
       } catch (err) {
-        showToast("Lỗi khi đọc file DNA.");
+        showToast("Error while reading DNA file.");
       }
     };
     reader.readAsText(file);
@@ -250,13 +250,13 @@ const App: React.FC = () => {
   const processFile = useCallback((file: File) => {
     const ext = file.name.toLowerCase();
     if (!ext.endsWith('.srt') && !ext.endsWith('.sktproject')) {
-      alert('Vui lòng chọn file định dạng .srt hoặc .sktproject');
+      alert('Please select a .srt or .sktproject file.');
       setStatus('error');
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('Dung lượng file vượt quá 5MB');
+      alert('File size exceeds 5MB.');
       setStatus('error');
       return;
     }
@@ -287,7 +287,7 @@ const App: React.FC = () => {
         }
         
         if (parsedSegments.length === 0) {
-          alert('File không có segment hợp lệ hoặc sai định dạng');
+          alert('File has no valid segments or has an invalid format.');
           setStatus('error');
           return;
         }
@@ -308,13 +308,13 @@ const App: React.FC = () => {
         setCurrentPage(1); 
         setSelectedIds(new Set());
       } catch (err) {
-        alert('Lỗi khi parse file: ' + (err as Error).message);
+        alert('Error while parsing file: ' + (err as Error).message);
         setStatus('error');
       }
     };
     reader.onerror = () => {
       setStatus('error');
-      alert('Lỗi khi đọc file');
+      alert('Error while reading file.');
     };
     reader.readAsText(file);
   }, [settings.autoFixOnUpload]);
@@ -387,19 +387,19 @@ const App: React.FC = () => {
 
   const handleTranslate = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast("Vui lòng nhập Gemini API Key");
+      showToast("Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
     if (segments.length === 0) return;
     const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
     if (needingTranslation.length === 0) {
-      showToast("Tất cả các dòng đã được dịch. Không cần dịch thêm.");
+      showToast("All lines are already translated. Nothing to do.");
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
     if (!translationPreset) {
-      showToast("Vui lòng cấu hình Translation Style trước.");
+      showToast("Please configure Translation Style first.");
       setActiveTab('translation-style');
       return;
     }
@@ -414,7 +414,7 @@ const App: React.FC = () => {
       for (let i = 0; i < needingTranslation.length; i += batchSize) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
-          showToast("Đã dừng quá trình dịch.");
+          showToast("Translation process has been stopped.");
           setStatus('success');
           return;
         }
@@ -437,20 +437,20 @@ const App: React.FC = () => {
       }
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setStatus('success');
-      showToast("Dịch hoàn tất.");
+      showToast("Translation completed.");
     } catch (err: any) {
       setStatus('error');
       setTranslationState(prev => ({ ...prev, status: 'error' }));
-      showToast(`Lỗi: ${err.message}`);
+      showToast(`Error: ${err.message}`);
       setSegments(prev => prev.map(s => ({ ...s, isProcessing: false })));
     }
   };
 
-  const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Đang dừng..."); };
+  const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Stopping translation..."); };
 
   const handleAiOptimize = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast("Vui lòng nhập Gemini API Key");
+      showToast("Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -530,7 +530,7 @@ const App: React.FC = () => {
     setSelectedIds(new Set());
     setTranslationState(prev => ({ ...prev, status: 'completed', customText: undefined }));
     
-    showToast(`Tối ưu hoàn tất: Bỏ qua ${safeCount} Safe, AI tối ưu lại ${optimizedCount} câu. Số request thực hiện: ${requestCount}.`);
+    showToast(`Optimization finished: Skipped ${safeCount} safe segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -573,7 +573,7 @@ const App: React.FC = () => {
     else if (mode === 'count') res = splitByCount(segments, value as number, fileName, includeMetadata);
     else if (mode === 'manual') res = splitByManual(segments, (value as string).split('\n').filter(x => x.trim()), fileName, includeMetadata);
     else if (mode === 'range') res = splitByRange(segments, value.start, value.end, fileName, includeMetadata);
-    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast(`Đã chia file thành ${res.length} phần.`); }
+    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast(`File has been split into ${res.length} parts.`); }
   };
 
   const handleDownloadGenerated = (file: SplitResult) => {
@@ -583,7 +583,7 @@ const App: React.FC = () => {
   };
 
   const handleLoadGenerated = (file: SplitResult) => {
-    if (confirm(`Nạp file "${file.fileName}" vào Editor?`)) {
+    if (confirm(`Load file "${file.fileName}" into the editor?`)) {
       setFileName(file.fileName);
       const { baseName, editedCount: count } = parseFileName(file.fileName);
       setBaseFileName(baseName);
@@ -598,7 +598,7 @@ const App: React.FC = () => {
 
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
-    showToast("Đã xóa file tạm thời.");
+    showToast("Temporary split file removed.");
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -615,13 +615,12 @@ const App: React.FC = () => {
     
     setSegments(prev => {
       const filtered = prev.filter(s => s.id !== segmentToDelete);
-      // Re-indexing: Bắt đầu từ 1, liên tục, không khoảng trống.
       return filtered.map((s, index) => ({ ...s, id: index + 1 }));
     });
-    setSelectedIds(new Set()); // Clear selection to avoid ID mismatch after re-indexing
+    setSelectedIds(new Set());
     setShowDeleteModal(false);
     setSegmentToDelete(null);
-    showToast("Đã xoá segment và đánh lại số thứ tự.");
+    showToast("Segment deleted and indices have been re-numbered.");
   };
 
   const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
@@ -644,10 +643,10 @@ const App: React.FC = () => {
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
-            <h3 className="text-xl font-bold mb-3">Xóa dự án?</h3>
+            <h3 className="text-xl font-bold mb-3">Clear current project?</h3>
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Hủy</button>
-              <button onClick={() => performClear()} className="flex-1 py-3 bg-rose-600 rounded-xl">Xác nhận</button>
+              <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
+              <button onClick={() => performClear()} className="flex-1 py-3 bg-rose-600 rounded-xl">Confirm</button>
             </div>
           </div>
         </div>
@@ -656,9 +655,9 @@ const App: React.FC = () => {
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
-            <h3 className="text-xl font-bold mb-3">Tải lên file mới?</h3>
+            <h3 className="text-xl font-bold mb-3">Upload a new file?</h3>
             <div className="flex gap-3 mt-8">
-              <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Hủy</button>
+              <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
               <button onClick={handleReplaceConfirm} className="flex-1 py-3 bg-blue-600 rounded-xl">Confirm & Upload</button>
             </div>
           </div>
@@ -671,11 +670,11 @@ const App: React.FC = () => {
             <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mb-6 mx-auto">
               {ICONS.Delete}
             </div>
-            <h3 className="text-xl font-bold mb-2 text-center">Xoá segment?</h3>
-            <p className="text-slate-400 text-sm text-center mb-8">Bạn có chắc muốn xoá segment này không? Hành động này sẽ đánh lại số thứ tự toàn bộ file.</p>
+            <h3 className="text-xl font-bold mb-2 text-center">Delete segment?</h3>
+            <p className="text-slate-400 text-sm text-center mb-8">Are you sure you want to delete this segment? This will re-index all remaining segments.</p>
             <div className="flex gap-3">
-              <button onClick={() => { setShowDeleteModal(false); setSegmentToDelete(null); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Hủy</button>
-              <button onClick={confirmDelete} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 rounded-xl font-bold transition-colors">Xác nhận xoá</button>
+              <button onClick={() => { setShowDeleteModal(false); setSegmentToDelete(null); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 rounded-xl font-bold transition-colors">Confirm delete</button>
             </div>
           </div>
         </div>
@@ -684,14 +683,14 @@ const App: React.FC = () => {
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-lg rounded-[40px] shadow-2xl p-10 animate-in zoom-in duration-300">
-            <h3 className="text-2xl font-bold mb-2">Tải xuống</h3>
-            <p className="text-slate-500 text-sm mb-10">Chọn định dạng và phiên bản bạn muốn lưu trữ.</p>
+            <h3 className="text-2xl font-bold mb-2">Download</h3>
+            <p className="text-slate-500 text-sm mb-10">Choose the format and version you want to export.</p>
             <div className="space-y-4">
               <button onClick={() => handleDownloadChoice('project')} className="w-full p-5 bg-blue-600/10 border border-blue-500/20 rounded-3xl text-left hover:bg-blue-600/20 transition-all group">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="block font-bold text-blue-400">Save Project (.sktproject)</span>
-                    <span className="text-[11px] text-slate-500">Lưu toàn bộ trạng thái, preset và text để làm việc tiếp.</span>
+                    <span className="text-[11px] text-slate-500">Save full project state, presets, and text for later editing.</span>
                   </div>
                   <span className="text-blue-500 group-hover:translate-x-1 transition-transform">{ICONS.Next}</span>
                 </div>
@@ -700,15 +699,15 @@ const App: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => handleDownloadChoice('srt-tran')} className="p-6 bg-emerald-600/10 border border-emerald-500/20 rounded-3xl text-left hover:bg-emerald-600/20 transition-all group">
                   <span className="block font-bold text-emerald-400">Export Translated SRT</span>
-                  <span className="text-[10px] text-slate-500">Bản dịch Tiếng Việt</span>
+                  <span className="text-[10px] text-slate-500">Translated Vietnamese version</span>
                 </button>
                 <button onClick={() => handleDownloadChoice('srt-orig')} className="p-6 bg-slate-800 border border-slate-700 rounded-3xl text-left hover:bg-slate-700 transition-all group">
                   <span className="block font-bold text-slate-400">Export Original SRT</span>
-                  <span className="text-[10px] text-slate-500">Bản gốc Tiếng Trung</span>
+                  <span className="text-[10px] text-slate-500">Original Chinese version</span>
                 </button>
               </div>
             </div>
-            <button onClick={() => setShowExportModal(false)} className="w-full mt-8 py-4 text-slate-500 font-bold hover:text-slate-300">Đóng</button>
+            <button onClick={() => setShowExportModal(false)} className="w-full mt-8 py-4 text-slate-500 font-bold hover:text-slate-300">Close</button>
           </div>
         </div>
       )}
@@ -735,11 +734,11 @@ const App: React.FC = () => {
         <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
             <h1 className="text-4xl font-bold text-slate-100 mb-2 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-12">Dịch và tối ưu phụ đề chuyên nghiệp</p>
+            <p className="text-slate-400 mb-12">Professional subtitle translation and optimization.</p>
             <label className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
               <input type="file" accept=".srt,.sktproject" className="hidden" onChange={handleFileUpload} />
               <div className="p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6">{ICONS.Upload}</div>
-              <p className="text-xl font-bold text-slate-200">Kéo thả file SRT/SKTPROJECT</p>
+              <p className="text-xl font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
             </label>
           </div>
         </div>
@@ -772,15 +771,22 @@ const App: React.FC = () => {
             />
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">
-                <div className="flex justify-between mb-1.5"><span className="text-[10px] font-bold text-blue-400">{translationState.customText || `Đang xử lý: ${translationState.processed}/${translationState.total}`}</span><span>{progress}%</span></div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${progress}%` }}></div></div>
+                <div className="flex justify-between mb-1.5">
+                  <span className="text-[10px] font-bold text-blue-400">
+                    {translationState.customText || `Processing: ${translationState.processed}/${translationState.total}`}
+                  </span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500" style={{ width: `${progress}%` }}></div>
+                </div>
               </div>
             )}
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between">
               <div className="flex gap-2">
                 {translationState.status === 'running' ? 
                   <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Task</button> : 
-                  <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Dịch Toàn Bộ</button>
+                  <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Translate All</button>
                 }
                 <button 
                   onClick={handleAiOptimize} 
@@ -789,10 +795,10 @@ const App: React.FC = () => {
                     settings.optimizationMode === 'aggressive' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-200'
                   }`}
                 >
-                  AI Tối Ưu {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+                  AI Optimize {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
                 </button>
               </div>
-              <button onClick={() => setShowExportModal(true)} className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20">{ICONS.Export} Tải Xuống</button>
+              <button onClick={() => setShowExportModal(true)} className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20">{ICONS.Export} Export</button>
             </div>
           </div>
           <div className="w-80 border-l border-slate-800 bg-slate-900">
@@ -814,7 +820,7 @@ const App: React.FC = () => {
               <div className="space-y-6">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Chọn Model Gemini
+                    Select Gemini model
                   </label>
                   <select 
                     id="ai-model-select"
@@ -837,7 +843,7 @@ const App: React.FC = () => {
                   <input
                     id="ai-api-key-input"
                     type="text"
-                    placeholder="Nhập Gemini API Key của bạn"
+                    placeholder="Enter your Gemini API Key"
                     value={settings.apiKey || ''}
                     onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
                     className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
@@ -852,10 +858,10 @@ const App: React.FC = () => {
                     onClick={() => setShowApiKey(prev => !prev)}
                     className="absolute right-3 top-9 text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-widest"
                   >
-                    {showApiKey ? 'Ẩn' : 'Hiện'}
+                    {showApiKey ? 'Hide' : 'Show'}
                   </button>
                   <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                    Khoá này được lưu cục bộ trong trình duyệt (localStorage) và không được gửi ra ngoài trừ khi gọi trực tiếp tới API của Google.
+                    This key is stored locally in your browser (localStorage) and is only sent directly to Google APIs when making requests.
                   </p>
                 </div>
 
@@ -887,22 +893,22 @@ const App: React.FC = () => {
                       
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">Số yêu cầu (Req):</span>
+                          <span className="text-slate-500">Number of requests:</span>
                           <span className="font-bold text-slate-200">{stats.requests}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-500">Tổng Tokens:</span>
+                          <span className="text-slate-500">Total tokens:</span>
                           <span className="font-bold text-slate-200">{stats.tokens.toLocaleString()}</span>
                         </div>
                         
                         {key === 'Translate' && (
                           <div className="pt-4 mt-4 border-t border-slate-700/50 space-y-3">
                             <div className="flex justify-between text-sm">
-                              <span className="text-slate-500">Số segment đã dịch:</span>
+                              <span className="text-slate-500">Translated segments:</span>
                               <span className="font-bold text-emerald-400">{segCount}</span>
                             </div>
                             <div className="flex justify-between text-sm">
-                              <span className="text-slate-500">Token TB/segment:</span>
+                              <span className="text-slate-500">Average tokens / segment:</span>
                               <span className="font-bold text-blue-400">{avgTkn}</span>
                             </div>
                           </div>
@@ -912,7 +918,7 @@ const App: React.FC = () => {
                   );
                 })}
               </div>
-              <p className="text-[10px] text-slate-500 mt-6 italic">Dữ liệu Dashboard là Session-based. Reset khi Clear Project hoặc nạp file mới.</p>
+              <p className="text-[10px] text-slate-500 mt-6 italic">Dashboard data is session-based and resets when you clear the project or upload a new file.</p>
             </section>
           </div>
         </div>

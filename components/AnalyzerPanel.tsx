@@ -150,8 +150,8 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             </ResponsiveContainer>
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-              <span className="text-xs text-slate-500 font-medium italic block mb-2">Không có dữ liệu CPS để hiển thị.</span>
-              <p className="text-[10px] text-slate-600">Phân tích yêu cầu có nội dung văn bản.</p>
+              <span className="text-xs text-slate-500 font-medium italic block mb-2">No CPS data available to display.</span>
+              <p className="text-[10px] text-slate-600">Run an analysis on a project with text content to see CPS distribution.</p>
             </div>
           )}
         </div>
@@ -228,7 +228,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-rose-400">{data.tooFastLines} segments too fast</p>
-              <p className="text-[10px] text-rose-400/60 leading-normal">CPS vượt ngưỡng {criticalThreshold}. Độc giả có thể gặp khó khăn khi theo dõi.</p>
+              <p className="text-[10px] text-rose-400/60 leading-normal">CPS is above {criticalThreshold}. Viewers may struggle to read in time.</p>
             </div>
           </div>
         )}
@@ -237,7 +237,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
             <div>
               <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
-              <p className="text-[10px] text-amber-400/60 leading-normal">Vượt quá 2 dòng. Độc giả có thể gặp khó khăn khi đọc nhanh.</p>
+              <p className="text-[10px] text-amber-400/60 leading-normal">More than 2 lines. Viewers may find it hard to read quickly.</p>
             </div>
           </div>
         )}

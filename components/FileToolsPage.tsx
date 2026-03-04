@@ -26,7 +26,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
             {ICONS.Split}
           </div>
           <h2 className="text-2xl font-bold text-slate-200">No Project Loaded</h2>
-          <p className="text-slate-500">Vui lòng upload file SRT trước khi sử dụng File Tools.</p>
+          <p className="text-slate-500">Please upload an SRT file before using File Tools.</p>
         </div>
       </div>
     );
@@ -68,16 +68,16 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                   {ICONS.Split}
                 </div>
                 <div className="max-w-md mx-auto">
-                  <h3 className="text-lg font-bold text-slate-300">Chưa có file được chia</h3>
+                  <h3 className="text-lg font-bold text-slate-300">No split files yet</h3>
                   <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-                    Sử dụng công cụ Split để chia file thành các phần nhỏ hơn theo thời lượng hoặc số dòng.
+                    Use the Split tool to divide the file into smaller parts by duration or line count.
                   </p>
                 </div>
                 <button 
                   onClick={() => setShowSplitConfig(true)}
                   className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
                 >
-                  Bắt đầu chia file
+                  Start splitting
                 </button>
               </div>
             ) : (
@@ -117,7 +117,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                         onClick={() => props.onLoadGenerated(file)}
                         className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
                       >
-                        Nạp Editor
+                        Load into Editor
                       </button>
                       <button 
                         onClick={() => props.onDownloadGenerated(file)}

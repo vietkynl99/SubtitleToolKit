@@ -105,13 +105,13 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
               }`}
             >
-              {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+              {allSelected ? 'Deselect all' : 'Select all'}
             </button>
           </div>
           <div className="flex items-center gap-4">
             {selectedIds.size > 0 && (
               <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest animate-in fade-in slide-in-from-right-2">
-                Đã chọn {selectedIds.size} dòng
+                Selected {selectedIds.size} lines
               </span>
             )}
             {isFilterRange && (
@@ -181,7 +181,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onDeleteSegment(seg.id); }}
                     className="ml-2 p-1.5 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
-                    title="Xoá segment"
+                    title="Delete segment"
                    >
                     {ICONS.Delete}
                    </button>
@@ -194,7 +194,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                 <div className="flex-1 p-5 border-b md:border-b-0 md:border-r border-slate-800/50 bg-slate-900/30">
                   <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mb-2">Original (CN)</div>
                   <p className="text-base text-slate-400 leading-relaxed font-medium">
-                    {seg.originalText || <span className="text-slate-700 italic text-sm">Không có text gốc</span>}
+                    {seg.originalText || <span className="text-slate-700 italic text-sm">No original text</span>}
                   </p>
                 </div>
 
@@ -202,11 +202,11 @@ const SegmentList: React.FC<SegmentListProps> = ({
                 <div className="flex-1 p-5 bg-slate-900/10">
                   <div className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest mb-2">Translation (VN)</div>
                   
-                  {seg.isProcessing && !seg.translatedText ? (
+                    {seg.isProcessing && !seg.translatedText ? (
                     <div className="space-y-3 animate-pulse">
                       <div className="text-sm font-bold text-slate-500 flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-slate-600 border-t-slate-400 rounded-full animate-spin" />
-                        ĐANG XỬ LÝ...
+                          PROCESSING...
                       </div>
                       <div className="h-4 bg-slate-800 rounded-full w-3/4" />
                       <div className="h-4 bg-slate-800 rounded-full w-1/2" />
@@ -214,7 +214,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   ) : (
                     <textarea
                       className={`w-full bg-transparent border-none outline-none resize-none text-base font-semibold leading-relaxed placeholder:text-slate-700 placeholder:italic text-blue-100`}
-                      placeholder="Chưa có bản dịch..."
+                      placeholder="No translation yet..."
                       rows={Math.max(2, (seg.translatedText || '').split('\n').length)}
                       value={seg.translatedText || ''}
                       onChange={(e) => onUpdateText(seg.id, e.target.value)}
@@ -227,7 +227,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
         })}
         {segments.length === 0 && (
           <div className="p-12 text-center border-2 border-dashed border-slate-800 rounded-3xl">
-            <p className="text-sm text-slate-500 italic">Không có segment nào phù hợp bộ lọc.</p>
+            <p className="text-sm text-slate-500 italic">No segments match the current filter.</p>
           </div>
         )}
       </div>
