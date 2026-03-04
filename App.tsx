@@ -808,8 +808,8 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 max-w-4xl overflow-y-auto no-scrollbar pb-32">
-          <div className="space-y-10">
+        <div className="flex-1 p-12 overflow-y-auto pb-32">
+          <div className="max-w-4xl mx-auto space-y-10">
             {/* AI Mode (v3.1.0) - Dropdown Selection */}
             <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
               <div className="flex items-center gap-3 mb-8">
