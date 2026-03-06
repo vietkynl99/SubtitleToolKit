@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 'recharts';
 import { AnalysisResult, Severity, SubtitleSegment } from '../types';
 import { ICONS } from '../constants';
@@ -29,6 +29,25 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   onLoadGenerated,
   onDeleteGenerated
 }) => {
+  const chartWrapRef = useRef<HTMLDivElement | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!chartWrapRef.current) return;
+    const node = chartWrapRef.current;
+    const updateSize = () => {
+      const rect = node.getBoundingClientRect();
+      setChartSize({
+        width: Math.max(0, Math.floor(rect.width)),
+        height: Math.max(0, Math.floor(rect.height))
+      });
+    };
+    updateSize();
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const getBucketColor = (mid: number) => {
     if (mid > criticalThreshold) return '#f43f5e'; // rose-500
     if (mid >= safeThreshold) return '#f59e0b'; // amber-500
@@ -90,9 +109,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
       {/* CPS Histogram Chart */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Detailed CPS Distribution</h3>
-        <div className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 relative">
+        <div ref={chartWrapRef} className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 relative">
           {formattedHistogramData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            chartSize.width > 0 && chartSize.height > 0 ? (
+            <ResponsiveContainer width={chartSize.width} height={chartSize.height} minWidth={0}>
               <BarChart data={formattedHistogramData} margin={{ top: 5, right: 5, bottom: 20, left: -25 }}>
                 <XAxis 
                   dataKey="range" 
@@ -140,6 +160,11 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-500">
+                Initializing chart...
+              </div>
+            )
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
               <span className="text-xs text-slate-500 font-medium italic block mb-2">No CPS data available to display.</span>

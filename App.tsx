@@ -839,7 +839,7 @@ const App: React.FC = () => {
 
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
             <h3 className="text-xl font-bold mb-3">Clear current project?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -851,7 +851,7 @@ const App: React.FC = () => {
 
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
             <h3 className="text-xl font-bold mb-3">Upload a new file?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -879,11 +879,10 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-lg rounded-[32px] shadow-2xl p-8 animate-in zoom-in duration-300">
-            <h3 className="text-2xl font-bold mb-2">Download</h3>
-            <p className="text-slate-500 text-sm mb-10">Choose the format and version you want to export.</p>
-            <div className="space-y-4">
-              <button onClick={() => handleDownloadChoice('project')} className="w-full p-5 bg-blue-600/10 border border-blue-500/20 rounded-3xl text-left hover:bg-blue-600/20 transition-all group">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-[32px] shadow-2xl p-6 md:p-7 animate-in zoom-in duration-300">
+            <h3 className="text-2xl font-bold mb-4">Download</h3>
+            <div className="space-y-3">
+              <button onClick={() => handleDownloadChoice('project')} className="w-full p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl text-left hover:bg-blue-600/20 transition-all group">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="block font-bold text-blue-400">Save Project (.sktproject)</span>
@@ -893,23 +892,25 @@ const App: React.FC = () => {
                 </div>
               </button>
               
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => handleDownloadChoice('srt-tran')} className="p-6 bg-emerald-600/10 border border-emerald-500/20 rounded-3xl text-left hover:bg-emerald-600/20 transition-all group">
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => handleDownloadChoice('srt-tran')} className="min-h-[96px] p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between">
                   <span className="block font-bold text-emerald-400">Export Translated SRT</span>
                   <span className="text-[10px] text-slate-500">Translated Vietnamese version</span>
                 </button>
-                <button onClick={() => handleDownloadChoice('srt-orig')} className="p-6 bg-slate-800 border border-slate-700 rounded-3xl text-left hover:bg-slate-700 transition-all group">
+                <button onClick={() => handleDownloadChoice('srt-orig')} className="min-h-[96px] p-5 bg-slate-800 border border-slate-700 rounded-2xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between">
                   <span className="block font-bold text-slate-400">Export Original SRT</span>
                   <span className="text-[10px] text-slate-500">Original Chinese version</span>
                 </button>
               </div>
             </div>
-            <button onClick={() => setShowExportModal(false)} className="w-full mt-8 py-4 text-slate-500 font-bold hover:text-slate-300">Close</button>
+            <div className="mt-4 pt-4 border-t border-slate-800 flex justify-end">
+              <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-slate-200">Close</button>
+            </div>
           </div>
         </div>
       )}
 
-      {status === 'success' && segments.length > 0 && fileName && (
+      {segments.length > 0 && fileName && (
         <div className="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between shrink-0 z-20">
           <div className="flex items-center gap-4 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
@@ -1172,7 +1173,9 @@ const App: React.FC = () => {
               showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
             }`}
           >
-            <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+            {showQualityDashboard && (
+              <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+            )}
           </div>
         </div>
       )}
