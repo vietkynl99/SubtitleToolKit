@@ -16,7 +16,7 @@ import {
   generateExportFileName
 } from './services/subtitleLogic';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search } from 'lucide-react';
+import { Search, CopyCheck, CopyX } from 'lucide-react';
 import { 
   Status, 
   SubtitleSegment, 
@@ -113,6 +113,11 @@ const App: React.FC = () => {
   const [replaceQuery, setReplaceQuery] = useState<string>('');
   const [isStoppingTranslate, setIsStoppingTranslate] = useState<boolean>(false);
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [videoPreviewName, setVideoPreviewName] = useState<string>('');
+  const [videoPanelHeight, setVideoPanelHeight] = useState<number>(220);
+  const [isResizingVideoPanel, setIsResizingVideoPanel] = useState<boolean>(false);
+  const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0);
   const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
   const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
@@ -121,6 +126,10 @@ const App: React.FC = () => {
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const videoResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const editorPaneRef = useRef<HTMLDivElement | null>(null);
   const undoStackRef = useRef<SubtitleSegment[][]>([]);
 
   const showToast = (message: string) => {
@@ -149,6 +158,43 @@ const App: React.FC = () => {
     showToast('Undo applied.');
   }, [cloneSegments]);
 
+  const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    setVideoPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+    setVideoPreviewName(file.name);
+    setVideoCurrentTime(0);
+    const paneHeight = editorPaneRef.current?.clientHeight ?? 440;
+    const maxHeight = Math.max(180, Math.min(window.innerHeight * 0.7, 560));
+    const defaultHalfHeight = Math.round(paneHeight * 0.5);
+    setVideoPanelHeight(Math.max(140, Math.min(maxHeight, defaultHalfHeight)));
+
+    event.target.value = '';
+  };
+
+  const handleClearVideoPreview = () => {
+    setVideoPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setVideoPreviewName('');
+    setVideoCurrentTime(0);
+    setIsResizingVideoPanel(false);
+    videoResizeRef.current = null;
+  };
+
+  const handleStartResizeVideoPanel = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoPreviewUrl) return;
+    videoResizeRef.current = { startY: event.clientY, startHeight: videoPanelHeight };
+    setIsResizingVideoPanel(true);
+    event.preventDefault();
+  };
+
   useEffect(() => {
     if (baseFileName) {
       setFileName(generateExportFileName(baseFileName, editedCount));
@@ -163,6 +209,40 @@ const App: React.FC = () => {
       localStorage.removeItem('subtitle_api_key');
     }
   }, [settings]);
+
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+    };
+  }, [videoPreviewUrl]);
+
+  useEffect(() => {
+    if (!isResizingVideoPanel) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!videoResizeRef.current) return;
+      const { startY, startHeight } = videoResizeRef.current;
+      const delta = startY - event.clientY;
+      const maxHeight = Math.max(180, Math.min(window.innerHeight * 0.7, 560));
+      const nextHeight = Math.max(140, Math.min(maxHeight, startHeight + delta));
+      setVideoPanelHeight(nextHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingVideoPanel(false);
+      videoResizeRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingVideoPanel]);
 
   // Reset pagination when filter changes
   useEffect(() => {
@@ -231,6 +311,42 @@ const App: React.FC = () => {
       return fields.some(field => matcher.test(field));
     });
   }, [translationFilteredSegments, searchQuery, compileSearch]);
+
+  const captionTimeline = useMemo(() => {
+    return segments
+      .map(seg => ({
+        id: seg.id,
+        startSec: timeToSeconds(seg.startTime),
+        endSec: timeToSeconds(seg.endTime),
+        text: (seg.translatedText || seg.originalText || '').trim()
+      }))
+      .filter(seg => seg.text && seg.endSec >= seg.startSec);
+  }, [segments]);
+
+  const activeCaptionLines = useMemo(() => {
+    if (!videoPreviewUrl) return [];
+    const t = videoCurrentTime;
+    return captionTimeline
+      .filter(seg => t >= seg.startSec && t <= seg.endSec + 0.03)
+      .map(seg => seg.text);
+  }, [captionTimeline, videoCurrentTime, videoPreviewUrl]);
+
+  const activeCaptionSegmentId = useMemo(() => {
+    if (!videoPreviewUrl) return null;
+    const t = videoCurrentTime;
+    const active = captionTimeline.find(seg => t >= seg.startSec && t <= seg.endSec + 0.03);
+    return active?.id ?? null;
+  }, [captionTimeline, videoCurrentTime, videoPreviewUrl]);
+
+  useEffect(() => {
+    if (!activeCaptionSegmentId) return;
+    const index = editorSegments.findIndex(seg => seg.id === activeCaptionSegmentId);
+    if (index === -1) return;
+    const targetPage = Math.floor(index / EDITOR_PAGE_SIZE) + 1;
+    if (targetPage !== currentPage) {
+      setCurrentPage(targetPage);
+    }
+  }, [activeCaptionSegmentId, editorSegments, currentPage]);
 
   const handleReplaceNext = useCallback(() => {
     const compiled = compileSearch(searchQuery);
@@ -339,6 +455,7 @@ const App: React.FC = () => {
       const isFind = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f';
       const isReplace = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'h';
       const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey;
+      const isSpaceToggle = !event.ctrlKey && !event.metaKey && !event.altKey && (event.code === 'Space' || event.key === ' ');
       if (isFind) {
         event.preventDefault();
         setShowSearchBox(true);
@@ -354,10 +471,19 @@ const App: React.FC = () => {
         event.preventDefault();
         handleUndoSegments();
       }
+      if (isSpaceToggle && !isTypingTarget && videoPreviewUrl && videoElementRef.current) {
+        event.preventDefault();
+        const video = videoElementRef.current;
+        if (video.paused) {
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      }
     };
     window.addEventListener('keydown', handleFindShortcut);
     return () => window.removeEventListener('keydown', handleFindShortcut);
-  }, [activeTab, segments.length, handleUndoSegments]);
+  }, [activeTab, segments.length, handleUndoSegments, videoPreviewUrl]);
 
   const totalDurationStr = useMemo(() => {
     if (processedSegments.length === 0) return '0m 0s';
@@ -382,6 +508,15 @@ const App: React.FC = () => {
       return next;
     });
   };
+
+  const handleSeekToSegmentStart = useCallback((segmentId: number) => {
+    if (!videoPreviewUrl || !videoElementRef.current) return;
+    const target = segments.find(seg => seg.id === segmentId);
+    if (!target) return;
+    const startSec = Math.max(0, timeToSeconds(target.startTime));
+    videoElementRef.current.currentTime = startSec;
+    setVideoCurrentTime(startSec);
+  }, [segments, videoPreviewUrl]);
 
   const handleSelectAll = () => {
     if (selectedIds.size === editorSegments.length) {
@@ -766,7 +901,7 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadChoice = (type: 'project' | 'srt-orig' | 'srt-tran') => {
+  const handleDownloadChoice = (type: 'project' | 'srt-orig' | 'srt-tran' | 'preset') => {
     setShowExportModal(false);
     if (type === 'project') {
       const json = generateSktProject(segments, baseFileName, translationPreset, projectCreatedAt || undefined);
@@ -784,6 +919,13 @@ const App: React.FC = () => {
       const name = `[Translated]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
       showToast("Translated SRT exported.");
+    } else if (type === 'preset') {
+      if (!translationPreset) {
+        showToast("No translation preset to export.");
+        return;
+      }
+      handleExportPreset();
+      showToast("Preset exported.");
     }
   };
 
@@ -854,7 +996,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress} hasProject={segments.length > 0} onClearProject={handleClearProjectRequest}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress} hasProject={segments.length > 0} onClearProject={handleClearProjectRequest} onExportProject={() => setShowExportModal(true)}>
       {toast.visible && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 border border-slate-700 px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
           <p className="text-sm font-bold text-blue-400 flex items-center gap-2">{ICONS.Success} {toast.message}</p>
@@ -903,27 +1045,38 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-[32px] shadow-2xl p-6 md:p-7 animate-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-[28px] shadow-2xl p-5 md:p-6 animate-in zoom-in duration-300">
             <h3 className="text-2xl font-bold mb-4">Download</h3>
             <div className="space-y-3">
-              <button onClick={() => handleDownloadChoice('project')} className="w-full p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl text-left hover:bg-blue-600/20 transition-all group">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="block font-bold text-blue-400">Save Project (.sktproject)</span>
-                    <span className="text-[11px] text-slate-500">Save full project state, presets, and text for later editing.</span>
-                  </div>
-                  <span className="text-blue-500 group-hover:translate-x-1 transition-transform">{ICONS.Next}</span>
-                </div>
-              </button>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => handleDownloadChoice('srt-tran')} className="min-h-[96px] p-5 bg-emerald-600/10 border border-emerald-500/20 rounded-2xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between">
-                  <span className="block font-bold text-emerald-400">Export Translated SRT</span>
-                  <span className="text-[10px] text-slate-500">Translated Vietnamese version</span>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => handleDownloadChoice('project')}
+                  className="w-full min-h-[74px] p-3.5 bg-blue-600/10 border border-blue-500/20 rounded-xl text-left hover:bg-blue-600/20 transition-all group flex flex-col justify-between"
+                >
+                  <span className="block font-bold text-blue-400">Save Project (.sktproject)</span>
+                  <span className="text-[10px] text-slate-500">Save full project state for later editing.</span>
                 </button>
-                <button onClick={() => handleDownloadChoice('srt-orig')} className="min-h-[96px] p-5 bg-slate-800 border border-slate-700 rounded-2xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between">
+                <button
+                  onClick={() => handleDownloadChoice('preset')}
+                  disabled={!translationPreset}
+                  className="w-full min-h-[74px] p-3.5 bg-cyan-600/10 border border-cyan-500/20 rounded-xl text-left hover:bg-cyan-600/20 transition-all group flex flex-col justify-between disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-600/10"
+                >
+                  <span className="block font-bold text-cyan-400">Export Preset (.json)</span>
+                  <span className="text-[10px] text-slate-500">Translation style DNA preset.</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadChoice('srt-tran')}
+                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between"
+                >
+                  <span className="block font-bold text-emerald-400">Export Translated SRT</span>
+                  <span className="text-[10px] text-slate-500">Translated Vietnamese version.</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadChoice('srt-orig')}
+                  className="w-full min-h-[74px] p-3.5 bg-slate-800 border border-slate-700 rounded-xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between"
+                >
                   <span className="block font-bold text-slate-400">Export Original SRT</span>
-                  <span className="text-[10px] text-slate-500">Original Chinese version</span>
+                  <span className="text-[10px] text-slate-500">Original Chinese version.</span>
                 </button>
               </div>
             </div>
@@ -967,7 +1120,7 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'translation-style' && (
-        <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onExport={handleExportPreset} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
+        <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
       )}
 
       {activeTab === 'file-tools' && (
@@ -990,19 +1143,23 @@ const App: React.FC = () => {
               <span className="block w-4 h-[2px] bg-current rounded-full"></span>
             </span>
           </button>
-          <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+          <div ref={editorPaneRef} className="flex-1 flex flex-col overflow-hidden bg-slate-950">
             <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
                   <button
                     onClick={handleSelectAll}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                    title={editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect all' : 'Select all'}
+                    aria-label={editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect all segments' : 'Select all segments'}
+                    className={`p-1.5 rounded-lg border transition-colors ${
                       editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id))
                         ? 'bg-blue-600 border-blue-500 text-white'
                         : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
                     }`}
                   >
-                    {editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect All' : 'Select All'}
+                    {editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id))
+                      ? <CopyX size={16} />
+                      : <CopyCheck size={16} />}
                   </button>
 
                   <select
@@ -1068,9 +1225,20 @@ const App: React.FC = () => {
                     <span>{isOptimizing ? 'Optimizing...' : 'Optimize'}</span>
                   </button>
 
-                  <button onClick={() => setShowExportModal(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold">
-                    <span className="shrink-0">{ICONS.Export}</span>
-                    <span>Export</span>
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleVideoFileChange}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[11px] font-bold hover:bg-slate-700 transition-colors"
+                  >
+                    <span className="shrink-0">{ICONS.Upload}</span>
+                    <span>{videoPreviewUrl ? 'Change Preview Video' : 'Load Preview Video'}</span>
                   </button>
                 </div>
 
@@ -1206,12 +1374,69 @@ const App: React.FC = () => {
               onToggleSelect={handleToggleSelect} 
               onUpdateText={updateSegmentText} 
               onDeleteSegment={deleteSegment}
+              onSegmentClick={handleSeekToSegmentStart}
               currentPage={currentPage}
               searchQuery={searchQuery}
               searchCaseSensitive={searchCaseSensitive}
               searchWholeWord={searchWholeWord}
               searchRegexMode={searchRegexMode}
-            />          </div>
+              activeSegmentId={activeCaptionSegmentId}
+            />
+            {videoPreviewUrl && (
+              <>
+                <div
+                  className={`h-2 shrink-0 border-t border-slate-800 bg-slate-900/70 flex items-center justify-center ${isResizingVideoPanel ? 'cursor-row-resize' : 'cursor-ns-resize'}`}
+                  onMouseDown={handleStartResizeVideoPanel}
+                  role="separator"
+                  aria-label="Resize video preview"
+                  aria-orientation="horizontal"
+                >
+                  <div className="w-10 h-1 rounded-full bg-slate-600" />
+                </div>
+                <div className="shrink-0 border-t border-slate-800 bg-slate-950/80 p-2" style={{ height: `${videoPanelHeight}px` }}>
+                  <div className="h-full rounded-xl border border-slate-800 overflow-hidden flex flex-col">
+                    <div className="px-3 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-bold text-slate-300 truncate">{videoPreviewName || 'Video Preview'}</span>
+                      <button
+                        type="button"
+                        onClick={handleClearVideoPreview}
+                        className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="relative flex-1 bg-black overflow-hidden">
+                      <video
+                        ref={videoElementRef}
+                        src={videoPreviewUrl}
+                        controls
+                        className="absolute inset-0 w-full h-full object-contain"
+                        style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}
+                        onTimeUpdate={(e) => setVideoCurrentTime(e.currentTarget.currentTime)}
+                        onSeeked={(e) => setVideoCurrentTime(e.currentTarget.currentTime)}
+                        onLoadedMetadata={() => setVideoCurrentTime(0)}
+                      />
+                      {activeCaptionLines.length > 0 && (
+                        <div className="absolute inset-x-0 bottom-12 px-4 pointer-events-none">
+                          <div className="mx-auto max-w-4xl space-y-1 text-center">
+                            {activeCaptionLines.map((line, idx) => (
+                              <p
+                                key={`${idx}-${line.slice(0, 20)}`}
+                                className="text-white text-[20px] font-semibold leading-tight whitespace-pre-line"
+                                style={{ textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.9)' }}
+                              >
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <div
             className={`bg-slate-900 transition-all duration-300 overflow-hidden ${
               showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
@@ -1345,6 +1570,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
-
-

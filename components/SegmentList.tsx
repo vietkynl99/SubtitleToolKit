@@ -8,11 +8,13 @@ interface SegmentListProps {
   onToggleSelect: (id: number) => void;
   onUpdateText: (id: number, text: string) => void;
   onDeleteSegment: (id: number) => void;
+  onSegmentClick?: (id: number) => void;
   currentPage: number;
   searchQuery: string;
   searchCaseSensitive: boolean;
   searchWholeWord: boolean;
   searchRegexMode: boolean;
+  activeSegmentId?: number | null;
 }
 
 const PAGE_SIZE = 30;
@@ -23,14 +25,17 @@ const SegmentList: React.FC<SegmentListProps> = ({
   onToggleSelect,
   onUpdateText,
   onDeleteSegment,
+  onSegmentClick,
   currentPage,
   searchQuery,
   searchCaseSensitive,
   searchWholeWord,
-  searchRegexMode
+  searchRegexMode,
+  activeSegmentId
 }) => {
   const [editingTranslationId, setEditingTranslationId] = React.useState<number | null>(null);
   const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const segmentRowRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
 
   const getSeverityClasses = (severity: Severity) => {
     switch (severity) {
@@ -133,6 +138,16 @@ const SegmentList: React.FC<SegmentListProps> = ({
     });
   }, [pagedSegments, editingTranslationId, searchQuery]);
 
+  React.useEffect(() => {
+    if (!activeSegmentId) return;
+    const existsOnPage = pagedSegments.some(seg => seg.id === activeSegmentId);
+    if (!existsOnPage) return;
+    const row = segmentRowRefs.current[activeSegmentId];
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.focus({ preventScroll: true });
+  }, [activeSegmentId, pagedSegments, currentPage]);
+
   const idSearchQuery = searchQuery.trim().startsWith('#') ? searchQuery.trim().slice(1).trim() : '';
 
   return (
@@ -152,20 +167,29 @@ const SegmentList: React.FC<SegmentListProps> = ({
             {pagedSegments.map((seg) => {
               const colors = getSeverityClasses(seg.severity);
               const isSelected = selectedIds.has(seg.id);
+              const isActiveByVideo = activeSegmentId === seg.id;
 
               return (
                 <div
                   key={seg.id}
-                  className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all ${
-                    isSelected
-                      ? 'border-blue-500 ring-1 ring-blue-500/20'
-                      : 'border-slate-800 hover:border-slate-700'
+                  ref={(el) => {
+                    segmentRowRefs.current[seg.id] = el;
+                  }}
+                  tabIndex={-1}
+                  onClick={() => onSegmentClick?.(seg.id)}
+                  className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all outline-none ${
+                    isActiveByVideo
+                      ? 'border-amber-400 ring-2 ring-amber-400/30 bg-amber-500/5'
+                      : isSelected
+                        ? 'border-blue-500 ring-1 ring-blue-500/20'
+                        : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="pt-1 flex justify-center">
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={() => onToggleSelect(seg.id)}
                       className="w-4 h-4 bg-slate-800 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
                     />
@@ -207,7 +231,10 @@ const SegmentList: React.FC<SegmentListProps> = ({
                         return (
                           <button
                             type="button"
-                            onClick={() => setEditingTranslationId(seg.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTranslationId(seg.id);
+                            }}
                             className="w-full text-left bg-transparent border-none p-0"
                             title="Click to edit translation"
                           >
@@ -237,6 +264,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                             }}
                             autoFocus={editingTranslationId === seg.id}
                             onBlur={() => setEditingTranslationId(null)}
+                            onClick={(e) => e.stopPropagation()}
                           />
                           {searchQuery.trim() && (seg.translatedText || '').toLowerCase().includes(searchQuery.toLowerCase()) && (
                             <div className="mt-1 text-[10px] text-slate-400">

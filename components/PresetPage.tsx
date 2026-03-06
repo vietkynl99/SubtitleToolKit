@@ -5,7 +5,6 @@ import { ICONS } from '../constants';
 interface PresetPageProps {
   preset: TranslationPreset | null;
   onAnalyze: (input: string) => void;
-  onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onUpdatePreset: (newPreset: TranslationPreset) => void;
   isLoading: boolean;
@@ -31,7 +30,6 @@ const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onR
 const PresetPage: React.FC<PresetPageProps> = ({
   preset,
   onAnalyze,
-  onExport,
   onImport,
   onUpdatePreset,
   isLoading,
@@ -118,13 +116,6 @@ const PresetPage: React.FC<PresetPageProps> = ({
             </div>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={onExport}
-              disabled={isLoading || !preset}
-              className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-widest rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {ICONS.Export} Export
-            </button>
             <label className={`flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20 ${isLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
               {ICONS.Upload} Import
               {!isLoading && <input type="file" accept=".json" className="hidden" onChange={onImport} />}
@@ -253,13 +244,6 @@ const PresetPage: React.FC<PresetPageProps> = ({
           </div>
         </div>
 
-        {!isLoading && preset && (
-          <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 text-center animate-in slide-in-from-bottom duration-500">
-            <p className="text-[12px] text-slate-500 font-medium italic opacity-80">
-              DNA v3.1.0 provides a contextual baseline for the AI. Title/Summary will be used as a context reference for every translation batch.
-            </p>
-          </div>
-        )}
       </div>
 
       <style>{`

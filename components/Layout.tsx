@@ -8,9 +8,10 @@ interface LayoutProps {
   progress: number;
   hasProject: boolean;
   onClearProject: () => void;
+  onExportProject: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, progress, hasProject, onClearProject }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, progress, hasProject, onClearProject, onExportProject }) => {
   // Requirement 2: Mandatory Flat Menu Order v1.7.0
   const menuItems = [
     { id: 'upload', label: 'Upload', icon: ICONS.Upload },
@@ -57,13 +58,22 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
         <div className="p-3 border-t border-slate-800 space-y-3">
           {/* Requirement 3: Clear Current Project button above Progress Bar */}
           {hasProject && (
-            <button 
-              onClick={onClearProject}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all border border-rose-500/20 group"
-            >
-              <span className="transition-transform group-hover:rotate-90">{ICONS.Delete}</span>
-              <span className="hidden md:block">Clear Project</span>
-            </button>
+            <>
+              <button 
+                onClick={onClearProject}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all border border-rose-500/20 group"
+              >
+                <span className="transition-transform group-hover:rotate-90">{ICONS.Delete}</span>
+                <span className="hidden md:block">Clear Project</span>
+              </button>
+              <button
+                onClick={onExportProject}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white text-[11px] font-bold uppercase tracking-widest rounded-xl transition-all border border-emerald-500/20"
+              >
+                <span>{ICONS.Export}</span>
+                <span className="hidden md:block">Export</span>
+              </button>
+            </>
           )}
 
         </div>
