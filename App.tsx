@@ -1238,7 +1238,7 @@ const App: React.FC = () => {
                     className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[11px] font-bold hover:bg-slate-700 transition-colors"
                   >
                     <span className="shrink-0">{ICONS.Upload}</span>
-                    <span>{videoPreviewUrl ? 'Change Preview Video' : 'Load Preview Video'}</span>
+                    <span>Preview</span>
                   </button>
                 </div>
 
