@@ -1033,12 +1033,13 @@ const App: React.FC = () => {
                       <button
                         onClick={handleTranslate}
                         disabled
-                        className="relative overflow-hidden px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-80"
+                        className="relative overflow-hidden inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-80"
                       >
                         <span
                           className="absolute left-0 top-0 h-full bg-blue-500/30 pointer-events-none"
                           style={{ width: `${progress}%` }}
                         />
+                        <span className="relative z-10 shrink-0">{ICONS.AI}</span>
                         <span className="relative z-10">
                           Translating {translationState.processed}/{translationState.total} ({progress}%)
                         </span>
@@ -1052,17 +1053,19 @@ const App: React.FC = () => {
                       </button>
                     </>
                   ) : (
-                    <button onClick={handleTranslate} disabled={status === 'processing'} className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-60 transition-colors hover:bg-blue-600/70">
-                      Translate All
+                    <button onClick={handleTranslate} disabled={status === 'processing'} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-60 transition-colors hover:bg-blue-600/70">
+                      <span className="shrink-0">{ICONS.AI}</span>
+                      <span>Translate All</span>
                     </button>
                   )}
 
                   <button
                     onClick={handleAiOptimize}
                     disabled={status === 'processing' || selectedIds.size === 0 || isOptimizing}
-                    className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-600/70"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-600/70"
                   >
-                    {isOptimizing ? 'Optimizing...' : 'Optimize'}
+                    <span className="shrink-0">{ICONS.AI}</span>
+                    <span>{isOptimizing ? 'Optimizing...' : 'Optimize'}</span>
                   </button>
 
                   <button onClick={() => setShowExportModal(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold">
