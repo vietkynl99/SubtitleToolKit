@@ -14,9 +14,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
   // Requirement 2: Mandatory Flat Menu Order v1.7.0
   const menuItems = [
     { id: 'upload', label: 'Upload', icon: ICONS.Upload },
-    { id: 'translation-style', label: 'Translation Style', icon: ICONS.Fix }, // Independent Menu
-    { id: 'file-tools', label: 'File Tools', icon: ICONS.Split }, // Now just File Tools (Split)
-    { id: 'editor', label: 'Editor', icon: ICONS.File },
+    { id: 'translation-style', label: 'Translation Style', icon: ICONS.Fix, requiresProject: true }, // Independent Menu
+    { id: 'file-tools', label: 'File Tools', icon: ICONS.Split, requiresProject: true }, // Now just File Tools (Split)
+    { id: 'editor', label: 'Editor', icon: ICONS.File, requiresProject: true },
     { id: 'settings', label: 'Settings', icon: ICONS.Settings },
   ];
 
@@ -30,20 +30,27 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
         </div>
         
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                activeTab === item.id 
-                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/5' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              <span className="shrink-0">{item.icon}</span>
-              <span className="hidden md:block font-medium truncate">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            const isDisabled = !!item.requiresProject && !hasProject;
+            return (
+              <button
+                key={item.id}
+                onClick={() => !isDisabled && setActiveTab(item.id)}
+                disabled={isDisabled}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                  activeTab === item.id 
+                  ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/5' 
+                  : isDisabled
+                  ? 'text-slate-600 cursor-not-allowed opacity-50'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`}
+                title={isDisabled ? 'Load a project first' : undefined}
+              >
+                <span className="shrink-0">{item.icon}</span>
+                <span className="hidden md:block font-medium truncate">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* Sidebar Footer Area */}
@@ -59,21 +66,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
             </button>
           )}
 
-          {/* Requirement 4: Global Progress Bar */}
-          {hasProject && progress > 0 && (
-            <div className="animate-in fade-in duration-500">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Progress</span>
-                <span className="text-[10px] text-blue-400 font-bold">{progress}%</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-blue-500 h-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(59,130,246,0.5)]" 
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          )}
         </div>
       </aside>
 

@@ -13,42 +13,30 @@ interface PresetPageProps {
   totalSegments: number;
 }
 
-const SUGGESTED_GENRES = [
-  "Tu tiên", "Tiên hiệp", "Huyền huyễn", "Hệ thống", "Xuyên không", 
-  "Trọng sinh", "Dị giới", "Dị năng", "Thần thoại", "Quỷ dị", 
-  "Huyền nghi", "Mạt thế", "Đô thị", "Tổng tài", "Thương chiến", 
-  "Hắc đạo", "Gia đấu", "Học đường", "Showbiz", "Hành động", 
-  "Chiến đấu", "Sinh tồn", "Báo thù", "Trinh thám", "Kịch tính", 
-  "Hài hước", "Hài hước đen", "Parody", "Châm biếm"
-];
-
-const SUGGESTED_TONES = [
-  "Trang trọng", "Hào hùng", "Huyền ảo", "Bí ẩn", "U ám", 
-  "Lạnh lùng", "Kiêu ngạo", "Thực tế", "Đời thường", "Phóng khoáng", 
-  "Hài hước", "Mỉa mai", "Châm biếm", "Kịch tính", "Nghiêm túc"
-];
-
 const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
-  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 rounded-full text-[13px] font-medium text-blue-400 group animate-in zoom-in duration-200">
-    {label}
-    <button 
+  <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-[12px] font-semibold text-slate-200 animate-in zoom-in duration-200">
+    <span className="truncate max-w-[180px]">{label}</span>
+    <button
       onClick={onRemove}
-      className="text-blue-500/50 hover:text-rose-500 transition-colors"
+      className="text-slate-500 hover:text-rose-400 transition-colors leading-none"
+      title="Remove tag"
+      aria-label="Remove tag"
+      type="button"
     >
-      ✕
+      x
     </button>
   </span>
 );
 
-const PresetPage: React.FC<PresetPageProps> = ({ 
-  preset, 
-  onAnalyze, 
-  onExport, 
-  onImport, 
+const PresetPage: React.FC<PresetPageProps> = ({
+  preset,
+  onAnalyze,
+  onExport,
+  onImport,
   onUpdatePreset,
-  isLoading, 
-  fileName, 
-  totalSegments 
+  isLoading,
+  fileName,
+  totalSegments
 }) => {
   const [titleInput, setTitleInput] = useState('');
   const [genreInput, setGenreInput] = useState('');
@@ -61,7 +49,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
     }
   }, [preset]);
 
-  const handleAddTag = (type: 'genres' | 'tone', value: string, taxonomy: string[]) => {
+  const handleAddTag = (type: 'genres' | 'tone', value: string) => {
     if (!preset) return;
     const cleanValue = value.trim();
     if (!cleanValue) return;
@@ -72,14 +60,8 @@ const PresetPage: React.FC<PresetPageProps> = ({
     }
 
     if (preset[type].includes(cleanValue)) {
-      setGenreInput('');
-      setToneInput('');
-      return;
-    }
-
-    // Taxonomy check
-    if (!taxonomy.includes(cleanValue)) {
-      setWarning(`"${cleanValue}" is not in the taxonomy. Please choose from the suggestions.`);
+      if (type === 'genres') setGenreInput('');
+      else setToneInput('');
       return;
     }
 
@@ -87,7 +69,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
       ...preset,
       [type]: [...preset[type], cleanValue]
     });
-    
+
     if (type === 'genres') setGenreInput('');
     else setToneInput('');
     setWarning(null);
@@ -128,17 +110,15 @@ const PresetPage: React.FC<PresetPageProps> = ({
   return (
     <div className="flex-1 p-8 overflow-y-auto bg-slate-950 no-scrollbar pb-24">
       <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-        {/* Page Header Area */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-blue-600/10 text-blue-500 rounded-xl">{ICONS.Fix}</div>
             <div>
               <h1 className="text-[24px] font-semibold text-slate-100">Translation Style (DNA)</h1>
-              <p className="text-[12px] text-slate-500 opacity-60 font-medium uppercase tracking-widest mt-0.5">Style Configuration v3.1.0</p>
             </div>
           </div>
           <div className="flex gap-3">
-             <button 
+            <button
               onClick={onExport}
               disabled={isLoading || !preset}
               className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-widest rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed"
@@ -153,21 +133,20 @@ const PresetPage: React.FC<PresetPageProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
-          {/* Card: REFERENCE INPUT */}
           <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl flex flex-col relative overflow-hidden">
             <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Title / Summary
             </h3>
-            
+
             <div className="space-y-4 flex-1 flex flex-col">
-              <textarea 
+              <textarea
                 placeholder="Enter a title or plot summary for the AI to analyze the style..."
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 disabled={isLoading}
                 className="flex-1 w-full bg-slate-800 border border-slate-700 focus:border-blue-500/50 outline-none p-5 rounded-2xl text-slate-100 text-base leading-relaxed resize-none font-medium transition-colors"
               />
-              <button 
+              <button
                 onClick={handleAnalyzeClick}
                 disabled={isLoading || !titleInput.trim()}
                 className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3"
@@ -182,16 +161,11 @@ const PresetPage: React.FC<PresetPageProps> = ({
             </div>
 
             <div className="pt-6 border-t border-slate-800/50 flex items-center justify-between">
-              <div className="text-[12px] text-slate-500 opacity-50 font-medium">
-                 {totalSegments} segments analyzed
-              </div>
-              <div className="text-[12px] text-slate-500 opacity-50 font-medium truncate max-w-[200px]">
-                {fileName}
-              </div>
+              <div className="text-[12px] text-slate-500 opacity-50 font-medium">{totalSegments} segments analyzed</div>
+              <div className="text-[12px] text-slate-500 opacity-50 font-medium truncate max-w-[200px]">{fileName}</div>
             </div>
           </div>
 
-          {/* Card: STYLE CONFIGS */}
           <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between">
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
@@ -207,83 +181,57 @@ const PresetPage: React.FC<PresetPageProps> = ({
             {isLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-300">
                 <div className="w-8 h-8 border-3 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                  <div className="text-[13px] font-medium text-slate-400">AI is analyzing style DNA...</div>
+                <div className="text-[13px] font-medium text-slate-400">AI is analyzing style DNA...</div>
               </div>
             ) : preset ? (
               <div className="space-y-8 flex-1 animate-in fade-in duration-500">
-                {/* Genres */}
                 <div className="space-y-3">
                   <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Genres (Max 5)</div>
-                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 bg-slate-800/50 rounded-2xl border border-slate-800 focus-within:border-blue-500/30 transition-colors">
+                  <div className="flex flex-wrap gap-2 min-h-[44px] p-3 bg-slate-900 border border-slate-700 rounded-2xl focus-within:border-blue-500/40 transition-colors">
                     {preset.genres.map((g, idx) => (
                       <TagChip key={g} label={g} onRemove={() => handleRemoveTag('genres', idx)} />
                     ))}
-                    <input 
+                    <input
                       type="text"
-                      placeholder={preset.genres.length < 5 ? "Add genre..." : ""}
+                      placeholder={preset.genres.length < 5 ? 'Add genre and press Enter...' : ''}
                       value={genreInput}
                       onChange={(e) => setGenreInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput, SUGGESTED_GENRES)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput)}
                       disabled={preset.genres.length >= 5}
-                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[100px]"
+                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[180px]"
                     />
-                  </div>
-                  {/* Taxonomy Suggestions */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTED_GENRES.filter(g => !preset.genres.includes(g) && g.toLowerCase().includes(genreInput.toLowerCase())).slice(0, 8).map(g => (
-                      <button 
-                        key={g} 
-                        onClick={() => handleAddTag('genres', g, SUGGESTED_GENRES)}
-                        className="text-[10px] px-2 py-1 bg-slate-800 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
-                      >
-                        + {g}
-                      </button>
-                    ))}
                   </div>
                 </div>
 
-                {/* Tones */}
                 <div className="space-y-3">
                   <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Tones (Max 5)</div>
-                  <div className="flex flex-wrap gap-2 min-h-[40px] p-3 bg-slate-800/50 rounded-2xl border border-slate-800 focus-within:border-purple-500/30 transition-colors">
+                  <div className="flex flex-wrap gap-2 min-h-[44px] p-3 bg-slate-900 border border-slate-700 rounded-2xl focus-within:border-blue-500/40 transition-colors">
                     {preset.tone.map((t, idx) => (
                       <TagChip key={t} label={t} onRemove={() => handleRemoveTag('tone', idx)} />
                     ))}
-                    <input 
+                    <input
                       type="text"
-                      placeholder={preset.tone.length < 5 ? "Add tone..." : ""}
+                      placeholder={preset.tone.length < 5 ? 'Add tone and press Enter...' : ''}
                       value={toneInput}
                       onChange={(e) => setToneInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('tone', toneInput, SUGGESTED_TONES)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('tone', toneInput)}
                       disabled={preset.tone.length >= 5}
-                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[100px]"
+                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[180px]"
                     />
-                  </div>
-                  {/* Taxonomy Suggestions */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTED_TONES.filter(t => !preset.tone.includes(t) && t.toLowerCase().includes(toneInput.toLowerCase())).slice(0, 8).map(t => (
-                      <button 
-                        key={t} 
-                        onClick={() => handleAddTag('tone', t, SUGGESTED_TONES)}
-                        className="text-[10px] px-2 py-1 bg-slate-800 text-slate-500 hover:text-slate-300 rounded-md transition-colors"
-                      >
-                        + {t}
-                      </button>
-                    ))}
                   </div>
                 </div>
 
-                {/* Humor Level */}
                 <div className="space-y-4 pt-4 border-t border-slate-800/50">
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Humor Intensity</div>
                     <div className="text-[16px] font-semibold text-slate-200">{preset.humor_level} <span className="text-[11px] text-slate-500 font-medium">/ 10</span></div>
                   </div>
-                  
+
                   <div className="space-y-2">
-                    <input 
-                      type="range" 
-                      min="0" max="10" 
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
                       value={preset.humor_level}
                       onChange={(e) => handleHumorChange(Number(e.target.value))}
                       disabled={isLoading}
@@ -298,16 +246,13 @@ const PresetPage: React.FC<PresetPageProps> = ({
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center space-y-4 text-center p-6">
-                <div className="p-4 bg-slate-800 rounded-2xl text-slate-600">
-                  {ICONS.Analyzer}
-                </div>
+                <div className="p-4 bg-slate-800 rounded-2xl text-slate-600">{ICONS.Analyzer}</div>
                 <p className="text-sm text-slate-500 italic">Enter a title/summary and click Analyze to get started.</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Info Footer */}
         {!isLoading && preset && (
           <div className="bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 text-center animate-in slide-in-from-bottom duration-500">
             <p className="text-[12px] text-slate-500 font-medium italic opacity-80">

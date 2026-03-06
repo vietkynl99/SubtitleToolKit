@@ -84,6 +84,7 @@ const App: React.FC = () => {
 
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<any>('all');
+  const [translationFilter, setTranslationFilter] = useState<'all' | 'translated' | 'untranslated'>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
@@ -110,6 +111,8 @@ const App: React.FC = () => {
   const [showReplaceBox, setShowReplaceBox] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [replaceQuery, setReplaceQuery] = useState<string>('');
+  const [isStoppingTranslate, setIsStoppingTranslate] = useState<boolean>(false);
+  const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
   const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
   const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
@@ -164,7 +167,7 @@ const App: React.FC = () => {
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, searchQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
+  }, [filter, translationFilter, searchQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
 
   const globalAnalysis = useMemo(() => {
     if (segments.length === 0) return null;
@@ -184,6 +187,16 @@ const App: React.FC = () => {
     }
     return processedSegments;
   }, [processedSegments, filter]);
+
+  const translationFilteredSegments = useMemo(() => {
+    if (translationFilter === 'translated') {
+      return filteredSegments.filter(s => (s.translatedText || '').trim() !== '');
+    }
+    if (translationFilter === 'untranslated') {
+      return filteredSegments.filter(s => (s.translatedText || '').trim() === '');
+    }
+    return filteredSegments;
+  }, [filteredSegments, translationFilter]);
 
   const compileSearch = useCallback((rawQuery: string) => {
     const q = rawQuery.trim();
@@ -207,17 +220,17 @@ const App: React.FC = () => {
 
   const editorSegments = useMemo(() => {
     const compiled = compileSearch(searchQuery);
-    if (!compiled) return searchQuery.trim() ? [] : filteredSegments;
+    if (!compiled) return searchQuery.trim() ? [] : translationFilteredSegments;
     const { regex: matcher, isIdSearch } = compiled;
 
     if (isIdSearch) {
-      return filteredSegments.filter(s => matcher.test(s.id.toString()));
+      return translationFilteredSegments.filter(s => matcher.test(s.id.toString()));
     }
-    return filteredSegments.filter(s => {
+    return translationFilteredSegments.filter(s => {
       const fields = [s.startTime, s.endTime, s.originalText || '', s.translatedText || ''];
       return fields.some(field => matcher.test(field));
     });
-  }, [filteredSegments, searchQuery, compileSearch]);
+  }, [translationFilteredSegments, searchQuery, compileSearch]);
 
   const handleReplaceNext = useCallback(() => {
     const compiled = compileSearch(searchQuery);
@@ -604,6 +617,7 @@ const App: React.FC = () => {
     }
     setStatus('processing');
     stopRequestedRef.current = false;
+    setIsStoppingTranslate(false);
     const totalToTranslateInSession = needingTranslation.length;
     setTranslationState({ status: 'running', processed: 0, total: totalToTranslateInSession });
     setProgress(0);
@@ -613,6 +627,7 @@ const App: React.FC = () => {
       for (let i = 0; i < needingTranslation.length; i += batchSize) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
+          setIsStoppingTranslate(false);
           showToast("Translation process has been stopped.");
           setStatus('success');
           return;
@@ -635,17 +650,24 @@ const App: React.FC = () => {
         setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
       }
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
+      setIsStoppingTranslate(false);
       setStatus('success');
       showToast("Translation completed.");
     } catch (err: any) {
       setStatus('error');
       setTranslationState(prev => ({ ...prev, status: 'error' }));
+      setIsStoppingTranslate(false);
       showToast(`Error: ${err.message}`);
       setSegments(prev => prev.map(s => ({ ...s, isProcessing: false })));
     }
   };
 
-  const handleStopTranslate = () => { stopRequestedRef.current = true; showToast("Stopping translation..."); };
+  const handleStopTranslate = () => {
+    if (isStoppingTranslate) return;
+    stopRequestedRef.current = true;
+    setIsStoppingTranslate(true);
+    showToast("Stopping translation...");
+  };
 
   const handleAiOptimize = async () => {
     if (!settings.apiKey?.trim()) {
@@ -654,6 +676,7 @@ const App: React.FC = () => {
       return;
     }
     if (selectedIds.size === 0) return;
+    setIsOptimizing(true);
     setStatus('processing');
     setProgress(0);
 
@@ -728,6 +751,7 @@ const App: React.FC = () => {
     setStatus('success');
     setSelectedIds(new Set());
     setTranslationState(prev => ({ ...prev, status: 'completed', customText: undefined }));
+    setIsOptimizing(false);
     
     showToast(`Optimization finished: Skipped ${safeCount} safe segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
   };
@@ -992,22 +1016,53 @@ const App: React.FC = () => {
                     <option value="critical">Critical</option>
                   </select>
 
+                  <select
+                    value={translationFilter}
+                    onChange={(e) => setTranslationFilter(e.target.value as 'all' | 'translated' | 'untranslated')}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
+                    title="Translation status filter"
+                    aria-label="Translation status filter"
+                  >
+                    <option value="all">All</option>
+                    <option value="translated">Translated</option>
+                    <option value="untranslated">Untranslated</option>
+                  </select>
+
                   {translationState.status === 'running' ? (
-                    <button onClick={handleStopTranslate} className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold">
-                      ✨ Stop Translate
-                    </button>
+                    <>
+                      <button
+                        onClick={handleTranslate}
+                        disabled
+                        className="relative overflow-hidden px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-80"
+                      >
+                        <span
+                          className="absolute left-0 top-0 h-full bg-blue-500/30 pointer-events-none"
+                          style={{ width: `${progress}%` }}
+                        />
+                        <span className="relative z-10">
+                          Translating {translationState.processed}/{translationState.total} ({progress}%)
+                        </span>
+                      </button>
+                      <button
+                        onClick={handleStopTranslate}
+                        disabled={isStoppingTranslate}
+                        className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {isStoppingTranslate ? 'Stopping...' : 'Stop'}
+                      </button>
+                    </>
                   ) : (
                     <button onClick={handleTranslate} disabled={status === 'processing'} className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-60 transition-colors hover:bg-blue-600/70">
-                      ✨ Translate All
+                      Translate All
                     </button>
                   )}
 
                   <button
                     onClick={handleAiOptimize}
-                    disabled={status === 'processing' || selectedIds.size === 0}
+                    disabled={status === 'processing' || selectedIds.size === 0 || isOptimizing}
                     className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-600/70"
                   >
-                    ✨ Optimize
+                    {isOptimizing ? 'Optimizing...' : 'Optimize'}
                   </button>
 
                   <button onClick={() => setShowExportModal(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold">
@@ -1153,21 +1208,7 @@ const App: React.FC = () => {
               searchCaseSensitive={searchCaseSensitive}
               searchWholeWord={searchWholeWord}
               searchRegexMode={searchRegexMode}
-            />
-            {translationState.status === 'running' && (
-              <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">
-                <div className="flex justify-between mb-1.5">
-                  <span className="text-[10px] font-bold text-blue-400">
-                    {translationState.customText || `Processing: ${translationState.processed}/${translationState.total}`}
-                  </span>
-                  <span>{progress}%</span>
-                </div>
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: `${progress}%` }}></div>
-                </div>
-              </div>
-            )}
-          </div>
+            />          </div>
           <div
             className={`bg-slate-900 transition-all duration-300 overflow-hidden ${
               showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
@@ -1301,3 +1342,6 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
