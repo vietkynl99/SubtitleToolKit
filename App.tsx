@@ -16,6 +16,7 @@ import {
   generateExportFileName
 } from './services/subtitleLogic';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Search } from 'lucide-react';
 import { 
   Status, 
   SubtitleSegment, 
@@ -105,7 +106,45 @@ const App: React.FC = () => {
   }>({ status: 'idle', processed: 0, total: 0 });
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [showQualityDashboard, setShowQualityDashboard] = useState<boolean>(true);
+  const [showSearchBox, setShowSearchBox] = useState<boolean>(false);
+  const [showReplaceBox, setShowReplaceBox] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [replaceQuery, setReplaceQuery] = useState<string>('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
+  const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
+  const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
+  const [replaceCursor, setReplaceCursor] = useState<{ segmentId: number; start: number } | null>(null);
   const stopRequestedRef = useRef<boolean>(false);
+  const searchAreaRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const undoStackRef = useRef<SubtitleSegment[][]>([]);
+
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
+  };
+
+  const cloneSegments = useCallback((list: SubtitleSegment[]) => list.map(seg => ({ ...seg })), []);
+
+  const commitSegmentsChange = useCallback((updater: SubtitleSegment[] | ((prev: SubtitleSegment[]) => SubtitleSegment[])) => {
+    setSegments(prev => {
+      undoStackRef.current.push(cloneSegments(prev));
+      if (undoStackRef.current.length > 100) undoStackRef.current.shift();
+      const next = typeof updater === 'function'
+        ? (updater as (prev: SubtitleSegment[]) => SubtitleSegment[])(prev)
+        : updater;
+      return cloneSegments(next);
+    });
+  }, [cloneSegments]);
+
+  const handleUndoSegments = useCallback(() => {
+    const last = undoStackRef.current.pop();
+    if (!last) return;
+    setSegments(cloneSegments(last));
+    setSelectedIds(new Set());
+    showToast('Undo applied.');
+  }, [cloneSegments]);
 
   useEffect(() => {
     if (baseFileName) {
@@ -125,7 +164,7 @@ const App: React.FC = () => {
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter]);
+  }, [filter, searchQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
 
   const globalAnalysis = useMemo(() => {
     if (segments.length === 0) return null;
@@ -146,9 +185,110 @@ const App: React.FC = () => {
     return processedSegments;
   }, [processedSegments, filter]);
 
+  const compileSearch = useCallback((rawQuery: string) => {
+    const q = rawQuery.trim();
+    if (!q) return null;
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const isIdSearch = q.startsWith('#');
+    const queryCore = isIdSearch ? q.slice(1).trim() : q;
+    if (!queryCore) return null;
+
+    const basePattern = searchRegexMode ? queryCore : escapeRegExp(queryCore);
+    const wrappedPattern = searchWholeWord
+      ? `(?<![\\p{L}\\p{N}\\p{M}_])(?:${basePattern})(?![\\p{L}\\p{N}\\p{M}_])`
+      : basePattern;
+    const flags = `${searchCaseSensitive ? '' : 'i'}u`;
+    try {
+      return { regex: new RegExp(wrappedPattern, flags), isIdSearch };
+    } catch {
+      return null;
+    }
+  }, [searchCaseSensitive, searchWholeWord, searchRegexMode]);
+
+  const editorSegments = useMemo(() => {
+    const compiled = compileSearch(searchQuery);
+    if (!compiled) return searchQuery.trim() ? [] : filteredSegments;
+    const { regex: matcher, isIdSearch } = compiled;
+
+    if (isIdSearch) {
+      return filteredSegments.filter(s => matcher.test(s.id.toString()));
+    }
+    return filteredSegments.filter(s => {
+      const fields = [s.startTime, s.endTime, s.originalText || '', s.translatedText || ''];
+      return fields.some(field => matcher.test(field));
+    });
+  }, [filteredSegments, searchQuery, compileSearch]);
+
+  const handleReplaceNext = useCallback(() => {
+    const compiled = compileSearch(searchQuery);
+    if (!compiled || compiled.isIdSearch) return;
+
+    const baseRegex = compiled.regex;
+    const flags = baseRegex.flags.includes('g') ? baseRegex.flags : `${baseRegex.flags}g`;
+    const indexById = new Map<number, number>();
+    segments.forEach((s, idx) => indexById.set(s.id, idx));
+
+    const matches: Array<{ segmentId: number; start: number; end: number }> = [];
+    segments.forEach((seg) => {
+      const text = seg.translatedText || '';
+      if (!text) return;
+      const regex = new RegExp(baseRegex.source, flags);
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(text)) !== null) {
+        if (!m[0].length) {
+          regex.lastIndex += 1;
+          continue;
+        }
+        matches.push({ segmentId: seg.id, start: m.index, end: m.index + m[0].length });
+      }
+    });
+    if (!matches.length) return;
+
+    let target = matches[0];
+    if (replaceCursor) {
+      const curOrder = indexById.get(replaceCursor.segmentId) ?? -1;
+      const nextMatch = matches.find((m) => {
+        const mOrder = indexById.get(m.segmentId) ?? -1;
+        return mOrder > curOrder || (mOrder === curOrder && m.start > replaceCursor.start);
+      });
+      if (nextMatch) target = nextMatch;
+    }
+
+    const segIdx = segments.findIndex(s => s.id === target.segmentId);
+    if (segIdx === -1) return;
+    const src = segments[segIdx].translatedText || '';
+    const changed = `${src.slice(0, target.start)}${replaceQuery}${src.slice(target.end)}`;
+    const updated = [...segments];
+    updated[segIdx] = { ...updated[segIdx], translatedText: changed };
+    commitSegmentsChange(updated);
+    setReplaceCursor({ segmentId: target.segmentId, start: target.start + replaceQuery.length });
+  }, [compileSearch, searchQuery, segments, replaceCursor, replaceQuery, commitSegmentsChange]);
+
+  const handleReplaceAll = useCallback(() => {
+    const compiled = compileSearch(searchQuery);
+    if (!compiled || compiled.isIdSearch) return;
+
+    const baseRegex = compiled.regex;
+    const flags = baseRegex.flags.includes('g') ? baseRegex.flags : `${baseRegex.flags}g`;
+    let count = 0;
+    const updated = segments.map((seg) => {
+      const text = seg.translatedText || '';
+      if (!text) return seg;
+      const regex = new RegExp(baseRegex.source, flags);
+      const replaced = text.replace(regex, () => {
+        count += 1;
+        return replaceQuery;
+      });
+      return replaced === text ? seg : { ...seg, translatedText: replaced };
+    });
+    commitSegmentsChange(updated);
+    setReplaceCursor(null);
+    showToast(count > 0 ? `Replaced ${count} match(es).` : 'No matches to replace.');
+  }, [compileSearch, searchQuery, segments, replaceQuery, commitSegmentsChange]);
+
   const totalEditorPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredSegments.length / EDITOR_PAGE_SIZE)),
-    [filteredSegments.length]
+    () => Math.max(1, Math.ceil(editorSegments.length / EDITOR_PAGE_SIZE)),
+    [editorSegments.length]
   );
 
   useEffect(() => {
@@ -156,6 +296,55 @@ const App: React.FC = () => {
       setCurrentPage(totalEditorPages);
     }
   }, [currentPage, totalEditorPages]);
+
+  useEffect(() => {
+    setReplaceCursor(null);
+  }, [searchQuery, replaceQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
+
+  useEffect(() => {
+    if (!showSearchBox) return;
+    const handleDocumentMouseDown = (event: MouseEvent) => {
+      if (!searchAreaRef.current?.contains(event.target as Node) && !searchQuery.trim() && !replaceQuery.trim()) {
+        setShowSearchBox(false);
+        setShowReplaceBox(false);
+      }
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', handleDocumentMouseDown);
+  }, [showSearchBox, searchQuery, replaceQuery]);
+
+  useEffect(() => {
+    const handleFindShortcut = (event: KeyboardEvent) => {
+      if (!(activeTab === 'editor' && segments.length > 0)) return;
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget = !!target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      );
+      const isFind = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f';
+      const isReplace = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'h';
+      const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey;
+      if (isFind) {
+        event.preventDefault();
+        setShowSearchBox(true);
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+      }
+      if (isReplace) {
+        event.preventDefault();
+        setShowSearchBox(true);
+        setShowReplaceBox(true);
+        setTimeout(() => replaceInputRef.current?.focus(), 0);
+      }
+      if (isUndo && !isTypingTarget) {
+        event.preventDefault();
+        handleUndoSegments();
+      }
+    };
+    window.addEventListener('keydown', handleFindShortcut);
+    return () => window.removeEventListener('keydown', handleFindShortcut);
+  }, [activeTab, segments.length, handleUndoSegments]);
 
   const totalDurationStr = useMemo(() => {
     if (processedSegments.length === 0) return '0m 0s';
@@ -167,11 +356,6 @@ const App: React.FC = () => {
     return `${m}m ${s}s`;
   }, [processedSegments]);
   
-  const showToast = (message: string) => {
-    setToast({ message, visible: true });
-    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
-  };
-
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     showToast("File name copied to clipboard");
@@ -187,10 +371,10 @@ const App: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.size === filteredSegments.length) {
+    if (selectedIds.size === editorSegments.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredSegments.map(s => s.id)));
+      setSelectedIds(new Set(editorSegments.map(s => s.id)));
     }
   };
 
@@ -310,6 +494,7 @@ const App: React.FC = () => {
         }
 
         setSegments(parsedSegments);
+        undoStackRef.current = [];
         setTranslationPreset(preset);
         setTranslationState({ status: 'idle', processed: 0, total: 0 });
         setApiUsage(INITIAL_USAGE);
@@ -336,6 +521,7 @@ const App: React.FC = () => {
     setStatus('clearing');
     await new Promise(resolve => setTimeout(resolve, 800));
     setSegments([]);
+    undoStackRef.current = [];
     setGeneratedFiles([]);
     setTranslationPreset(null);
     setTranslationState({ status: 'idle', processed: 0, total: 0 });
@@ -537,7 +723,7 @@ const App: React.FC = () => {
       }
     }
 
-    setSegments(currentSegments);
+    commitSegmentsChange(currentSegments);
     setProgress(100);
     setStatus('success');
     setSelectedIds(new Set());
@@ -599,7 +785,7 @@ const App: React.FC = () => {
       const { baseName, editedCount: count } = parseFileName(file.fileName);
       setBaseFileName(baseName);
       setEditedCount(count);
-      setSegments(file.segments);
+      commitSegmentsChange(file.segments);
       setSelectedIds(new Set());
       setFilter('all');
       setCurrentPage(1);
@@ -613,7 +799,7 @@ const App: React.FC = () => {
   };
 
   const updateSegmentText = (id: number, text: string) => {
-    setSegments(prev => prev.map(s => s.id === id ? { ...s, translatedText: text } : s));
+    commitSegmentsChange(prev => prev.map(s => s.id === id ? { ...s, translatedText: text } : s));
   };
 
   const deleteSegment = (id: number) => {
@@ -624,7 +810,7 @@ const App: React.FC = () => {
   const confirmDelete = () => {
     if (segmentToDelete === null) return;
     
-    setSegments(prev => {
+    commitSegmentsChange(prev => {
       const filtered = prev.filter(s => s.id !== segmentToDelete);
       return filtered.map((s, index) => ({ ...s, id: index + 1 }));
     });
@@ -786,12 +972,12 @@ const App: React.FC = () => {
                   <button
                     onClick={handleSelectAll}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
-                      filteredSegments.length > 0 && filteredSegments.every(s => selectedIds.has(s.id))
+                      editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id))
                         ? 'bg-blue-600 border-blue-500 text-white'
                         : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
                     }`}
                   >
-                    {filteredSegments.length > 0 && filteredSegments.every(s => selectedIds.has(s.id)) ? 'Deselect All' : 'Select All'}
+                    {editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect All' : 'Select All'}
                   </button>
 
                   <select
@@ -830,6 +1016,111 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <div ref={searchAreaRef}>
+                    {!showSearchBox ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSearchBox(true);
+                          setShowReplaceBox(false);
+                        }}
+                        className="p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
+                        title="Search segments"
+                        aria-label="Search segments"
+                      >
+                        <Search size={14} />
+                      </button>
+                    ) : (
+                      <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[260px]">
+                        <div className="inline-flex items-center gap-2 px-1 py-0.5">
+                          <span className="text-slate-400"><Search size={14} /></span>
+                          <input
+                            ref={searchInputRef}
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search"
+                            className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSearchCaseSensitive(prev => !prev)}
+                            title="Case sensitive"
+                            aria-label="Case sensitive"
+                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                              searchCaseSensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            Aa
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSearchWholeWord(prev => !prev)}
+                            title="Match whole word"
+                            aria-label="Match whole word"
+                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                              searchWholeWord ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
+                            }`}
+                          >
+                            ab
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSearchRegexMode(prev => !prev)}
+                            title="Regex search"
+                            aria-label="Regex search"
+                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                              searchRegexMode ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            .*
+                          </button>
+                        </div>
+
+                        {showReplaceBox ? (
+                          <div className="inline-flex items-center gap-2 px-1 py-0.5 border-t border-slate-700/70">
+                            <span className="text-[11px] text-slate-400">R</span>
+                            <input
+                              ref={replaceInputRef}
+                              type="text"
+                              value={replaceQuery}
+                              onChange={(e) => setReplaceQuery(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleReplaceNext();
+                                }
+                              }}
+                              placeholder="Replace"
+                              className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleReplaceAll}
+                              className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
+                              title="Replace all"
+                              aria-label="Replace all"
+                            >
+                              All
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowReplaceBox(true);
+                              setTimeout(() => replaceInputRef.current?.focus(), 0);
+                            }}
+                            className="self-end px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
+                            title="Open replace box (Ctrl+H)"
+                            aria-label="Open replace box"
+                          >
+                            Replace
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
                     Page {currentPage} / {totalEditorPages}
                   </span>
@@ -851,12 +1142,16 @@ const App: React.FC = () => {
               </div>
             </div>
             <SegmentList 
-              segments={filteredSegments} 
+              segments={editorSegments} 
               selectedIds={selectedIds} 
               onToggleSelect={handleToggleSelect} 
               onUpdateText={updateSegmentText} 
               onDeleteSegment={deleteSegment}
               currentPage={currentPage}
+              searchQuery={searchQuery}
+              searchCaseSensitive={searchCaseSensitive}
+              searchWholeWord={searchWholeWord}
+              searchRegexMode={searchRegexMode}
             />
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">

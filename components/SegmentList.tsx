@@ -9,6 +9,10 @@ interface SegmentListProps {
   onUpdateText: (id: number, text: string) => void;
   onDeleteSegment: (id: number) => void;
   currentPage: number;
+  searchQuery: string;
+  searchCaseSensitive: boolean;
+  searchWholeWord: boolean;
+  searchRegexMode: boolean;
 }
 
 const PAGE_SIZE = 30;
@@ -19,8 +23,15 @@ const SegmentList: React.FC<SegmentListProps> = ({
   onToggleSelect,
   onUpdateText,
   onDeleteSegment,
-  currentPage
+  currentPage,
+  searchQuery,
+  searchCaseSensitive,
+  searchWholeWord,
+  searchRegexMode
 }) => {
+  const [editingTranslationId, setEditingTranslationId] = React.useState<number | null>(null);
+  const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
+
   const getSeverityClasses = (severity: Severity) => {
     switch (severity) {
       case 'critical':
@@ -35,11 +46,100 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
   const pagedSegments = segments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const buildSearchRegex = (query: string): RegExp | null => {
+    const q = query.trim();
+    if (!q) return null;
+    const basePattern = searchRegexMode ? q : escapeRegExp(q);
+    const wrappedPattern = searchWholeWord
+      ? `(?<![\\p{L}\\p{N}\\p{M}_])(?:${basePattern})(?![\\p{L}\\p{N}\\p{M}_])`
+      : basePattern;
+    const flags = `${searchCaseSensitive ? '' : 'i'}u`;
+    try {
+      return new RegExp(wrappedPattern, flags);
+    } catch {
+      return null;
+    }
+  };
+
+  const renderHighlightedText = (text: string, query: string) => {
+    const regex = buildSearchRegex(query);
+    if (!regex || !text) return text;
+
+    const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
+    const globalRegex = new RegExp(regex.source, flags);
+    const nodes: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = globalRegex.exec(text)) !== null) {
+      const start = match.index;
+      const matched = match[0];
+
+      if (matched.length === 0) {
+        globalRegex.lastIndex += 1;
+        continue;
+      }
+
+      if (start > lastIdx) {
+        nodes.push(<React.Fragment key={`t-${start}`}>{text.slice(lastIdx, start)}</React.Fragment>);
+      }
+
+      nodes.push(
+        <mark key={`m-${start}`} className="bg-amber-300/30 text-amber-100 px-0.5 rounded">
+          {matched}
+        </mark>
+      );
+      lastIdx = start + matched.length;
+    }
+
+    if (lastIdx < text.length) {
+      nodes.push(<React.Fragment key={`t-end`}>{text.slice(lastIdx)}</React.Fragment>);
+    }
+
+    return nodes.length > 0 ? <>{nodes}</> : text;
+  };
+
+  const getMatchSnippet = (text: string, query: string, radius = 20) => {
+    if (!query.trim()) return null;
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const idx = lowerText.indexOf(lowerQuery);
+    if (idx === -1) return null;
+    const start = Math.max(0, idx - radius);
+    const end = Math.min(text.length, idx + query.length + radius);
+    const prefix = start > 0 ? '...' : '';
+    const suffix = end < text.length ? '...' : '';
+    return `${prefix}${text.slice(start, end)}${suffix}`;
+  };
+
+  const resizeTranslationTextarea = (el: HTMLTextAreaElement) => {
+    const styles = window.getComputedStyle(el);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 18;
+    const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+    const maxHeight = (lineHeight * 2) + paddingTop + paddingBottom;
+
+    el.style.height = 'auto';
+    const nextHeight = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${nextHeight}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  };
+
+  React.useEffect(() => {
+    Object.values(translationTextareaRefs.current).forEach((el) => {
+      if (el) resizeTranslationTextarea(el);
+    });
+  }, [pagedSegments, editingTranslationId, searchQuery]);
+
+  const idSearchQuery = searchQuery.trim().startsWith('#') ? searchQuery.trim().slice(1).trim() : '';
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/50 h-full">
       <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
-        <div className="min-w-[980px]">
-          <div className="grid grid-cols-[28px_54px_170px_minmax(240px,1fr)_minmax(260px,1fr)_92px] gap-2 px-3 py-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        <div className="min-w-[920px]">
+          <div className="grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 px-3 py-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <div className="text-center">Sel</div>
             <div>#</div>
             <div>Time</div>
@@ -56,7 +156,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               return (
                 <div
                   key={seg.id}
-                  className={`grid grid-cols-[28px_54px_170px_minmax(240px,1fr)_minmax(260px,1fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all ${
+                  className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all ${
                     isSelected
                       ? 'border-blue-500 ring-1 ring-blue-500/20'
                       : 'border-slate-800 hover:border-slate-700'
@@ -73,40 +173,79 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
                   <div className="pt-1">
                     <span className="inline-flex px-2 py-0.5 bg-slate-800 rounded-md text-[10px] font-bold font-mono text-slate-300">
-                      #{seg.id}
+                      #{idSearchQuery ? renderHighlightedText(seg.id.toString(), idSearchQuery) : seg.id.toString()}
                     </span>
                   </div>
 
                   <div className="pt-1 text-[11px] font-bold font-mono text-slate-500 leading-tight">
-                    <div>{seg.startTime}</div>
-                    <div>{seg.endTime}</div>
+                    <div>{renderHighlightedText(seg.startTime, searchQuery)}</div>
+                    <div>{renderHighlightedText(seg.endTime, searchQuery)}</div>
                   </div>
 
                   <div className="pt-0.5">
                     <p className="text-[13px] text-slate-300 leading-snug font-medium whitespace-pre-wrap break-words">
-                      {seg.originalText || <span className="text-slate-700 italic text-sm">No original text</span>}
+                      {seg.originalText ? renderHighlightedText(seg.originalText, searchQuery) : <span className="text-slate-700 italic text-sm">No original text</span>}
                     </p>
                   </div>
 
                   <div className="pt-0.5">
-                    {seg.isProcessing && !seg.translatedText ? (
-                      <div className="space-y-1.5 animate-pulse">
-                        <div className="text-[11px] font-bold text-slate-500 flex items-center gap-2">
-                          <div className="w-3 h-3 border-2 border-slate-600 border-t-slate-400 rounded-full animate-spin" />
-                          PROCESSING...
-                        </div>
-                        <div className="h-3 bg-slate-800 rounded-full w-4/5" />
-                        <div className="h-3 bg-slate-800 rounded-full w-3/5" />
-                      </div>
-                    ) : (
-                      <textarea
-                        className="w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic text-blue-100"
-                        placeholder="No translation yet..."
-                        rows={Math.max(1, (seg.translatedText || '').split('\n').length)}
-                        value={seg.translatedText || ''}
-                        onChange={(e) => onUpdateText(seg.id, e.target.value)}
-                      />
-                    )}
+                    {(() => {
+                      if (seg.isProcessing && !seg.translatedText) {
+                        return (
+                          <div className="space-y-1.5 animate-pulse">
+                            <div className="text-[11px] font-bold text-slate-500 flex items-center gap-2">
+                              <div className="w-3 h-3 border-2 border-slate-600 border-t-slate-400 rounded-full animate-spin" />
+                              PROCESSING...
+                            </div>
+                            <div className="h-3 bg-slate-800 rounded-full w-4/5" />
+                            <div className="h-3 bg-slate-800 rounded-full w-3/5" />
+                          </div>
+                        );
+                      }
+
+                      if (searchQuery.trim() && editingTranslationId !== seg.id) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setEditingTranslationId(seg.id)}
+                            className="w-full text-left bg-transparent border-none p-0"
+                            title="Click to edit translation"
+                          >
+                            <div className="text-[13px] font-semibold leading-snug text-blue-100 whitespace-pre-wrap break-words min-h-[20px]">
+                              {seg.translatedText
+                                ? renderHighlightedText(seg.translatedText, searchQuery)
+                                : <span className="text-slate-700 italic">No translation yet...</span>}
+                            </div>
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <>
+                          <textarea
+                            ref={(el) => {
+                              translationTextareaRefs.current[seg.id] = el;
+                              if (el) resizeTranslationTextarea(el);
+                            }}
+                            className="w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic text-blue-100"
+                            placeholder="No translation yet..."
+                            rows={1}
+                            value={seg.translatedText || ''}
+                            onChange={(e) => {
+                              onUpdateText(seg.id, e.target.value);
+                              resizeTranslationTextarea(e.currentTarget);
+                            }}
+                            autoFocus={editingTranslationId === seg.id}
+                            onBlur={() => setEditingTranslationId(null)}
+                          />
+                          {searchQuery.trim() && (seg.translatedText || '').toLowerCase().includes(searchQuery.toLowerCase()) && (
+                            <div className="mt-1 text-[10px] text-slate-400">
+                              Matched: {renderHighlightedText(getMatchSnippet(seg.translatedText || '', searchQuery) || '', searchQuery)}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div className="pt-1 flex items-center justify-between gap-2">
