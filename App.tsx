@@ -44,6 +44,7 @@ const INITIAL_USAGE: ApiUsage = {
   translate: { requests: 0, tokens: 0, segments: 0 },
   optimize: { requests: 0, tokens: 0 }
 };
+const EDITOR_PAGE_SIZE = 30;
 
 const App: React.FC = () => {
   // State
@@ -103,6 +104,7 @@ const App: React.FC = () => {
     customText?: string;
   }>({ status: 'idle', processed: 0, total: 0 });
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [showQualityDashboard, setShowQualityDashboard] = useState<boolean>(true);
   const stopRequestedRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -143,6 +145,17 @@ const App: React.FC = () => {
     }
     return processedSegments;
   }, [processedSegments, filter]);
+
+  const totalEditorPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredSegments.length / EDITOR_PAGE_SIZE)),
+    [filteredSegments.length]
+  );
+
+  useEffect(() => {
+    if (currentPage > totalEditorPages) {
+      setCurrentPage(totalEditorPages);
+    }
+  }, [currentPage, totalEditorPages]);
 
   const totalDurationStr = useMemo(() => {
     if (processedSegments.length === 0) return '0m 0s';
@@ -680,7 +693,7 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-lg rounded-[40px] shadow-2xl p-10 animate-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 w-full max-lg rounded-[32px] shadow-2xl p-8 animate-in zoom-in duration-300">
             <h3 className="text-2xl font-bold mb-2">Download</h3>
             <p className="text-slate-500 text-sm mb-10">Choose the format and version you want to export.</p>
             <div className="space-y-4">
@@ -711,7 +724,7 @@ const App: React.FC = () => {
       )}
 
       {status === 'success' && segments.length > 0 && fileName && (
-        <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 z-20">
+        <div className="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between shrink-0 z-20">
           <div className="flex items-center gap-4 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
@@ -729,14 +742,14 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
-            <h1 className="text-4xl font-bold text-slate-100 mb-2 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-12">Professional subtitle translation and optimization.</p>
-            <label className={`relative group flex flex-col items-center justify-center w-full h-80 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
+            <h1 className="text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
+            <p className="text-slate-400 mb-8">Professional subtitle translation and optimization.</p>
+            <label className={`relative group flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
               <input type="file" accept=".srt,.sktproject" className="hidden" onChange={handleFileUpload} />
-              <div className="p-6 bg-blue-600/10 rounded-full border border-blue-500/20 mb-6">{ICONS.Upload}</div>
-              <p className="text-xl font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
+              <div className="p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-5">{ICONS.Upload}</div>
+              <p className="text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
             </label>
           </div>
         </div>
@@ -751,21 +764,99 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'editor' && segments.length > 0 && (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
+          <button
+            type="button"
+            onClick={() => setShowQualityDashboard(prev => !prev)}
+            className="absolute top-3 right-3 z-30 w-10 h-10 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-300 transition-all flex items-center justify-center"
+            aria-label={showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}
+            title={showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}
+          >
+            <span className="sr-only">{showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}</span>
+            <span className="flex flex-col gap-1">
+              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
+              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
+              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
+            </span>
+          </button>
           <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+            <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+                  <button
+                    onClick={handleSelectAll}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                      filteredSegments.length > 0 && filteredSegments.every(s => selectedIds.has(s.id))
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    {filteredSegments.length > 0 && filteredSegments.every(s => selectedIds.has(s.id)) ? 'Deselect All' : 'Select All'}
+                  </button>
+
+                  <select
+                    value={typeof filter === 'string' ? filter : 'all'}
+                    onChange={(e) => setFilter(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
+                  >
+                    <option value="all">All</option>
+                    <option value="safe">Safe</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                  </select>
+
+                  {translationState.status === 'running' ? (
+                    <button onClick={handleStopTranslate} className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold">
+                      ✨ Stop Translate
+                    </button>
+                  ) : (
+                    <button onClick={handleTranslate} disabled={status === 'processing'} className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-60 transition-colors hover:bg-blue-600/70">
+                      ✨ Translate All
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleAiOptimize}
+                    disabled={status === 'processing' || selectedIds.size === 0}
+                    className="px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-600/70"
+                  >
+                    ✨ Optimize
+                  </button>
+
+                  <button onClick={() => setShowExportModal(true)} className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-bold">
+                    <span className="shrink-0">{ICONS.Export}</span>
+                    <span>Export</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
+                    Page {currentPage} / {totalEditorPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-md bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    <span className="rotate-180 block">{ICONS.Next}</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalEditorPages, prev + 1))}
+                    disabled={currentPage === totalEditorPages}
+                    className="p-1.5 rounded-md bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    {ICONS.Next}
+                  </button>
+                </div>
+              </div>
+            </div>
             <SegmentList 
               segments={filteredSegments} 
               selectedIds={selectedIds} 
               onToggleSelect={handleToggleSelect} 
-              onSelectAll={handleSelectAll}
               onUpdateText={updateSegmentText} 
               onDeleteSegment={deleteSegment}
-              filter={filter} 
-              onFilterChange={setFilter} 
-              safeThreshold={settings.cpsThreshold.safeMax} 
-              criticalThreshold={settings.cpsThreshold.warningMax} 
               currentPage={currentPage}
-              onPageChange={setCurrentPage}
             />
             {translationState.status === 'running' && (
               <div className="px-6 py-2 bg-slate-900 border-t border-slate-800">
@@ -780,42 +871,28 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/50 backdrop-blur-md flex items-center justify-between">
-              <div className="flex gap-2">
-                {translationState.status === 'running' ? 
-                  <button onClick={handleStopTranslate} className="px-6 py-2 bg-rose-600 text-white rounded-lg font-bold">Stop AI Task</button> : 
-                  <button onClick={handleTranslate} disabled={status === 'processing'} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold">AI Translate All</button>
-                }
-                <button 
-                  onClick={handleAiOptimize} 
-                  disabled={status === 'processing' || selectedIds.size === 0} 
-                  className={`px-4 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
-                    settings.optimizationMode === 'aggressive' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-200'
-                  }`}
-                >
-                  AI Optimize {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
-                </button>
-              </div>
-              <button onClick={() => setShowExportModal(true)} className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-bold shadow-lg shadow-emerald-500/20">{ICONS.Export} Export</button>
-            </div>
           </div>
-          <div className="w-80 border-l border-slate-800 bg-slate-900">
-             <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+          <div
+            className={`bg-slate-900 transition-all duration-300 overflow-hidden ${
+              showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
+            }`}
+          >
+            <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
           </div>
         </div>
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-12 overflow-y-auto pb-32">
-          <div className="max-w-4xl mx-auto space-y-10">
+        <div className="flex-1 p-10 overflow-y-auto pb-24">
+          <div className="max-w-4xl mx-auto space-y-8">
             {/* AI Mode (v3.1.0) - Dropdown Selection */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-8">
+            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Fix}</span>
                 <h3 className="text-lg font-bold text-slate-100">AI Mode</h3>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                     Select Gemini model
@@ -867,8 +944,8 @@ const App: React.FC = () => {
             </section>
 
             {/* API Usage Dashboard (Session-Based) */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 shadow-xl">
-              <div className="flex items-center gap-3 mb-8">
+            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Success}</span>
                 <h3 className="text-lg font-bold text-slate-100">API Usage Dashboard</h3>
               </div>

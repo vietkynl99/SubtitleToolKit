@@ -47,18 +47,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   const translationPercentage = segments.length > 0 ? Math.round((translatedCount / segments.length) * 100) : 0;
 
   return (
-    <div className="p-6 space-y-8 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-12">
+    <div className="p-4 space-y-6 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-8">
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Quality Dashboard</h3>
-          {activeFilter !== 'all' && (
-             <button 
-              onClick={() => onFilterTrigger('all')}
-              className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase"
-            >
-              Reset Filter
-            </button>
-          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button 
