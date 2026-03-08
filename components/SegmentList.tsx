@@ -7,6 +7,7 @@ interface SegmentListProps {
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onUpdateText: (id: number, text: string) => void;
+  onUpdateTime: (id: number, field: 'startTime' | 'endTime', value: string) => void;
   onDeleteSegment: (id: number) => void;
   onSegmentClick?: (id: number) => void;
   currentPage: number;
@@ -24,6 +25,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
   selectedIds,
   onToggleSelect,
   onUpdateText,
+  onUpdateTime,
   onDeleteSegment,
   onSegmentClick,
   currentPage,
@@ -34,6 +36,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
   activeSegmentId
 }) => {
   const [editingTranslationId, setEditingTranslationId] = React.useState<number | null>(null);
+  const [editingTime, setEditingTime] = React.useState<{ id: number; field: 'startTime' | 'endTime' } | null>(null);
   const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
   const segmentRowRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
 
@@ -168,6 +171,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               const colors = getSeverityClasses(seg.severity);
               const isSelected = selectedIds.has(seg.id);
               const isActiveByVideo = activeSegmentId === seg.id;
+              const hasTimelineIssue = seg.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
 
               return (
                 <div
@@ -201,9 +205,59 @@ const SegmentList: React.FC<SegmentListProps> = ({
                     </span>
                   </div>
 
-                  <div className="pt-1 text-[11px] font-bold font-mono text-slate-500 leading-tight">
-                    <div>{renderHighlightedText(seg.startTime, searchQuery)}</div>
-                    <div>{renderHighlightedText(seg.endTime, searchQuery)}</div>
+                  <div className={`pt-1 text-[11px] font-bold font-mono leading-tight rounded-md px-1.5 py-1 ${
+                    hasTimelineIssue
+                      ? 'text-rose-300 bg-rose-500/10 border border-rose-500/30'
+                      : 'text-slate-500'
+                  }`}>
+                    {editingTime?.id === seg.id && editingTime.field === 'startTime' ? (
+                      <input
+                        type="text"
+                        value={seg.startTime}
+                        onChange={(e) => onUpdateTime(seg.id, 'startTime', e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={() => setEditingTime(null)}
+                        autoFocus
+                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight"
+                        placeholder="00:00:00,000"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTime({ id: seg.id, field: 'startTime' });
+                        }}
+                        className="w-full text-left bg-transparent border-none p-0"
+                        title="Click to edit start time"
+                      >
+                        {renderHighlightedText(seg.startTime, searchQuery)}
+                      </button>
+                    )}
+                    {editingTime?.id === seg.id && editingTime.field === 'endTime' ? (
+                      <input
+                        type="text"
+                        value={seg.endTime}
+                        onChange={(e) => onUpdateTime(seg.id, 'endTime', e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={() => setEditingTime(null)}
+                        autoFocus
+                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight"
+                        placeholder="00:00:00,000"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingTime({ id: seg.id, field: 'endTime' });
+                        }}
+                        className="w-full text-left bg-transparent border-none p-0"
+                        title="Click to edit end time"
+                      >
+                        {renderHighlightedText(seg.endTime, searchQuery)}
+                      </button>
+                    )}
                   </div>
 
                   <div className="pt-0.5">

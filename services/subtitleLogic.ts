@@ -201,6 +201,7 @@ export function analyzeSegments(
 ): { stats: AnalysisResult, enrichedSegments: SubtitleSegment[] } {
   let tooLongLines = 0;
   let tooFastLines = 0;
+  let timelineOverlapLines = 0;
   let totalCPS = 0;
   let minCPS = Infinity;
   let maxCPS = -Infinity;
@@ -235,6 +236,19 @@ export function analyzeSegments(
     return enriched;
   });
 
+  for (let i = 1; i < enrichedSegments.length; i++) {
+    const prev = enrichedSegments[i - 1];
+    const current = enrichedSegments[i];
+    const prevEnd = timeToSeconds(prev.endTime);
+    const currentStart = timeToSeconds(current.startTime);
+
+    if (prevEnd > currentStart) {
+      timelineOverlapLines++;
+      prev.issueList = [...prev.issueList, `Timeline overlap with segment #${current.id}`];
+      current.issueList = [...current.issueList, `Timeline overlap with segment #${prev.id}`];
+    }
+  }
+
   const totalLines = segments.length;
   if (totalLines === 0) {
     return {
@@ -242,6 +256,7 @@ export function analyzeSegments(
         totalLines: 0,
         tooLongLines: 0,
         tooFastLines: 0,
+        timelineOverlapLines: 0,
         avgCPS: 0,
         minCPS: 0,
         maxCPS: 0,
@@ -288,6 +303,7 @@ export function analyzeSegments(
       totalLines,
       tooLongLines,
       tooFastLines,
+      timelineOverlapLines,
       avgCPS: totalCPS / totalLines,
       minCPS,
       maxCPS,

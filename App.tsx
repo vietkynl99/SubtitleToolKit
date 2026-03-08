@@ -16,7 +16,7 @@ import {
   generateExportFileName
 } from './services/subtitleLogic';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, CopyCheck, CopyX } from 'lucide-react';
+import { Search, CopyCheck, CopyX, Eye, EyeOff } from 'lucide-react';
 import { 
   Status, 
   SubtitleSegment, 
@@ -84,7 +84,6 @@ const App: React.FC = () => {
 
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [filter, setFilter] = useState<any>('all');
-  const [translationFilter, setTranslationFilter] = useState<'all' | 'translated' | 'untranslated'>('all');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showClearModal, setShowClearModal] = useState<boolean>(false);
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
@@ -113,6 +112,8 @@ const App: React.FC = () => {
   const [replaceQuery, setReplaceQuery] = useState<string>('');
   const [isStoppingTranslate, setIsStoppingTranslate] = useState<boolean>(false);
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
+  const [isStoppingOptimize, setIsStoppingOptimize] = useState<boolean>(false);
+  const [optimizeState, setOptimizeState] = useState<{ processed: number; total: number }>({ processed: 0, total: 0 });
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoPreviewName, setVideoPreviewName] = useState<string>('');
   const [videoPanelHeight, setVideoPanelHeight] = useState<number>(220);
@@ -123,6 +124,7 @@ const App: React.FC = () => {
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
   const [replaceCursor, setReplaceCursor] = useState<{ segmentId: number; start: number } | null>(null);
   const stopRequestedRef = useRef<boolean>(false);
+  const optimizeStopRequestedRef = useRef<boolean>(false);
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
@@ -136,6 +138,14 @@ const App: React.FC = () => {
     setToast({ message, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
   };
+
+  const clearAndCloseSearch = useCallback(() => {
+    setSearchQuery('');
+    setReplaceQuery('');
+    setReplaceCursor(null);
+    setShowReplaceBox(false);
+    setShowSearchBox(false);
+  }, []);
 
   const cloneSegments = useCallback((list: SubtitleSegment[]) => list.map(seg => ({ ...seg })), []);
 
@@ -247,7 +257,7 @@ const App: React.FC = () => {
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, translationFilter, searchQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
+  }, [filter, searchQuery, searchCaseSensitive, searchWholeWord, searchRegexMode]);
 
   const globalAnalysis = useMemo(() => {
     if (segments.length === 0) return null;
@@ -258,7 +268,19 @@ const App: React.FC = () => {
   const allStats = useMemo(() => globalAnalysis?.stats, [globalAnalysis]);
 
   const filteredSegments = useMemo(() => {
+    const hasTimelineIssue = (segment: SubtitleSegment) =>
+      segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
+
     if (filter === 'all') return processedSegments;
+    if (filter === 'timeline') {
+      return processedSegments.filter(hasTimelineIssue);
+    }
+    if (filter === 'translated') {
+      return processedSegments.filter(s => (s.translatedText || '').trim() !== '');
+    }
+    if (filter === 'untranslated') {
+      return processedSegments.filter(s => (s.translatedText || '').trim() === '');
+    }
     if (typeof filter === 'string') {
       return processedSegments.filter(s => s.severity === filter);
     }
@@ -267,16 +289,6 @@ const App: React.FC = () => {
     }
     return processedSegments;
   }, [processedSegments, filter]);
-
-  const translationFilteredSegments = useMemo(() => {
-    if (translationFilter === 'translated') {
-      return filteredSegments.filter(s => (s.translatedText || '').trim() !== '');
-    }
-    if (translationFilter === 'untranslated') {
-      return filteredSegments.filter(s => (s.translatedText || '').trim() === '');
-    }
-    return filteredSegments;
-  }, [filteredSegments, translationFilter]);
 
   const compileSearch = useCallback((rawQuery: string) => {
     const q = rawQuery.trim();
@@ -300,17 +312,36 @@ const App: React.FC = () => {
 
   const editorSegments = useMemo(() => {
     const compiled = compileSearch(searchQuery);
-    if (!compiled) return searchQuery.trim() ? [] : translationFilteredSegments;
+    if (!compiled) return searchQuery.trim() ? [] : filteredSegments;
     const { regex: matcher, isIdSearch } = compiled;
 
     if (isIdSearch) {
-      return translationFilteredSegments.filter(s => matcher.test(s.id.toString()));
+      return filteredSegments.filter(s => matcher.test(s.id.toString()));
     }
-    return translationFilteredSegments.filter(s => {
+    return filteredSegments.filter(s => {
       const fields = [s.startTime, s.endTime, s.originalText || '', s.translatedText || ''];
       return fields.some(field => matcher.test(field));
     });
-  }, [translationFilteredSegments, searchQuery, compileSearch]);
+  }, [filteredSegments, searchQuery, compileSearch]);
+
+  const translateScope = useMemo(() => {
+    const selectedSegments = segments.filter(s => selectedIds.has(s.id));
+    const selectedNeedingTranslation = selectedSegments.filter(s => !(s.translatedText || '').trim());
+    if (selectedIds.size > 0) {
+      return { mode: 'selected' as const, targets: selectedNeedingTranslation };
+    }
+    const allNeedingTranslation = segments.filter(s => !(s.translatedText || '').trim());
+    return { mode: 'all' as const, targets: allNeedingTranslation };
+  }, [segments, selectedIds]);
+
+  const hasTranslatableTarget = translateScope.targets.length > 0;
+
+  const canOptimizeSelected = useMemo(() => {
+    if (selectedIds.size === 0) return false;
+    const selectedSegments = segments.filter(s => selectedIds.has(s.id));
+    if (selectedSegments.length === 0) return false;
+    return selectedSegments.some(s => (s.translatedText || '').trim() !== '');
+  }, [segments, selectedIds]);
 
   const captionTimeline = useMemo(() => {
     return segments
@@ -456,6 +487,7 @@ const App: React.FC = () => {
       const isReplace = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'h';
       const isUndo = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey;
       const isSpaceToggle = !event.ctrlKey && !event.metaKey && !event.altKey && (event.code === 'Space' || event.key === ' ');
+      const isEscape = event.key === 'Escape';
       if (isFind) {
         event.preventDefault();
         setShowSearchBox(true);
@@ -480,10 +512,14 @@ const App: React.FC = () => {
           video.pause();
         }
       }
+      if (isEscape && showSearchBox) {
+        event.preventDefault();
+        clearAndCloseSearch();
+      }
     };
     window.addEventListener('keydown', handleFindShortcut);
     return () => window.removeEventListener('keydown', handleFindShortcut);
-  }, [activeTab, segments.length, handleUndoSegments, videoPreviewUrl]);
+  }, [activeTab, segments.length, handleUndoSegments, videoPreviewUrl, showSearchBox, clearAndCloseSearch]);
 
   const totalDurationStr = useMemo(() => {
     if (processedSegments.length === 0) return '0m 0s';
@@ -739,9 +775,10 @@ const App: React.FC = () => {
       return;
     }
     if (segments.length === 0) return;
-    const needingTranslation = segments.filter(s => !s.translatedText || s.translatedText.trim() === '');
+    const selectedMode = translateScope.mode === 'selected';
+    const needingTranslation = translateScope.targets;
     if (needingTranslation.length === 0) {
-      showToast("All lines are already translated. Nothing to do.");
+      showToast(selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
@@ -787,7 +824,7 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setIsStoppingTranslate(false);
       setStatus('success');
-      showToast("Translation completed.");
+      showToast(selectedMode ? "Selected segments translated." : "All segments translated.");
     } catch (err: any) {
       setStatus('error');
       setTranslationState(prev => ({ ...prev, status: 'error' }));
@@ -811,13 +848,21 @@ const App: React.FC = () => {
       return;
     }
     if (selectedIds.size === 0) return;
+    if (!canOptimizeSelected) {
+      showToast("Only translated segments can be optimized.");
+      return;
+    }
     setIsOptimizing(true);
+    setIsStoppingOptimize(false);
+    optimizeStopRequestedRef.current = false;
     setStatus('processing');
     setProgress(0);
+    setOptimizeState({ processed: 0, total: 0 });
 
     let safeCount = 0;
     let optimizedCount = 0;
     let requestCount = 0;
+    let untranslatedSkippedCount = 0;
 
     const currentSegments = [...segments];
     const aiTargetSegments: SubtitleSegment[] = [];
@@ -825,6 +870,10 @@ const App: React.FC = () => {
     for (const segId of Array.from(selectedIds)) {
       const seg = currentSegments.find(s => s.id === segId);
       if (!seg) continue;
+      if (!(seg.translatedText || '').trim()) {
+        untranslatedSkippedCount++;
+        continue;
+      }
 
       const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold);
       const severity = meta.enrichedSegments[0].severity;
@@ -838,23 +887,15 @@ const App: React.FC = () => {
 
     if (aiTargetSegments.length > 0) {
       const batchSize = 20;
-      const totalBatches = Math.ceil(aiTargetSegments.length / batchSize);
-      
-      setTranslationState({ 
-        status: 'running', 
-        processed: 0, 
-        total: aiTargetSegments.length,
-        customText: `Batch 1/${totalBatches} (${Math.min(batchSize, aiTargetSegments.length)} segments)` 
-      });
+      let processedForOptimize = 0;
+      setOptimizeState({ processed: 0, total: aiTargetSegments.length });
 
       for (let i = 0; i < aiTargetSegments.length; i += batchSize) {
+        if (optimizeStopRequestedRef.current) {
+          break;
+        }
         const currentBatch = aiTargetSegments.slice(i, i + batchSize);
         const batchIdx = Math.floor(i / batchSize) + 1;
-        
-        setTranslationState(prev => ({ 
-          ...prev, 
-          customText: `Batch ${batchIdx}/${totalBatches} (${currentBatch.length} segments)` 
-        }));
 
         try {
           const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.optimizationMode, settings.aiModel, settings.apiKey);
@@ -877,18 +918,36 @@ const App: React.FC = () => {
         }
 
         const progressPercent = Math.floor(((i + currentBatch.length) / aiTargetSegments.length) * 100);
+        processedForOptimize = Math.min(aiTargetSegments.length, i + currentBatch.length);
+        setOptimizeState({ processed: processedForOptimize, total: aiTargetSegments.length });
         setProgress(progressPercent);
       }
     }
 
+    const wasStopped = optimizeStopRequestedRef.current;
     commitSegmentsChange(currentSegments);
-    setProgress(100);
+    if (!wasStopped) setProgress(100);
     setStatus('success');
-    setSelectedIds(new Set());
-    setTranslationState(prev => ({ ...prev, status: 'completed', customText: undefined }));
     setIsOptimizing(false);
+    setIsStoppingOptimize(false);
+    optimizeStopRequestedRef.current = false;
+    setOptimizeState({ processed: 0, total: 0 });
+    if (!wasStopped) {
+      setSelectedIds(new Set());
+    }
     
-    showToast(`Optimization finished: Skipped ${safeCount} safe segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
+    if (wasStopped) {
+      showToast(`Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
+      return;
+    }
+    showToast(`Optimization finished: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
+  };
+
+  const handleStopOptimize = () => {
+    if (isStoppingOptimize) return;
+    optimizeStopRequestedRef.current = true;
+    setIsStoppingOptimize(true);
+    showToast("Stopping optimization...");
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -966,6 +1025,10 @@ const App: React.FC = () => {
 
   const updateSegmentText = (id: number, text: string) => {
     commitSegmentsChange(prev => prev.map(s => s.id === id ? { ...s, translatedText: text } : s));
+  };
+
+  const updateSegmentTime = (id: number, field: 'startTime' | 'endTime', value: string) => {
+    commitSegmentsChange(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
   };
 
   const deleteSegment = (id: number) => {
@@ -1061,21 +1124,21 @@ const App: React.FC = () => {
                   disabled={!translationPreset}
                   className="w-full min-h-[74px] p-3.5 bg-cyan-600/10 border border-cyan-500/20 rounded-xl text-left hover:bg-cyan-600/20 transition-all group flex flex-col justify-between disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-600/10"
                 >
-                  <span className="block font-bold text-cyan-400">Export Preset (.json)</span>
+                  <span className="block font-bold text-cyan-400">Export Translation Style (.json)</span>
                   <span className="text-[10px] text-slate-500">Translation style DNA preset.</span>
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-tran')}
                   className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between"
                 >
-                  <span className="block font-bold text-emerald-400">Export Translated SRT</span>
+                  <span className="block font-bold text-emerald-400">Export Translated (.srt)</span>
                   <span className="text-[10px] text-slate-500">Translated Vietnamese version.</span>
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-orig')}
                   className="w-full min-h-[74px] p-3.5 bg-slate-800 border border-slate-700 rounded-xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between"
                 >
-                  <span className="block font-bold text-slate-400">Export Original SRT</span>
+                  <span className="block font-bold text-slate-400">Export Original (.srt)</span>
                   <span className="text-[10px] text-slate-500">Original Chinese version.</span>
                 </button>
               </div>
@@ -1102,6 +1165,124 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
+          {activeTab === 'editor' && (
+            <div className="shrink-0 ml-4">
+              <div ref={searchAreaRef}>
+                {!showSearchBox ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSearchBox(true);
+                      setShowReplaceBox(false);
+                    }}
+                    className="p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
+                    title="Search segments"
+                    aria-label="Search segments"
+                  >
+                    <Search size={14} />
+                  </button>
+                ) : (
+                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[280px]">
+                    <div className="inline-flex items-center gap-2 px-1 py-0.5">
+                      <span className="text-slate-400"><Search size={14} /></span>
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search"
+                        className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setSearchCaseSensitive(prev => !prev)}
+                        title="Case sensitive"
+                        aria-label="Case sensitive"
+                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                          searchCaseSensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Aa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchWholeWord(prev => !prev)}
+                        title="Match whole word"
+                        aria-label="Match whole word"
+                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                          searchWholeWord ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
+                        }`}
+                      >
+                        ab
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSearchRegexMode(prev => !prev)}
+                        title="Regex search"
+                        aria-label="Regex search"
+                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
+                          searchRegexMode ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        .*
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearAndCloseSearch}
+                        title="Clear and close search"
+                        aria-label="Clear and close search"
+                        className="px-1.5 rounded text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
+                      >
+                        x
+                      </button>
+                    </div>
+
+                    {showReplaceBox ? (
+                      <div className="inline-flex items-center gap-2 px-1 py-0.5 border-t border-slate-700/70">
+                        <span className="text-[11px] text-slate-400">R</span>
+                        <input
+                          ref={replaceInputRef}
+                          type="text"
+                          value={replaceQuery}
+                          onChange={(e) => setReplaceQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleReplaceNext();
+                            }
+                          }}
+                          placeholder="Replace"
+                          className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleReplaceAll}
+                          className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
+                          title="Replace all"
+                          aria-label="Replace all"
+                        >
+                          All
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowReplaceBox(true);
+                          setTimeout(() => replaceInputRef.current?.focus(), 0);
+                        }}
+                        className="self-end px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
+                        title="Open replace box (Ctrl+H)"
+                        aria-label="Open replace box"
+                      >
+                        Replace
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1171,58 +1352,59 @@ const App: React.FC = () => {
                     <option value="safe">Safe</option>
                     <option value="warning">Warning</option>
                     <option value="critical">Critical</option>
-                  </select>
-
-                  <select
-                    value={translationFilter}
-                    onChange={(e) => setTranslationFilter(e.target.value as 'all' | 'translated' | 'untranslated')}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
-                    title="Translation status filter"
-                    aria-label="Translation status filter"
-                  >
-                    <option value="all">All</option>
+                    <option value="timeline">Timeline Issues</option>
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
                   </select>
 
-                  {translationState.status === 'running' ? (
-                    <>
-                      <button
-                        onClick={handleTranslate}
-                        disabled
-                        className="relative overflow-hidden inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-80"
-                      >
-                        <span
-                          className="absolute left-0 top-0 h-full bg-blue-500/30 pointer-events-none"
-                          style={{ width: `${progress}%` }}
-                        />
-                        <span className="relative z-10 shrink-0">{ICONS.AI}</span>
-                        <span className="relative z-10">
-                          Translating {translationState.processed}/{translationState.total} ({progress}%)
-                        </span>
-                      </button>
-                      <button
-                        onClick={handleStopTranslate}
-                        disabled={isStoppingTranslate}
-                        className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {isStoppingTranslate ? 'Stopping...' : 'Stop'}
-                      </button>
-                    </>
-                  ) : (
-                    <button onClick={handleTranslate} disabled={status === 'processing'} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-60 transition-colors hover:bg-blue-600/70">
-                      <span className="shrink-0">{ICONS.AI}</span>
-                      <span>Translate All</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={translationState.status === 'running' ? handleStopTranslate : handleTranslate}
+                    disabled={translationState.status === 'running' ? isStoppingTranslate : (status === 'processing' || !hasTranslatableTarget)}
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                      translationState.status === 'running'
+                        ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
+                        : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60'
+                    }`}
+                  >
+                    {translationState.status === 'running' && (
+                      <span
+                        className="absolute left-0 top-0 h-full bg-white/10 pointer-events-none"
+                        style={{ width: `${progress}%` }}
+                      />
+                    )}
+                    <span className="relative z-10 shrink-0">{ICONS.AI}</span>
+                    <span className="relative z-10">
+                      {translationState.status === 'running'
+                        ? (isStoppingTranslate
+                          ? 'Stopping...'
+                          : `Stop (${translationState.processed}/${translationState.total} - ${progress}%)`)
+                        : (translateScope.mode === 'selected' ? 'Translate Selected' : 'Translate All')}
+                    </span>
+                  </button>
 
                   <button
-                    onClick={handleAiOptimize}
-                    disabled={status === 'processing' || selectedIds.size === 0 || isOptimizing}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700/70 border border-blue-500/40 text-blue-100 rounded-lg text-[11px] font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-600/70"
+                    onClick={isOptimizing ? handleStopOptimize : handleAiOptimize}
+                    disabled={isOptimizing ? isStoppingOptimize : (status === 'processing' || !canOptimizeSelected)}
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                      isOptimizing
+                        ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
+                        : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-50 disabled:cursor-not-allowed'
+                    }`}
                   >
-                    <span className="shrink-0">{ICONS.AI}</span>
-                    <span>{isOptimizing ? 'Optimizing...' : 'Optimize'}</span>
+                    {isOptimizing && (
+                      <span
+                        className="absolute left-0 top-0 h-full bg-white/10 pointer-events-none"
+                        style={{ width: `${progress}%` }}
+                      />
+                    )}
+                    <span className="relative z-10 shrink-0">{ICONS.AI}</span>
+                    <span className="relative z-10">
+                      {isOptimizing
+                        ? (isStoppingOptimize
+                          ? 'Stopping...'
+                          : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progress}%)`)
+                        : 'Optimize Selected'}
+                    </span>
                   </button>
 
                   <input
@@ -1243,111 +1425,6 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <div ref={searchAreaRef}>
-                    {!showSearchBox ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSearchBox(true);
-                          setShowReplaceBox(false);
-                        }}
-                        className="p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
-                        title="Search segments"
-                        aria-label="Search segments"
-                      >
-                        <Search size={14} />
-                      </button>
-                    ) : (
-                      <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[260px]">
-                        <div className="inline-flex items-center gap-2 px-1 py-0.5">
-                          <span className="text-slate-400"><Search size={14} /></span>
-                          <input
-                            ref={searchInputRef}
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search"
-                            className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setSearchCaseSensitive(prev => !prev)}
-                            title="Case sensitive"
-                            aria-label="Case sensitive"
-                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                              searchCaseSensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            Aa
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSearchWholeWord(prev => !prev)}
-                            title="Match whole word"
-                            aria-label="Match whole word"
-                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                              searchWholeWord ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
-                            }`}
-                          >
-                            ab
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSearchRegexMode(prev => !prev)}
-                            title="Regex search"
-                            aria-label="Regex search"
-                            className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                              searchRegexMode ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            .*
-                          </button>
-                        </div>
-
-                        {showReplaceBox ? (
-                          <div className="inline-flex items-center gap-2 px-1 py-0.5 border-t border-slate-700/70">
-                            <span className="text-[11px] text-slate-400">R</span>
-                            <input
-                              ref={replaceInputRef}
-                              type="text"
-                              value={replaceQuery}
-                              onChange={(e) => setReplaceQuery(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleReplaceNext();
-                                }
-                              }}
-                              placeholder="Replace"
-                              className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleReplaceAll}
-                              className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
-                              title="Replace all"
-                              aria-label="Replace all"
-                            >
-                              All
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowReplaceBox(true);
-                              setTimeout(() => replaceInputRef.current?.focus(), 0);
-                            }}
-                            className="self-end px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
-                            title="Open replace box (Ctrl+H)"
-                            aria-label="Open replace box"
-                          >
-                            Replace
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
                     Page {currentPage} / {totalEditorPages}
                   </span>
@@ -1373,6 +1450,7 @@ const App: React.FC = () => {
               selectedIds={selectedIds} 
               onToggleSelect={handleToggleSelect} 
               onUpdateText={updateSegmentText} 
+              onUpdateTime={updateSegmentTime}
               onDeleteSegment={deleteSegment}
               onSegmentClick={handleSeekToSegmentStart}
               currentPage={currentPage}
@@ -1456,13 +1534,13 @@ const App: React.FC = () => {
             <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">AI Mode</h3>
+                <h3 className="text-lg font-bold text-slate-100">AI Settings</h3>
               </div>
 
               <div className="space-y-5">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Select Gemini model
+                    Model
                   </label>
                   <select 
                     id="ai-model-select"
@@ -1498,9 +1576,11 @@ const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowApiKey(prev => !prev)}
-                    className="absolute right-3 top-9 text-[10px] font-bold text-slate-400 hover:text-slate-200 uppercase tracking-widest"
+                    className="absolute right-3 top-9 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                    title={showApiKey ? 'Hide API key' : 'Show API key'}
                   >
-                    {showApiKey ? 'Hide' : 'Show'}
+                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                   <p className="text-[10px] text-slate-500 italic leading-relaxed">
                     This key is stored locally in your browser (localStorage) and is only sent directly to Google APIs when making requests.
@@ -1560,7 +1640,6 @@ const App: React.FC = () => {
                   );
                 })}
               </div>
-              <p className="text-[10px] text-slate-500 mt-6 italic">Dashboard data is session-based and resets when you clear the project or upload a new file.</p>
             </section>
           </div>
         </div>
