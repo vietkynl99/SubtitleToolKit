@@ -11,6 +11,17 @@ export default defineConfig({
   },
 
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'icons-vendor': ['lucide-react'],
+          'charts-vendor': ['recharts'],
+          'ai-vendor': ['@google/genai']
+        }
+      }
+    }
+  },
 
   resolve: {
     alias: {

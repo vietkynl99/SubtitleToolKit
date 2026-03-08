@@ -15,7 +15,7 @@ import {
   parseFileName,
   generateExportFileName
 } from './services/subtitleLogic';
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { Search, CopyCheck, CopyX, Eye, EyeOff } from 'lucide-react';
 import { 
   Status, 
@@ -34,10 +34,6 @@ import {
   analyzeTranslationStyle
 } from './services/geminiService';
 import Layout from './components/Layout';
-import SegmentList from './components/SegmentList';
-import AnalyzerPanel from './components/AnalyzerPanel';
-import FileToolsPage from './components/FileToolsPage';
-import PresetPage from './components/PresetPage';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
 const INITIAL_USAGE: ApiUsage = {
@@ -46,6 +42,10 @@ const INITIAL_USAGE: ApiUsage = {
   optimize: { requests: 0, tokens: 0 }
 };
 const EDITOR_PAGE_SIZE = 30;
+const SegmentList = lazy(() => import('./components/SegmentList'));
+const AnalyzerPanel = lazy(() => import('./components/AnalyzerPanel'));
+const FileToolsPage = lazy(() => import('./components/FileToolsPage'));
+const PresetPage = lazy(() => import('./components/PresetPage'));
 
 const App: React.FC = () => {
   // State
@@ -1301,11 +1301,15 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'translation-style' && (
-        <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading translation style tools...</div>}>
+          <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
+        </Suspense>
       )}
 
       {activeTab === 'file-tools' && (
-        <FileToolsPage fileName={fileName} totalSegments={segments.length} segments={segments} onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading file tools...</div>}>
+          <FileToolsPage fileName={fileName} totalSegments={segments.length} segments={segments} onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+        </Suspense>
       )}
 
       {activeTab === 'editor' && segments.length > 0 && (
@@ -1445,21 +1449,23 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
-            <SegmentList 
-              segments={editorSegments} 
-              selectedIds={selectedIds} 
-              onToggleSelect={handleToggleSelect} 
-              onUpdateText={updateSegmentText} 
-              onUpdateTime={updateSegmentTime}
-              onDeleteSegment={deleteSegment}
-              onSegmentClick={handleSeekToSegmentStart}
-              currentPage={currentPage}
-              searchQuery={searchQuery}
-              searchCaseSensitive={searchCaseSensitive}
-              searchWholeWord={searchWholeWord}
-              searchRegexMode={searchRegexMode}
-              activeSegmentId={activeCaptionSegmentId}
-            />
+            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading editor...</div>}>
+              <SegmentList 
+                segments={editorSegments} 
+                selectedIds={selectedIds} 
+                onToggleSelect={handleToggleSelect} 
+                onUpdateText={updateSegmentText} 
+                onUpdateTime={updateSegmentTime}
+                onDeleteSegment={deleteSegment}
+                onSegmentClick={handleSeekToSegmentStart}
+                currentPage={currentPage}
+                searchQuery={searchQuery}
+                searchCaseSensitive={searchCaseSensitive}
+                searchWholeWord={searchWholeWord}
+                searchRegexMode={searchRegexMode}
+                activeSegmentId={activeCaptionSegmentId}
+              />
+            </Suspense>
             {videoPreviewUrl && (
               <>
                 <div
@@ -1521,7 +1527,9 @@ const App: React.FC = () => {
             }`}
           >
             {showQualityDashboard && (
-              <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+              <Suspense fallback={<div className="h-full flex items-center justify-center text-slate-400 text-sm">Loading dashboard...</div>}>
+                <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+              </Suspense>
             )}
           </div>
         </div>
