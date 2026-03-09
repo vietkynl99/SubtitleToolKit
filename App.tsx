@@ -1318,10 +1318,10 @@ const App: React.FC = () => {
             type="button"
             onClick={() => setShowQualityDashboard(prev => !prev)}
             className="absolute top-3 right-3 z-30 w-10 h-10 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-300 transition-all flex items-center justify-center"
-            aria-label={showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}
-            title={showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}
+            aria-label={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
+            title={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
           >
-            <span className="sr-only">{showQualityDashboard ? 'Hide quality dashboard' : 'Show quality dashboard'}</span>
+            <span className="sr-only">{showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}</span>
             <span className="flex flex-col gap-1">
               <span className="block w-4 h-[2px] bg-current rounded-full"></span>
               <span className="block w-4 h-[2px] bg-current rounded-full"></span>

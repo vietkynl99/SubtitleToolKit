@@ -60,6 +60,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   }));
 
   const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
+  const hasIssueAlerts = data.timelineOverlapLines > 0 || data.tooLongLines > 0;
 
   // Requirement: Translation Progress (v2.2.0)
   const translatedCount = segments.filter(s => s.translatedText && s.translatedText.trim() !== '').length;
@@ -68,39 +69,38 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   return (
     <div className="p-4 space-y-6 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-8">
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Quality Dashboard</h3>
-        </div>
-        <div className="space-y-3 mb-4">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Issue Alerts</h3>
-          {data.timelineOverlapLines > 0 && (
-            <button
-              type="button"
-              onClick={() => onFilterTrigger(activeFilter === 'timeline' ? 'all' : 'timeline')}
-              className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
-                activeFilter === 'timeline'
-                  ? 'bg-rose-500/20 border border-rose-400/50 shadow-lg shadow-rose-500/10'
-                  : 'bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/15'
-              }`}
-              title="Click to show only timeline-overlap segments"
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
-              <div>
-                <p className="text-xs font-bold text-rose-400">{data.timelineOverlapLines} timeline overlap issues</p>
-                <p className="text-[10px] text-rose-400/60 leading-normal">Detected pairs where previous end time is greater than next start time.</p>
+        {hasIssueAlerts && (
+          <div className="space-y-3 mb-4">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Issue Alert</h3>
+            {data.timelineOverlapLines > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'timeline' ? 'all' : 'timeline')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'timeline'
+                    ? 'bg-rose-500/20 border border-rose-400/50 shadow-lg shadow-rose-500/10'
+                    : 'bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/15'
+                }`}
+                title="Click to show only timeline-overlap segments"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-rose-400">{data.timelineOverlapLines} timeline overlap issues</p>
+                  <p className="text-[10px] text-rose-400/60 leading-normal">Detected pairs where previous end time is greater than next start time.</p>
+                </div>
+              </button>
+            )}
+            {data.tooLongLines > 0 && (
+              <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
+                  <p className="text-[10px] text-amber-400/60 leading-normal">More than 2 lines. Viewers may find it hard to read quickly.</p>
+                </div>
               </div>
-            </button>
-          )}
-          {data.tooLongLines > 0 && (
-            <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
-              <div>
-                <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
-                <p className="text-[10px] text-amber-400/60 leading-normal">More than 2 lines. Viewers may find it hard to read quickly.</p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Overview</h3>
         <div className="grid grid-cols-2 gap-3">
           <button 
