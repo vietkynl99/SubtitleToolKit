@@ -142,8 +142,7 @@ Keep all character names and proper nouns consistent.
 • If a term looks like a name, treat it as a name rather than translating its meaning.
 
 8. Word choice
-If multiple Vietnamese expressions are possible,
-prefer the more vivid and entertaining wording when humor level is high.
+If multiple Vietnamese expressions are possible, prefer the more vivid and entertaining wording.
 
 9. Context usage
 Each subtitle must remain understandable independently.
