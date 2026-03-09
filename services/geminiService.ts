@@ -17,55 +17,88 @@ export async function translateBatch(
   const ai = new GoogleGenAI({ apiKey });
 
   // -------- HUMOR STYLE --------
+  const humorLevel = preset?.humor_level ?? 0;
+
   let humorRule = "";
 
-  if (preset) {
-    const h = preset.humor_level;
-
-    if (h <= 2) {
-      humorRule = "Neutral narration.";
-    }
-    else if (h <= 4) {
-      humorRule = "Natural conversational tone.";
-    }
-    else if (h <= 6) {
-      humorRule = "Light playful narration allowed.";
-    }
-    else if (h <= 8) {
-      humorRule = "Energetic recap style narration.";
-    }
-    else {
-      humorRule = `
-Playful Vietnamese narration.
-Light internet slang may be used if it fits the context.
-Do not force slang if it breaks tone.
+  if (humorLevel <= 2) {
+    humorRule = `
+Neutral narration.
+Translate faithfully with clear Vietnamese subtitles.
+No sarcasm or exaggeration.
 `;
   }
+  else if (humorLevel <= 4) {
+    humorRule = `
+Natural conversational narration.
+Subtitles should sound like natural spoken Vietnamese.
+Very mild humor allowed.
+`;
+  }
+  else if (humorLevel <= 6) {
+    humorRule = `
+Playful narration style.
+
+Guidelines:
+• Prefer lively spoken Vietnamese
+• Slightly expressive wording allowed
+• Mild humor or playful tone may appear
+`;
+  }
+  else if (humorLevel <= 8) {
+    humorRule = `
+Energetic recap-style narration.
+
+Guidelines:
+• Prefer expressive and dynamic Vietnamese phrasing
+• Light sarcasm or teasing tone allowed
+• Slight exaggeration allowed if meaning remains accurate
+• Subtitles should feel entertaining and vivid
+`;
+  }
+  else {
+    humorRule = `
+High-intensity comedic narration.
+
+Guidelines:
+• Strongly prefer vivid, punchy Vietnamese expressions
+• Sarcasm, teasing tone, and playful exaggeration allowed
+• Subtitles may sound like an energetic storyteller narrating events
+• Avoid flat or overly literal translation
+• Entertainment value is important while preserving original meaning
+
+The emotional tone may be amplified
+for entertainment as long as the original meaning stays correct.
+`;
   }
 
-  // -------- STYLE --------
+  // -------- STYLE BLOCK --------
   const styleBlock = preset
     ? `
 Genres: ${preset.genres.join(", ")}
-Tone: ${preset.tone.join(", ")}
-Narration: ${humorRule}
+
+Narration style:
+${humorRule}
 `
-    : "Narration: Neutral Vietnamese subtitle style.";
+    : `
+Narration intensity level: 0/10
+Neutral Vietnamese subtitle narration.
+`;
 
   // -------- STORY CONTEXT --------
   const storyContext = preset?.reference?.title_or_summary
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
-  
+
   // -------- NEIGHBOR CONTEXT --------
   const neighborContext =
     contextBefore.length || contextAfter.length
       ? `
-Neighbor subtitles:
+Neighbor subtitles (reference only):
 Prev: ${JSON.stringify(contextBefore)}
 Next: ${JSON.stringify(contextAfter)}
 `
-    : "";
+      : "";
 
   // -------- PROMPT --------
   const prompt = `
@@ -76,28 +109,45 @@ JSON array of strings.
 
 Core rules:
 
-1. Meaning
-Preserve original meaning. Do not invent new story details.
+1. Preserve meaning
+Keep the original meaning accurate.
+Do not invent new story information.
 
-2. Subtitle readability
-Use natural spoken Vietnamese suitable for subtitles.
+2. Speaker consistency
+Do not change who is speaking in the subtitle.
 
-3. Length control
-Target <1.4x original length.
-Hard limit <2x.
-If too long, compress wording.
+3. Subtitle readability
+Use natural spoken Vietnamese suitable for storytelling subtitles.
 
-4. Short line rule
+4. Length control
+Keep Vietnamese subtitles concise.
+Target: <1.4× the Chinese line  
+Hard limit: <2×
+
+If a line becomes long, shorten phrasing and simplify structure.
+Prefer the shorter expression when meaning is the same.
+
+5. Short line rule
 Chinese ≤4 characters → Vietnamese 1–3 words.
 
-5. Narration style
-Prefer dynamic verbs and concise phrasing.
-Avoid overly formal written Vietnamese.
-Avoid unnecessary filler words.
+6. Dynamic narration
+Prefer concise, expressive Vietnamese phrasing.
+Avoid overly formal written language.
 
-6. Context usage
-Each subtitle should be understandable independently.
-Context is only for pronouns or reference.
+7. Names and proper nouns
+Keep all character names and proper nouns consistent.
+
+• The same Chinese name must always use the same Vietnamese form.
+• Do not create different spellings for similar names.
+• If a term looks like a name, treat it as a name rather than translating its meaning.
+
+8. Word choice
+If multiple Vietnamese expressions are possible,
+prefer the more vivid and entertaining wording when humor level is high.
+
+9. Context usage
+Each subtitle must remain understandable independently.
+Neighbor context is only for resolving pronouns or references.
 
 ${styleBlock}
 
@@ -128,10 +178,11 @@ ${JSON.stringify(batch.map(s => s.originalText))}
       throw new Error("Invalid response format: Expected a JSON array.");
     }
 
-    return { 
-      translatedTexts: translatedBatch, 
-      tokens: response.usageMetadata?.totalTokenCount || 0 
+    return {
+      translatedTexts: translatedBatch,
+      tokens: response.usageMetadata?.totalTokenCount || 0
     };
+
   } catch (error) {
     console.error("Batch translation error:", error);
     throw error;
