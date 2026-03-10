@@ -110,10 +110,10 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
 
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="p-8 border-b border-slate-800">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="p-5 sm:p-8 border-b border-slate-800">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold flex items-center gap-3">
+            <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-3">
               <span className="p-2 bg-blue-600/10 text-blue-400 rounded-xl">{ICONS.Split}</span>
               Configure Split Options
             </h2>
@@ -126,8 +126,8 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
           <p className="text-slate-500 text-sm mt-2">Split the SRT file into multiple parts based on specific criteria.</p>
         </div>
 
-        <div className="p-8 space-y-6">
-          <div className={`grid grid-cols-4 gap-2 transition-opacity ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="p-5 sm:p-8 space-y-6">
+          <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 transition-opacity ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
             {[
               { id: 'duration', label: 'Duration', desc: 'By Minutes' },
               { id: 'count', label: 'Line Count', desc: 'By Segments' },

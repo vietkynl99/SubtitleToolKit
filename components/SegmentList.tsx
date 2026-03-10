@@ -155,8 +155,8 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/50 h-full">
-      <div className="flex-1 overflow-y-auto p-2 no-scrollbar">
-        <div className="min-w-[920px]">
+      <div className="flex-1 overflow-y-auto overflow-x-auto p-2 no-scrollbar">
+        <div className="min-w-[840px] sm:min-w-[920px]">
           <div className="grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 px-3 py-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <div className="text-center">Sel</div>
             <div>#</div>

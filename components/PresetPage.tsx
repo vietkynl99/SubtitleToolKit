@@ -130,38 +130,38 @@ const PresetPage: React.FC<PresetPageProps> = ({
 
   if (!fileName) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-12 bg-slate-950">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 bg-slate-950">
         <div className="w-full max-w-lg text-center space-y-6">
-          <div className="w-20 h-20 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-700">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-700">
             {ICONS.Fix}
           </div>
-          <h2 className="text-2xl font-bold text-slate-200">No Project Loaded</h2>
-          <p className="text-slate-500">Please upload an SRT file before configuring the Translation Preset.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-200">No Project Loaded</h2>
+          <p className="text-slate-500 text-sm sm:text-base">Please upload an SRT file before configuring the Translation Preset.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-slate-950 no-scrollbar pb-24">
-      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-        <div className="flex items-center justify-between mb-4">
+    <div className="flex-1 p-4 sm:p-8 overflow-y-auto bg-slate-950 no-scrollbar pb-24">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 sm:mb-4">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-blue-600/10 text-blue-500 rounded-xl">{ICONS.Fix}</div>
             <div>
-              <h1 className="text-[24px] font-semibold text-slate-100">Translation Style (DNA)</h1>
+              <h1 className="text-[20px] sm:text-[24px] font-semibold text-slate-100">Translation Style (DNA)</h1>
             </div>
           </div>
           <div className="flex gap-3">
-            <label className={`flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20 ${isLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <label className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20 ${isLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
               {ICONS.Upload} Import
               {!isLoading && <input type="file" accept=".json" className="hidden" onChange={onImport} />}
             </label>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
-          <div className="bg-slate-900 border border-slate-800 rounded-[24px] p-6 space-y-6 shadow-xl flex flex-col relative overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 items-stretch">
+          <div className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[24px] p-5 sm:p-6 space-y-5 sm:space-y-6 shadow-xl flex flex-col relative overflow-hidden">
             <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Title / Summary
             </h3>
@@ -172,12 +172,12 @@ const PresetPage: React.FC<PresetPageProps> = ({
                 value={titleInput}
                 onChange={(e) => setTitleInput(e.target.value)}
                 disabled={isLoading}
-                className="flex-1 w-full bg-slate-800 border border-slate-700 focus:border-blue-500/50 outline-none p-5 rounded-2xl text-slate-100 text-base leading-relaxed resize-none font-medium transition-colors"
+                className="flex-1 w-full bg-slate-800 border border-slate-700 focus:border-blue-500/50 outline-none p-4 sm:p-5 rounded-2xl text-slate-100 text-sm sm:text-base leading-relaxed resize-none font-medium transition-colors"
               />
               <button
                 onClick={handleAnalyzeClick}
                 disabled={isLoading || !titleInput.trim()}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3"
+                className="w-full py-3 sm:py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 text-sm sm:text-base"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -194,7 +194,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl flex flex-col relative overflow-hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 space-y-6 sm:space-y-8 shadow-xl flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between">
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> STYLE CONFIGS
@@ -259,7 +259,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
                 </div>
 
                 <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-70">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Term Replacement
                     </div>

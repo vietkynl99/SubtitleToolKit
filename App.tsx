@@ -1272,7 +1272,7 @@ const App: React.FC = () => {
 
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
             <h3 className="text-xl font-bold mb-3">Clear current project?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -1284,7 +1284,7 @@ const App: React.FC = () => {
 
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
             <h3 className="text-xl font-bold mb-3">Upload a new file?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -1296,7 +1296,7 @@ const App: React.FC = () => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8 animate-in zoom-in duration-200">
             <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mb-6 mx-auto">
               {ICONS.Delete}
             </div>
@@ -1312,12 +1312,12 @@ const App: React.FC = () => {
 
       {showTermReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-3xl rounded-3xl shadow-2xl p-6 md:p-7 animate-in zoom-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 animate-in zoom-in duration-200">
             <h3 className="text-xl font-bold mb-2">Confirm Auto Replace</h3>
             <p className="text-slate-400 text-sm mb-4">
               {termReplacePreview.total} replacement(s) will be applied across original and translated fields.
             </p>
-            <div className="max-h-[360px] overflow-y-auto border border-slate-800 rounded-2xl p-3 space-y-3 bg-slate-950/40">
+            <div className="max-h-[280px] sm:max-h-[360px] overflow-y-auto border border-slate-800 rounded-2xl p-3 space-y-3 bg-slate-950/40">
               {termReplacePreview.items.length === 0 ? (
                 <div className="text-slate-500 text-sm">No matches found.</div>
               ) : (
@@ -1382,7 +1382,7 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-[28px] shadow-2xl p-5 md:p-6 animate-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-[22px] sm:rounded-[28px] shadow-2xl p-5 sm:p-6 animate-in zoom-in duration-300">
             <h3 className="text-2xl font-bold mb-4">Download</h3>
             <div className="space-y-3">
               <div className="flex flex-col gap-3">
@@ -1425,22 +1425,22 @@ const App: React.FC = () => {
       )}
 
       {segments.length > 0 && fileName && (
-        <div className="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between shrink-0 z-20">
-          <div className="flex items-center gap-4 overflow-hidden">
+        <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-20">
+          <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
               <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
-              <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
-                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span>{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
-                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="hidden sm:inline">{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
+                <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
                 <span>{totalDurationStr}</span>
               </div>
             </div>
           </div>
           {activeTab === 'editor' && (
-            <div className="shrink-0 ml-4">
+            <div className="shrink-0 sm:ml-4">
               <div ref={searchAreaRef}>
                 {!showSearchBox ? (
                   <button
@@ -1456,7 +1456,7 @@ const App: React.FC = () => {
                     <Search size={14} />
                   </button>
                 ) : (
-                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[280px]">
+                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[220px] sm:min-w-[280px]">
                     <div className="inline-flex items-center gap-2 px-1 py-0.5">
                       <span className="text-slate-400"><Search size={14} /></span>
                       <input
@@ -1561,14 +1561,14 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
-            <h1 className="text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-8">Professional subtitle translation and optimization.</p>
-            <label className={`relative group flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
+            <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">Professional subtitle translation and optimization.</p>
+            <label className={`relative group flex flex-col items-center justify-center w-full h-52 sm:h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
               <input type="file" accept=".srt,.sktproject" className="hidden" onChange={handleFileUpload} />
-              <div className="p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-5">{ICONS.Upload}</div>
-              <p className="text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
+              <div className="p-4 sm:p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-4 sm:mb-5">{ICONS.Upload}</div>
+              <p className="text-base sm:text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
             </label>
           </div>
         </div>
@@ -1603,9 +1603,9 @@ const App: React.FC = () => {
             </span>
           </button>
           <div ref={editorPaneRef} className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-            <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+            <div className="px-3 sm:px-4 py-2 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar">
                   <button
                     onClick={handleSelectAll}
                     title={editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect all' : 'Select all'}
@@ -1624,7 +1624,7 @@ const App: React.FC = () => {
                   <select
                     value={typeof filter === 'string' ? filter : 'all'}
                     onChange={(e) => setFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
                   >
                     <option value="all">All</option>
                     <option value="safe">Safe</option>
@@ -1638,7 +1638,7 @@ const App: React.FC = () => {
                   <button
                     onClick={translationState.status === 'running' ? handleStopTranslate : handleTranslate}
                     disabled={translationState.status === 'running' ? isStoppingTranslate : (status === 'processing' || !hasTranslatableTarget)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[120px] sm:min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
                       translationState.status === 'running'
                         ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
                         : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60'
@@ -1663,7 +1663,7 @@ const App: React.FC = () => {
                   <button
                     onClick={isOptimizing ? handleStopOptimize : handleAiOptimize}
                     disabled={isOptimizing ? isStoppingOptimize : (status === 'processing' || !canOptimizeSelected)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[130px] sm:min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
                       isOptimizing
                         ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
                         : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1694,14 +1694,13 @@ const App: React.FC = () => {
                         : 'No matches for Term Replacement'
                     }
                     aria-label="Auto replace by term rules"
-                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${
                       termReplaceCount > 0
-                        ? 'bg-cyan-700/60 border border-cyan-500/40 text-cyan-100 hover:bg-cyan-600/70'
-                        : 'bg-slate-800 border border-slate-700 text-slate-400 cursor-not-allowed'
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700'
+                        : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    <span className="shrink-0">{ICONS.Fix}</span>
-                    <span>Auto Replace</span>
+                    <span className="shrink-0">{ICONS.Replace}</span>
                   </button>
 
                   <input
@@ -1714,7 +1713,7 @@ const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => videoInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[11px] font-bold hover:bg-slate-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[10px] sm:text-[11px] font-bold hover:bg-slate-700 transition-colors"
                   >
                     <span className="shrink-0">{ICONS.Upload}</span>
                     <span>Preview</span>
@@ -1815,7 +1814,7 @@ const App: React.FC = () => {
             )}
           </div>
           <div
-            className={`bg-slate-900 transition-all duration-300 overflow-hidden ${
+            className={`bg-slate-900 transition-all duration-300 overflow-hidden fixed right-0 top-0 h-full z-20 sm:static sm:h-auto ${
               showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
             }`}
           >
@@ -1829,13 +1828,13 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-10 overflow-y-auto pb-24">
+        <div className="flex-1 p-4 sm:p-10 overflow-y-auto pb-24">
           <div className="max-w-4xl mx-auto space-y-8">
             {/* AI Mode (v3.1.0) - Dropdown Selection */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+            <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">AI Settings</h3>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">AI Settings</h3>
               </div>
 
               <div className="space-y-5">
@@ -1892,10 +1891,10 @@ const App: React.FC = () => {
             </section>
 
             {/* API Usage Dashboard (Session-Based) */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+            <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Success}</span>
-                <h3 className="text-lg font-bold text-slate-100">API Usage Dashboard</h3>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">API Usage Dashboard</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
