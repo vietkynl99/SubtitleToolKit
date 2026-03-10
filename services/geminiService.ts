@@ -279,15 +279,34 @@ export async function aiFixSegments(
   const ai = new GoogleGenAI({ apiKey });
 
   const instruction = mode === 'aggressive'
-    ? "AGGRESSIVE: Shorten maximally. Remove particles/softeners. Blunt synonyms. Brevity > Nuance. Min CPS."
-    : "SAFE: Flow improvement. Tighten slightly. Keep nuance.";
+    ? "AGGRESSIVE: Compress hard. Use short punchy Vietnamese. Prefer slangy or playful phrasing if it keeps meaning. Keep the funny/lầy vibe."
+    : "SAFE: Slightly tighten wording. Keep natural spoken Vietnamese and humorous tone if present.";
 
-  const prompt = `Optimize Vietnamese subtitles. ${instruction}
+  const prompt = `Optimize Vietnamese subtitles for readability and CPS.
+
+${instruction}
+
 Rules:
-- Units: Independent. No cross-context, merging, or splitting.
-- Meaning: Exact core. No fluff.
-- Format: JSON [{id, fixedText}].
-Data: ${JSON.stringify(segments.map(s => ({ id: s.id, text: s.translatedText || s.originalText })))}`;
+- Segment units are independent. Do NOT merge or split.
+- Preserve the core meaning.
+- Prefer shorter words and punchy phrasing.
+- Keep natural spoken Vietnamese (casual, meme-like tone allowed).
+- If original line is playful, keep the humor/lầy vibe.
+- Remove redundant filler but keep character voice.
+
+Length control:
+- Target ≤1.3x original length
+- Hard limit ≤1.6x
+- If Chinese original ≤4 characters → Vietnamese 1–3 words.
+
+Output format:
+JSON array [{id, fixedText}]
+
+Data:
+${JSON.stringify(segments.map(s => ({
+  id: s.id,
+  text: s.translatedText || s.originalText
+})))}`;
 
   try {
     const response = await ai.models.generateContent({
