@@ -249,6 +249,12 @@ Genres: ${taxonomy.genres.join(', ')}`,
       title_or_summary: titleOrSummary
     },
     genres: result.genres || [],
+    term_replacements: [],
+    term_replace_options: {
+      case_sensitive: false,
+      whole_word: false,
+      regex: false
+    },
     humor_level: result.humor_level || 0
   };
 

@@ -44,6 +44,12 @@ const PresetPanel: React.FC<PresetPanelProps> = ({ preset, onAnalyze, onExport, 
                 {preset.genres.join(', ') || '---'}
               </div>
             </div>
+            <div>
+              <div className="text-[9px] text-slate-600 font-bold uppercase mb-0.5">Term Replacements</div>
+              <div className="text-[11px] text-slate-300 font-bold truncate">
+                {preset.term_replacements.length > 0 ? `${preset.term_replacements.length} rules` : '---'}
+              </div>
+            </div>
           </div>
 
           <div>

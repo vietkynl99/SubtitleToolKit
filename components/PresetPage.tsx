@@ -27,6 +27,12 @@ const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onR
   </span>
 );
 
+const getNextTermId = (list: { id: number }[]): number => {
+  if (list.length === 0) return 1;
+  const maxId = Math.max(...list.map(t => t.id));
+  return maxId + 1;
+};
+
 const PresetPage: React.FC<PresetPageProps> = ({
   preset,
   onAnalyze,
@@ -83,6 +89,40 @@ const PresetPage: React.FC<PresetPageProps> = ({
     onUpdatePreset({ ...preset, humor_level: val });
   };
 
+  const handleAddTerm = () => {
+    if (!preset || isLoading) return;
+    const nextId = getNextTermId(preset.term_replacements);
+    onUpdatePreset({
+      ...preset,
+      term_replacements: [...preset.term_replacements, { id: nextId, find: "", replace_with: "" }]
+    });
+  };
+
+  const handleUpdateTerm = (index: number, field: "find" | "replace_with", value: string) => {
+    if (!preset || isLoading) return;
+    const next = [...preset.term_replacements];
+    next[index] = { ...next[index], [field]: value };
+    onUpdatePreset({ ...preset, term_replacements: next });
+  };
+
+  const handleRemoveTerm = (index: number) => {
+    if (!preset || isLoading) return;
+    const next = [...preset.term_replacements];
+    next.splice(index, 1);
+    onUpdatePreset({ ...preset, term_replacements: next });
+  };
+
+  const handleTermOptionChange = (key: "case_sensitive" | "whole_word" | "regex") => {
+    if (!preset || isLoading) return;
+    onUpdatePreset({
+      ...preset,
+      term_replace_options: {
+        ...preset.term_replace_options,
+        [key]: !preset.term_replace_options[key]
+      }
+    });
+  };
+
   const handleAnalyzeClick = () => {
     if (!titleInput.trim()) return;
     onAnalyze(titleInput);
@@ -121,7 +161,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
-          <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-8 space-y-8 shadow-xl flex flex-col relative overflow-hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-[24px] p-6 space-y-6 shadow-xl flex flex-col relative overflow-hidden">
             <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Title / Summary
             </h3>
@@ -172,10 +212,12 @@ const PresetPage: React.FC<PresetPageProps> = ({
                 <div className="text-[13px] font-medium text-slate-400">AI is analyzing style DNA...</div>
               </div>
             ) : preset ? (
-              <div className="space-y-8 flex-1 animate-in fade-in duration-500">
-                <div className="space-y-3">
-                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Genres (Max 5)</div>
-                  <div className="flex flex-wrap gap-2 min-h-[44px] p-3 bg-slate-900 border border-slate-700 rounded-2xl focus-within:border-blue-500/40 transition-colors">
+              <div className="space-y-4 flex-1 animate-in fade-in duration-500">
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-70">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Genres (Max 5)
+                  </div>
+                  <div className="flex flex-wrap gap-2 min-h-[40px] p-2.5 bg-slate-900 border border-slate-700 rounded-xl focus-within:border-blue-500/40 transition-colors">
                     {preset.genres.map((g, idx) => (
                       <TagChip key={g} label={g} onRemove={() => handleRemoveTag('genres', idx)} />
                     ))}
@@ -186,15 +228,17 @@ const PresetPage: React.FC<PresetPageProps> = ({
                       onChange={(e) => setGenreInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput)}
                       disabled={preset.genres.length >= 5}
-                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[180px]"
+                      className="bg-transparent border-none outline-none text-[12px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[160px]"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t border-slate-800/50">
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Humor Intensity</div>
-                    <div className="text-[16px] font-semibold text-slate-200">{preset.humor_level} <span className="text-[11px] text-slate-500 font-medium">/ 10</span></div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-70">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Humor Intensity
+                    </div>
+                    <div className="text-[14px] font-semibold text-slate-200">{preset.humor_level} <span className="text-[10px] text-slate-500 font-medium">/ 10</span></div>
                   </div>
 
                   <div className="space-y-2">
@@ -205,12 +249,108 @@ const PresetPage: React.FC<PresetPageProps> = ({
                       value={preset.humor_level}
                       onChange={(e) => handleHumorChange(Number(e.target.value))}
                       disabled={isLoading}
-                      className="w-full h-[4px] bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer focus:ring-4 focus:ring-blue-500/10 custom-range-slider"
+                      className="w-full h-[3px] bg-slate-800 rounded-full appearance-none accent-blue-500 cursor-pointer focus:ring-4 focus:ring-blue-500/10 custom-range-slider"
                     />
-                    <div className="flex justify-between text-[11px] font-bold text-slate-500 opacity-50 uppercase tracking-widest">
+                    <div className="flex justify-between text-[10px] font-bold text-slate-500 opacity-50 uppercase tracking-widest">
                       <span>Serious (0-2)</span>
                       <span>Comedic (9-10)</span>
                     </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-70">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Term Replacement
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTermOptionChange("case_sensitive")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                          preset.term_replace_options.case_sensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Case sensitive"
+                        aria-label="Case sensitive"
+                      >
+                        Aa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTermOptionChange("whole_word")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                          preset.term_replace_options.whole_word ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
+                        }`}
+                        title="Match whole word"
+                        aria-label="Match whole word"
+                      >
+                        ab
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTermOptionChange("regex")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+                          preset.term_replace_options.regex ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Regex search"
+                        aria-label="Regex search"
+                      >
+                        .*
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-y-2 gap-x-2 text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+                      <div className="col-span-5">Find</div>
+                      <div className="col-span-5">Replace With</div>
+                      <div className="col-span-2"></div>
+                    </div>
+                    {preset.term_replacements.length === 0 ? (
+                      <div className="text-[11px] text-slate-600 italic">No replacements added.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {preset.term_replacements.map((t, idx) => (
+                          <div key={t.id} className="grid grid-cols-12 gap-y-2 gap-x-2">
+                            <input
+                              type="text"
+                              placeholder="Find..."
+                              value={t.find}
+                              onChange={(e) => handleUpdateTerm(idx, "find", e.target.value)}
+                              disabled={isLoading}
+                              className="col-span-5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-[11px] text-slate-200 outline-none focus:border-blue-500/50 transition-colors"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Replace with..."
+                              value={t.replace_with}
+                              onChange={(e) => handleUpdateTerm(idx, "replace_with", e.target.value)}
+                              disabled={isLoading}
+                              className="col-span-5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-2 text-[11px] text-slate-200 outline-none focus:border-blue-500/50 transition-colors"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTerm(idx)}
+                              disabled={isLoading}
+                              className="col-span-2 w-full bg-slate-800 hover:bg-rose-500/20 text-rose-400 rounded-xl flex items-center justify-center transition-colors"
+                              aria-label="Remove row"
+                              title="Remove row"
+                            >
+                              <span className="text-[14px]">{ICONS.Delete}</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleAddTerm}
+                      disabled={isLoading}
+                      className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-full text-base font-bold transition-colors"
+                      aria-label="Add row"
+                      title="Add row"
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               </div>

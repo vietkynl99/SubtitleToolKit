@@ -9,6 +9,12 @@ export interface TranslationPreset {
     title_or_summary: string;
   };
   genres: string[];
+  term_replacements: { id: number; find: string; replace_with: string }[];
+  term_replace_options: {
+    case_sensitive: boolean;
+    whole_word: boolean;
+    regex: boolean;
+  };
   humor_level: number;
 }
 
