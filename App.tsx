@@ -611,11 +611,15 @@ const App: React.FC = () => {
         const json = JSON.parse(event.target?.result as string);
         const isValid = json.reference?.title_or_summary && 
                         Array.isArray(json.genres) && 
-                        Array.isArray(json.tone) && 
                         typeof json.humor_level === 'number';
 
         if (isValid) {
-          setTranslationPreset(json);
+          const cleaned: TranslationPreset = {
+            reference: { title_or_summary: json.reference.title_or_summary },
+            genres: json.genres,
+            humor_level: json.humor_level
+          };
+          setTranslationPreset(cleaned);
           showToast("DNA preset imported successfully.");
         } else {
           showToast("Invalid DNA file or incompatible version.");

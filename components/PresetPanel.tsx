@@ -37,17 +37,11 @@ const PresetPanel: React.FC<PresetPanelProps> = ({ preset, onAnalyze, onExport, 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <div>
               <div className="text-[9px] text-slate-600 font-bold uppercase mb-0.5">Genres</div>
               <div className="text-[11px] text-slate-300 font-bold truncate">
                 {preset.genres.join(', ') || '---'}
-              </div>
-            </div>
-            <div>
-              <div className="text-[9px] text-slate-600 font-bold uppercase mb-0.5">Tone</div>
-              <div className="text-[11px] text-slate-300 font-bold truncate">
-                {preset.tone.join(', ') || '---'}
               </div>
             </div>
           </div>

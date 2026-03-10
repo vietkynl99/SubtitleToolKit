@@ -109,7 +109,11 @@ export function parseSktProject(content: string): { segments: SubtitleSegment[],
 
   // Ensure preset is either a valid object or null
   const preset = (json.preset && typeof json.preset === 'object' && Object.keys(json.preset).length > 0) 
-    ? json.preset 
+    ? {
+        reference: json.preset.reference || { title_or_summary: "" },
+        genres: Array.isArray(json.preset.genres) ? json.preset.genres : [],
+        humor_level: typeof json.preset.humor_level === 'number' ? json.preset.humor_level : 0
+      }
     : null;
 
   return { segments, preset, title: json.original_title };

@@ -38,7 +38,6 @@ const PresetPage: React.FC<PresetPageProps> = ({
 }) => {
   const [titleInput, setTitleInput] = useState('');
   const [genreInput, setGenreInput] = useState('');
-  const [toneInput, setToneInput] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,19 +46,18 @@ const PresetPage: React.FC<PresetPageProps> = ({
     }
   }, [preset]);
 
-  const handleAddTag = (type: 'genres' | 'tone', value: string) => {
+  const handleAddTag = (type: 'genres', value: string) => {
     if (!preset) return;
     const cleanValue = value.trim();
     if (!cleanValue) return;
 
     if (preset[type].length >= 5) {
-      setWarning(`Maximum 5 ${type === 'genres' ? 'genres' : 'tones'}.`);
+      setWarning('Maximum 5 genres.');
       return;
     }
 
     if (preset[type].includes(cleanValue)) {
-      if (type === 'genres') setGenreInput('');
-      else setToneInput('');
+      setGenreInput('');
       return;
     }
 
@@ -68,12 +66,11 @@ const PresetPage: React.FC<PresetPageProps> = ({
       [type]: [...preset[type], cleanValue]
     });
 
-    if (type === 'genres') setGenreInput('');
-    else setToneInput('');
+    setGenreInput('');
     setWarning(null);
   };
 
-  const handleRemoveTag = (type: 'genres' | 'tone', index: number) => {
+  const handleRemoveTag = (type: 'genres', index: number) => {
     if (!preset) return;
     const newList = [...preset[type]];
     newList.splice(index, 1);
@@ -189,24 +186,6 @@ const PresetPage: React.FC<PresetPageProps> = ({
                       onChange={(e) => setGenreInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag('genres', genreInput)}
                       disabled={preset.genres.length >= 5}
-                      className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[180px]"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="text-[11px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-60">Tones (Max 5)</div>
-                  <div className="flex flex-wrap gap-2 min-h-[44px] p-3 bg-slate-900 border border-slate-700 rounded-2xl focus-within:border-blue-500/40 transition-colors">
-                    {preset.tone.map((t, idx) => (
-                      <TagChip key={t} label={t} onRemove={() => handleRemoveTag('tone', idx)} />
-                    ))}
-                    <input
-                      type="text"
-                      placeholder={preset.tone.length < 5 ? 'Add tone and press Enter...' : ''}
-                      value={toneInput}
-                      onChange={(e) => setToneInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag('tone', toneInput)}
-                      disabled={preset.tone.length >= 5}
                       className="bg-transparent border-none outline-none text-[13px] text-slate-300 placeholder:text-slate-600 flex-1 min-w-[180px]"
                     />
                   </div>

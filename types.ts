@@ -9,7 +9,6 @@ export interface TranslationPreset {
     title_or_summary: string;
   };
   genres: string[];
-  tone: string[];
   humor_level: number;
 }
 
