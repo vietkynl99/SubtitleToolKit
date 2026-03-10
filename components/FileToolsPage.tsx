@@ -20,13 +20,13 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
 
   if (!props.fileName) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-12 bg-slate-950">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 bg-slate-950">
         <div className="w-full max-w-lg text-center space-y-6">
-          <div className="w-20 h-20 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-700">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-900 border border-slate-800 rounded-3xl flex items-center justify-center mx-auto text-slate-700">
             {ICONS.Split}
           </div>
-          <h2 className="text-2xl font-bold text-slate-200">No Project Loaded</h2>
-          <p className="text-slate-500">Please upload an SRT file before using File Tools.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-200">No Project Loaded</h2>
+          <p className="text-slate-500 text-sm sm:text-base">Please upload an SRT file before using File Tools.</p>
         </div>
       </div>
     );
@@ -35,25 +35,25 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
       {/* Page Header */}
-      <div className="bg-slate-900 border-b border-slate-800 px-8 py-5 flex items-center justify-between shrink-0">
+      <div className="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between shrink-0 gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-100 flex items-center gap-3">
             <span className="p-2 bg-blue-600/10 text-blue-500 rounded-xl">{ICONS.Split}</span>
             File Tools
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Manage and optimize your subtitle files.</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Manage and optimize your subtitle files.</p>
         </div>
         
         <button 
           onClick={() => setShowSplitConfig(true)}
-          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20"
+          className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20"
         >
           {ICONS.Split} Configure Split
         </button>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto no-scrollbar p-8">
+      <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-8">
         <div className="max-w-6xl mx-auto space-y-8">
           <section className="space-y-6">
             <div className="flex items-center justify-between">
@@ -63,19 +63,19 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
             </div>
 
             {props.generatedFiles.length === 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-12 text-center space-y-6 animate-in fade-in duration-500">
-                <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
+              <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-12 text-center space-y-5 sm:space-y-6 animate-in fade-in duration-500">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
                   {ICONS.Split}
                 </div>
                 <div className="max-w-md mx-auto">
-                  <h3 className="text-lg font-bold text-slate-300">No split files yet</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-300">No split files yet</h3>
                   <p className="text-slate-500 text-sm mt-2 leading-relaxed">
                     Use the Split tool to divide the file into smaller parts by duration or line count.
                   </p>
                 </div>
                 <button 
                   onClick={() => setShowSplitConfig(true)}
-                  className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
+                  className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
                 >
                   Start splitting
                 </button>
@@ -83,7 +83,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                 {props.generatedFiles.map((file, idx) => (
-                  <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[32px] p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
+                  <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="p-3 bg-blue-600/10 text-blue-400 rounded-xl">

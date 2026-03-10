@@ -214,19 +214,13 @@ export async function analyzeTranslationStyle(titleOrSummary: string, model: AiM
       "Chiến đấu", "Sinh tồn", "Báo thù", "Trinh thám", "Kịch tính", 
       "Hài hước", "Hài hước đen", "Parody", "Châm biếm"
     ],
-    tone: [
-      "Trang trọng", "Hào hùng", "Huyền ảo", "Bí ẩn", "U ám", 
-      "Lạnh lùng", "Kiêu ngạo", "Thực tế", "Đời thường", "Phóng khoáng", 
-      "Hài hước", "Mỉa mai", "Châm biếm", "Kịch tính", "Nghiêm túc"
-    ]
   };
 
   const response = await ai.models.generateContent({
     model,
-    contents: `Phân tích thể loại và tông giọng dịch dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}.
+    contents: `Phân tích thể loại dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}.
 Chỉ được phép chọn từ danh sách sau:
-Genres: ${taxonomy.genres.join(', ')}
-Tone: ${taxonomy.tone.join(', ')}`,
+Genres: ${taxonomy.genres.join(', ')}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -237,17 +231,12 @@ Tone: ${taxonomy.tone.join(', ')}`,
             items: { type: Type.STRING },
             description: "1-5 thể loại phù hợp nhất từ danh sách."
           },
-          tone: { 
-            type: Type.ARRAY, 
-            items: { type: Type.STRING },
-            description: "1-5 tông giọng phù hợp nhất từ danh sách."
-          },
           humor_level: { 
             type: Type.NUMBER,
             description: "Mức độ hài hước từ 0 đến 10"
           }
         },
-        required: ["genres", "tone", "humor_level"]
+        required: ["genres", "humor_level"]
       }
     }
   });
@@ -260,7 +249,12 @@ Tone: ${taxonomy.tone.join(', ')}`,
       title_or_summary: titleOrSummary
     },
     genres: result.genres || [],
-    tone: result.tone || [],
+    term_replacements: [],
+    term_replace_options: {
+      case_sensitive: false,
+      whole_word: false,
+      regex: false
+    },
     humor_level: result.humor_level || 0
   };
 
@@ -342,3 +336,4 @@ ${JSON.stringify(segments.map(s => ({
     return { segments, tokens: 0 };
   }
 }
+

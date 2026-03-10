@@ -89,6 +89,20 @@ const App: React.FC = () => {
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [showTermReplaceModal, setShowTermReplaceModal] = useState<boolean>(false);
+  const [termReplacePreview, setTermReplacePreview] = useState<{
+    total: number;
+    items: Array<{
+      segmentId: number;
+      field: 'original' | 'translated';
+      find: string;
+      replace_with: string;
+      count: number;
+      before: string;
+      after: string;
+    }>;
+  }>({ total: 0, items: [] });
+  const [termReplacePage, setTermReplacePage] = useState<number>(1);
   const [segmentToDelete, setSegmentToDelete] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
@@ -362,6 +376,62 @@ const App: React.FC = () => {
       .map(seg => seg.text);
   }, [captionTimeline, videoCurrentTime, videoPreviewUrl]);
 
+  const termRules = useMemo(() => {
+    if (!translationPreset?.term_replacements?.length) return [];
+    return translationPreset.term_replacements
+      .filter(t => (t.find || '').trim() !== '')
+      .map(t => ({ ...t, find: t.find.trim() }));
+  }, [translationPreset]);
+
+  const termReplaceOptions = useMemo(() => {
+    return translationPreset?.term_replace_options || {
+      case_sensitive: false,
+      whole_word: false,
+      regex: false
+    };
+  }, [translationPreset]);
+
+  const buildTermRegex = useCallback((find: string) => {
+    const q = find.trim();
+    if (!q) return null;
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const basePattern = termReplaceOptions.regex ? q : escapeRegExp(q);
+    const wrappedPattern = termReplaceOptions.whole_word
+      ? `(?<![\\p{L}\\p{N}\\p{M}_])(?:${basePattern})(?![\\p{L}\\p{N}\\p{M}_])`
+      : basePattern;
+    const flags = `${termReplaceOptions.case_sensitive ? '' : 'i'}u`;
+    try {
+      return { source: wrappedPattern, flags };
+    } catch {
+      return null;
+    }
+  }, [termReplaceOptions]);
+
+  const termReplaceCount = useMemo(() => {
+    if (termRules.length === 0 || segments.length === 0) return 0;
+    let total = 0;
+    for (const seg of segments) {
+      const fields: Array<string | null> = [seg.originalText, seg.translatedText];
+      for (const text of fields) {
+        if (!text) continue;
+        for (const rule of termRules) {
+          const built = buildTermRegex(rule.find);
+          if (!built) continue;
+          const regex = new RegExp(built.source, `${built.flags}g`);
+          let m: RegExpExecArray | null;
+          while ((m = regex.exec(text)) !== null) {
+            if (!m[0].length) {
+              regex.lastIndex += 1;
+              continue;
+            }
+            total += 1;
+          }
+        }
+      }
+    }
+    return total;
+  }, [segments, termRules, buildTermRegex]);
+
   const activeCaptionSegmentId = useMemo(() => {
     if (!videoPreviewUrl) return null;
     const t = videoCurrentTime;
@@ -445,6 +515,70 @@ const App: React.FC = () => {
     setReplaceCursor(null);
     showToast(count > 0 ? `Replaced ${count} match(es).` : 'No matches to replace.');
   }, [compileSearch, searchQuery, segments, replaceQuery, commitSegmentsChange]);
+
+  const buildTermReplacePreview = useCallback(() => {
+    const previewItems: Array<{
+      segmentId: number;
+      field: 'original' | 'translated';
+      find: string;
+      replace_with: string;
+      count: number;
+      before: string;
+      after: string;
+    }> = [];
+    if (termRules.length === 0) return { total: 0, items: previewItems };
+    let total = 0;
+    for (const seg of segments) {
+      const fields: Array<{ key: 'original' | 'translated'; value: string | null }> = [
+        { key: 'original', value: seg.originalText },
+        { key: 'translated', value: seg.translatedText }
+      ];
+      for (const field of fields) {
+        if (!field.value) continue;
+        for (const rule of termRules) {
+          const built = buildTermRegex(rule.find);
+          if (!built) continue;
+          const regex = new RegExp(built.source, `${built.flags}g`);
+          let count = 0;
+          const after = field.value.replace(regex, () => {
+            count += 1;
+            return rule.replace_with;
+          });
+          if (count > 0) {
+            total += count;
+            previewItems.push({
+              segmentId: seg.id,
+              field: field.key,
+              find: rule.find,
+              replace_with: rule.replace_with,
+              count,
+              before: field.value,
+              after
+            });
+          }
+        }
+      }
+    }
+    return { total, items: previewItems };
+  }, [segments, termRules, buildTermRegex]);
+
+  const applyTermReplacements = useCallback(() => {
+    if (termRules.length === 0) return;
+    const updated = segments.map(seg => {
+      let originalText = seg.originalText;
+      let translatedText = seg.translatedText;
+      for (const rule of termRules) {
+        const built = buildTermRegex(rule.find);
+        if (!built) continue;
+        const regex = new RegExp(built.source, `${built.flags}g`);
+        if (originalText) originalText = originalText.replace(regex, rule.replace_with);
+        if (translatedText) translatedText = translatedText.replace(regex, rule.replace_with);
+      }
+      if (originalText === seg.originalText && translatedText === seg.translatedText) return seg;
+      return { ...seg, originalText, translatedText };
+    });
+    commitSegmentsChange(updated);
+  }, [segments, termRules, buildTermRegex, commitSegmentsChange]);
 
   const totalEditorPages = useMemo(
     () => Math.max(1, Math.ceil(editorSegments.length / EDITOR_PAGE_SIZE)),
@@ -611,11 +745,31 @@ const App: React.FC = () => {
         const json = JSON.parse(event.target?.result as string);
         const isValid = json.reference?.title_or_summary && 
                         Array.isArray(json.genres) && 
-                        Array.isArray(json.tone) && 
                         typeof json.humor_level === 'number';
 
         if (isValid) {
-          setTranslationPreset(json);
+          const termReplacements = Array.isArray(json.term_replacements)
+            ? json.term_replacements
+                .filter((t: any) => t && typeof t.find === 'string' && typeof t.replace_with === 'string')
+                .map((t: any, i: number) => ({
+                  id: typeof t.id === 'number' && Number.isFinite(t.id) ? t.id : i + 1,
+                  find: t.find,
+                  replace_with: t.replace_with
+                }))
+            : [];
+          const termReplaceOptions = {
+            case_sensitive: !!json.term_replace_options?.case_sensitive,
+            whole_word: !!json.term_replace_options?.whole_word,
+            regex: !!json.term_replace_options?.regex
+          };
+          const cleaned: TranslationPreset = {
+            reference: { title_or_summary: json.reference.title_or_summary },
+            genres: json.genres,
+            term_replacements: termReplacements,
+            term_replace_options: termReplaceOptions,
+            humor_level: json.humor_level
+          };
+          setTranslationPreset(cleaned);
           showToast("DNA preset imported successfully.");
         } else {
           showToast("Invalid DNA file or incompatible version.");
@@ -1058,6 +1212,56 @@ const App: React.FC = () => {
     });
   };
 
+  const handleOpenTermReplace = () => {
+    const preview = buildTermReplacePreview();
+    setTermReplacePreview(preview);
+    if (preview.total > 0) {
+      setTermReplacePage(1);
+      setShowTermReplaceModal(true);
+    }
+  };
+
+  const handleConfirmTermReplace = () => {
+    if (termReplacePreview.total === 0) {
+      setShowTermReplaceModal(false);
+      return;
+    }
+    applyTermReplacements();
+    setShowTermReplaceModal(false);
+    showToast(`Auto replaced ${termReplacePreview.total} match(es).`);
+  };
+
+  const renderTermReplacePreview = (text: string, find: string, replaceWith: string) => {
+    const built = buildTermRegex(find);
+    if (!built) return text;
+    const regex = new RegExp(built.source, `${built.flags}g`);
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const matchText = match[0];
+      if (!matchText) {
+        regex.lastIndex += 1;
+        continue;
+      }
+      const start = match.index;
+      if (start > lastIndex) {
+        parts.push(text.slice(lastIndex, start));
+      }
+      parts.push(
+        <span key={`${start}-${matchText}`} className="inline-flex items-center gap-1 mx-0.5">
+          <span className="px-1 rounded bg-rose-500/15 text-rose-300 line-through">{matchText}</span>
+          <span className="px-1 rounded bg-emerald-500/15 text-emerald-300">{replaceWith}</span>
+        </span>
+      );
+      lastIndex = start + matchText.length;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts.length > 0 ? parts : text;
+  };
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress} hasProject={segments.length > 0} onClearProject={handleClearProjectRequest} onExportProject={() => setShowExportModal(true)}>
       {toast.visible && (
@@ -1068,7 +1272,7 @@ const App: React.FC = () => {
 
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
             <h3 className="text-xl font-bold mb-3">Clear current project?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -1080,7 +1284,7 @@ const App: React.FC = () => {
 
       {showReplaceModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
             <h3 className="text-xl font-bold mb-3">Upload a new file?</h3>
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
@@ -1092,7 +1296,7 @@ const App: React.FC = () => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8 animate-in zoom-in duration-200">
             <div className="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mb-6 mx-auto">
               {ICONS.Delete}
             </div>
@@ -1106,9 +1310,79 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {showTermReplaceModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 animate-in zoom-in duration-200">
+            <h3 className="text-xl font-bold mb-2">Confirm Auto Replace</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              {termReplacePreview.total} replacement(s) will be applied across original and translated fields.
+            </p>
+            <div className="max-h-[280px] sm:max-h-[360px] overflow-y-auto border border-slate-800 rounded-2xl p-3 space-y-3 bg-slate-950/40">
+              {termReplacePreview.items.length === 0 ? (
+                <div className="text-slate-500 text-sm">No matches found.</div>
+              ) : (
+                (() => {
+                  const segmentIds = Array.from(new Set(termReplacePreview.items.map(i => i.segmentId)));
+                  const totalPages = Math.max(1, Math.ceil(segmentIds.length / 10));
+                  const safePage = Math.min(termReplacePage, totalPages);
+                  const start = (safePage - 1) * 10;
+                  const pageSegmentIds = new Set(segmentIds.slice(start, start + 10));
+                  const pageItems = termReplacePreview.items.filter(i => pageSegmentIds.has(i.segmentId));
+                  return pageItems.map((item, idx) => (
+                    <div key={`${item.segmentId}-${item.field}-${item.find}-${idx}`} className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
+                        <span>Segment #{item.segmentId} · {item.field}</span>
+                      </div>
+                    <div className="text-[12px] text-slate-300 mb-2">
+                      <span className="font-bold text-slate-200">{item.find}</span> → <span className="font-bold text-cyan-300">{item.replace_with}</span>
+                    </div>
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-300 whitespace-pre-wrap">
+                      {renderTermReplacePreview(item.before, item.find, item.replace_with)}
+                    </div>
+                  </div>
+                ));
+              })()
+            )}
+            </div>
+            {termReplacePreview.items.length > 0 && (() => {
+              const segmentIds = Array.from(new Set(termReplacePreview.items.map(i => i.segmentId)));
+              const totalPages = Math.max(1, Math.ceil(segmentIds.length / 10));
+              const safePage = Math.min(termReplacePage, totalPages);
+              return (
+                <div className="flex items-center justify-between mt-4 text-[11px] text-slate-400">
+                  <span>
+                    Page {safePage} / {totalPages} · {segmentIds.length} segments
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setTermReplacePage(prev => Math.max(1, prev - 1))}
+                      disabled={safePage <= 1}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      onClick={() => setTermReplacePage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={safePage >= totalPages}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowTermReplaceModal(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Cancel</button>
+              <button onClick={handleConfirmTermReplace} className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold transition-colors">Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-xl rounded-[28px] shadow-2xl p-5 md:p-6 animate-in zoom-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-[22px] sm:rounded-[28px] shadow-2xl p-5 sm:p-6 animate-in zoom-in duration-300">
             <h3 className="text-2xl font-bold mb-4">Download</h3>
             <div className="space-y-3">
               <div className="flex flex-col gap-3">
@@ -1151,22 +1425,22 @@ const App: React.FC = () => {
       )}
 
       {segments.length > 0 && fileName && (
-        <div className="bg-slate-900 border-b border-slate-800 px-5 py-2.5 flex items-center justify-between shrink-0 z-20">
-          <div className="flex items-center gap-4 overflow-hidden">
+        <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-20">
+          <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
               <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
-              <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
-                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                <span>{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
-                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
+                <span className="hidden sm:inline">{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
+                <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
                 <span>{totalDurationStr}</span>
               </div>
             </div>
           </div>
           {activeTab === 'editor' && (
-            <div className="shrink-0 ml-4">
+            <div className="shrink-0 sm:ml-4">
               <div ref={searchAreaRef}>
                 {!showSearchBox ? (
                   <button
@@ -1182,7 +1456,7 @@ const App: React.FC = () => {
                     <Search size={14} />
                   </button>
                 ) : (
-                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[280px]">
+                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[220px] sm:min-w-[280px]">
                     <div className="inline-flex items-center gap-2 px-1 py-0.5">
                       <span className="text-slate-400"><Search size={14} /></span>
                       <input
@@ -1287,14 +1561,14 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
-            <h1 className="text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
-            <p className="text-slate-400 mb-8">Professional subtitle translation and optimization.</p>
-            <label className={`relative group flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
+            <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">Professional subtitle translation and optimization.</p>
+            <label className={`relative group flex flex-col items-center justify-center w-full h-52 sm:h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
               <input type="file" accept=".srt,.sktproject" className="hidden" onChange={handleFileUpload} />
-              <div className="p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-5">{ICONS.Upload}</div>
-              <p className="text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
+              <div className="p-4 sm:p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-4 sm:mb-5">{ICONS.Upload}</div>
+              <p className="text-base sm:text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
             </label>
           </div>
         </div>
@@ -1329,9 +1603,9 @@ const App: React.FC = () => {
             </span>
           </button>
           <div ref={editorPaneRef} className="flex-1 flex flex-col overflow-hidden bg-slate-950">
-            <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+            <div className="px-3 sm:px-4 py-2 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar">
                   <button
                     onClick={handleSelectAll}
                     title={editorSegments.length > 0 && editorSegments.every(s => selectedIds.has(s.id)) ? 'Deselect all' : 'Select all'}
@@ -1350,7 +1624,7 @@ const App: React.FC = () => {
                   <select
                     value={typeof filter === 'string' ? filter : 'all'}
                     onChange={(e) => setFilter(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
+                    className="px-2.5 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold bg-slate-800 border border-slate-700 text-slate-200 outline-none focus:ring-2 focus:ring-blue-500/40"
                   >
                     <option value="all">All</option>
                     <option value="safe">Safe</option>
@@ -1364,7 +1638,7 @@ const App: React.FC = () => {
                   <button
                     onClick={translationState.status === 'running' ? handleStopTranslate : handleTranslate}
                     disabled={translationState.status === 'running' ? isStoppingTranslate : (status === 'processing' || !hasTranslatableTarget)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[120px] sm:min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
                       translationState.status === 'running'
                         ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
                         : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60'
@@ -1389,7 +1663,7 @@ const App: React.FC = () => {
                   <button
                     onClick={isOptimizing ? handleStopOptimize : handleAiOptimize}
                     disabled={isOptimizing ? isStoppingOptimize : (status === 'processing' || !canOptimizeSelected)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[130px] sm:min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
                       isOptimizing
                         ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
                         : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1411,6 +1685,24 @@ const App: React.FC = () => {
                     </span>
                   </button>
 
+                  <button
+                    onClick={handleOpenTermReplace}
+                    disabled={status === 'processing' || termReplaceCount === 0}
+                    title={
+                      termReplaceCount > 0
+                        ? `${termReplaceCount} replacement(s) will be applied`
+                        : 'No matches for Term Replacement'
+                    }
+                    aria-label="Auto replace by term rules"
+                    className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${
+                      termReplaceCount > 0
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700'
+                        : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="shrink-0">{ICONS.Replace}</span>
+                  </button>
+
                   <input
                     ref={videoInputRef}
                     type="file"
@@ -1421,7 +1713,7 @@ const App: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => videoInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[11px] font-bold hover:bg-slate-700 transition-colors"
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[10px] sm:text-[11px] font-bold hover:bg-slate-700 transition-colors"
                   >
                     <span className="shrink-0">{ICONS.Upload}</span>
                     <span>Preview</span>
@@ -1522,7 +1814,7 @@ const App: React.FC = () => {
             )}
           </div>
           <div
-            className={`bg-slate-900 transition-all duration-300 overflow-hidden ${
+            className={`bg-slate-900 transition-all duration-300 overflow-hidden fixed right-0 top-0 h-full z-20 sm:static sm:h-auto ${
               showQualityDashboard ? 'w-72 border-l border-slate-800 opacity-100' : 'w-0 border-l border-transparent opacity-0 pointer-events-none'
             }`}
           >
@@ -1536,13 +1828,13 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'settings' && (
-        <div className="flex-1 p-10 overflow-y-auto pb-24">
+        <div className="flex-1 p-4 sm:p-10 overflow-y-auto pb-24">
           <div className="max-w-4xl mx-auto space-y-8">
             {/* AI Mode (v3.1.0) - Dropdown Selection */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+            <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-lg font-bold text-slate-100">AI Settings</h3>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">AI Settings</h3>
               </div>
 
               <div className="space-y-5">
@@ -1599,10 +1891,10 @@ const App: React.FC = () => {
             </section>
 
             {/* API Usage Dashboard (Session-Based) */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 shadow-xl">
+            <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6">
                 <span className="text-blue-500">{ICONS.Success}</span>
-                <h3 className="text-lg font-bold text-slate-100">API Usage Dashboard</h3>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">API Usage Dashboard</h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
