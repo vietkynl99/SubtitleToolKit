@@ -89,7 +89,6 @@ export interface AppSettings {
     warningMax: number;
   };
   autoFixOnUpload: boolean;
-  optimizationMode: 'safe' | 'aggressive';
   translationBatchSize: number;
   aiModel: AiModel;
   apiKey: string;

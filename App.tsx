@@ -1052,7 +1052,7 @@ const App: React.FC = () => {
         const batchIdx = Math.floor(i / batchSize) + 1;
 
         try {
-          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.optimizationMode, settings.aiModel, settings.apiKey);
+          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.aiModel, settings.apiKey);
           requestCount++;
           
           fixed.forEach(f => {

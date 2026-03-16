@@ -261,12 +261,8 @@ Genres: ${taxonomy.genres.join(', ')}`,
   return { preset, tokens };
 }
 
-/**
- * AI Subtitle Optimization v3.3.1.
- */
 export async function aiFixSegments(
   segments: SubtitleSegment[],
-  mode: 'safe' | 'aggressive' = 'safe',
   model: AiModel,
   apiKey: string,
   targetCPS: number = 15
@@ -274,10 +270,7 @@ export async function aiFixSegments(
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const instruction =
-    mode === "aggressive"
-      ? "Compress aggressively. Use very short Vietnamese phrases. Removing subjects is allowed."
-      : "Slightly shorten sentences but keep natural spoken Vietnamese.";
+  const instruction = "Compress aggressively. Use very short Vietnamese phrases. Removing subjects is allowed.";
 
   const payload = segments.map((s) => {
     const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
