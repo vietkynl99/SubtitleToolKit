@@ -1694,23 +1694,18 @@ const App: React.FC = () => {
                     </span>
                   </button>
 
-                  <button
-                    onClick={handleOpenTermReplace}
-                    disabled={status === 'processing' || termReplaceCount === 0}
-                    title={
-                      termReplaceCount > 0
-                        ? `${termReplaceCount} replacement(s) will be applied`
-                        : 'No matches for Term Replacement'
-                    }
-                    aria-label="Auto replace by term rules"
-                    className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${
-                      termReplaceCount > 0
-                        ? 'bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700'
-                        : 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                    }`}
-                  >
-                    <span className="shrink-0">{ICONS.Replace}</span>
-                  </button>
+                  {termReplaceCount > 0 && (
+                    <button
+                      onClick={handleOpenTermReplace}
+                      disabled={status === 'processing'}
+                      title={`${termReplaceCount} replacement(s) will be applied`}
+                      aria-label="Auto replace by term rules"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold transition-colors bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700"
+                    >
+                      <span className="shrink-0">{ICONS.Replace}</span>
+                      <span>Auto Replace</span>
+                    </button>
+                  )}
 
                   <input
                     ref={videoInputRef}

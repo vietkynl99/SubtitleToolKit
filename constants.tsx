@@ -16,7 +16,8 @@ import {
   Trash2,
   RefreshCw,
   FileText,
-  Scissors
+  Scissors,
+  Repeat
 } from 'lucide-react';
 
 export const ICONS = {
@@ -37,7 +38,8 @@ export const ICONS = {
   Delete: <Trash2 size={18} />,
   Retry: <RefreshCw size={18} />,
   File: <FileText size={18} />,
-  Split: <Scissors size={18} />
+  Split: <Scissors size={18} />,
+  Replace: <Repeat size={16} />
 };
 
 export const DEFAULT_SETTINGS = {
