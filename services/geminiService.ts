@@ -265,42 +265,58 @@ Genres: ${taxonomy.genres.join(', ')}`,
  * AI Subtitle Optimization v3.3.1.
  */
 export async function aiFixSegments(
-  segments: SubtitleSegment[], 
+  segments: SubtitleSegment[],
   mode: 'safe' | 'aggressive' = 'safe',
   model: AiModel,
-  apiKey: string
-): Promise<{ segments: SubtitleSegment[], tokens: number }> {
+  apiKey: string,
+  targetCPS: number = 15
+): Promise<{ segments: SubtitleSegment[]; tokens: number }> {
+
   const ai = new GoogleGenAI({ apiKey });
 
-  const instruction = mode === 'aggressive'
-    ? "AGGRESSIVE: Compress hard. Use short punchy Vietnamese. Prefer slangy or playful phrasing if it keeps meaning. Keep the funny/lầy vibe."
-    : "SAFE: Slightly tighten wording. Keep natural spoken Vietnamese and humorous tone if present.";
+  const instruction =
+    mode === "aggressive"
+      ? "Compress aggressively. Use very short Vietnamese phrases. Removing subjects is allowed."
+      : "Slightly shorten sentences but keep natural spoken Vietnamese.";
 
-  const prompt = `Optimize Vietnamese subtitles for readability and CPS.
+  const payload = segments.map((s) => {
+    const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
+    const maxChars = Math.max(Math.floor(duration * targetCPS), 3);
+
+    return {
+      id: s.id,
+      cn: s.originalText || "",
+      vn: s.translatedText || "",
+      duration,
+      maxChars,
+    };
+  });
+
+  const prompt = `
+Optimize Vietnamese subtitles for readability and CPS.
 
 ${instruction}
 
 Rules:
-- Segment units are independent. Do NOT merge or split.
-- Preserve the core meaning.
-- Prefer shorter words and punchy phrasing.
-- Keep natural spoken Vietnamese (casual, meme-like tone allowed).
-- If original line is playful, keep the humor/lầy vibe.
-- Remove redundant filler but keep character voice.
+- Each segment is independent.
+- Do NOT merge or split segments.
+- Preserve core meaning when possible.
+- Prefer short Vietnamese words.
+- Remove filler words if needed.
 
-Length control:
-- Target ≤1.3x original length
-- Hard limit ≤1.6x
-- If Chinese original ≤4 characters → Vietnamese 1–3 words.
+CRITICAL LENGTH RULE:
+Each segment has a maxChars limit.
+The output MUST be <= maxChars characters.
+
+Special rule:
+If Chinese text length ≤4 characters → output ≤3 Vietnamese words.
 
 Output format:
 JSON array [{id, fixedText}]
 
-Data:
-${JSON.stringify(segments.map(s => ({
-  id: s.id,
-  text: s.translatedText || s.originalText
-})))}`;
+Segments:
+${JSON.stringify(payload)}
+`;
 
   try {
     const response = await ai.models.generateContent({
@@ -314,20 +330,36 @@ ${JSON.stringify(segments.map(s => ({
             type: Type.OBJECT,
             properties: {
               id: { type: Type.INTEGER },
-              fixedText: { type: Type.STRING }
+              fixedText: { type: Type.STRING },
             },
-            required: ["id", "fixedText"]
-          }
-        }
-      }
+            required: ["id", "fixedText"],
+          },
+        },
+      },
     });
 
     const fixes = JSON.parse(response.text || "[]");
     const tokens = response.usageMetadata?.totalTokenCount || 0;
-    
-    const updatedSegments = segments.map(s => {
+
+    const updatedSegments = segments.map((s) => {
       const fix = fixes.find((f: any) => f.id === s.id);
-      return fix ? { ...s, translatedText: fix.fixedText } : s;
+
+      if (!fix) return s;
+
+      const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
+      const maxChars = Math.max(Math.floor(duration * targetCPS), 3);
+
+      let text = fix.fixedText.trim();
+
+      // Hard trim fallback
+      if (text.length > maxChars) {
+        text = text.slice(0, maxChars);
+      }
+
+      return {
+        ...s,
+        translatedText: text,
+      };
     });
 
     return { segments: updatedSegments, tokens };
@@ -336,4 +368,3 @@ ${JSON.stringify(segments.map(s => ({
     return { segments, tokens: 0 };
   }
 }
-
