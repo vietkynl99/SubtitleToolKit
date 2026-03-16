@@ -1597,20 +1597,6 @@ const App: React.FC = () => {
 
       {activeTab === 'editor' && segments.length > 0 && (
         <div className="flex-1 flex overflow-hidden relative">
-          <button
-            type="button"
-            onClick={() => setShowQualityDashboard(prev => !prev)}
-            className="absolute top-3 right-3 z-30 w-10 h-10 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-slate-300 transition-all flex items-center justify-center"
-            aria-label={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
-            title={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
-          >
-            <span className="sr-only">{showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}</span>
-            <span className="flex flex-col gap-1">
-              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
-              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
-              <span className="block w-4 h-[2px] bg-current rounded-full"></span>
-            </span>
-          </button>
           <div ref={editorPaneRef} className="flex-1 flex flex-col overflow-hidden bg-slate-950">
             <div className="px-3 sm:px-4 py-2 border-b border-slate-800 bg-slate-900/70 backdrop-blur-md">
               <div className="flex items-start sm:items-center justify-between gap-3">
@@ -1741,6 +1727,20 @@ const App: React.FC = () => {
                     className="p-1.5 rounded-md bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                   >
                     {ICONS.Next}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQualityDashboard(prev => !prev)}
+                    className="w-8 h-8 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all flex items-center justify-center"
+                    aria-label={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
+                    title={showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}
+                  >
+                    <span className="sr-only">{showQualityDashboard ? 'Hide issues panel' : 'Show issues panel'}</span>
+                    <span className="flex flex-col gap-1">
+                      <span className="block w-3 h-[2px] bg-current rounded-full"></span>
+                      <span className="block w-3 h-[2px] bg-current rounded-full"></span>
+                      <span className="block w-3 h-[2px] bg-current rounded-full"></span>
+                    </span>
                   </button>
                 </div>
               </div>
