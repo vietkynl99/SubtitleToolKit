@@ -12,7 +12,11 @@ const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
  * Parses a filename to extract base name and the current edited count.
  */
 export function parseFileName(fileName: string): { baseName: string, editedCount: number } {
-  let name = fileName.replace(/\.srt$/i, '').replace(/\.sktproject$/i, '').trim();
+  let name = fileName
+    .replace(/\.srt$/i, '')
+    .replace(/\.sktproject$/i, '')
+    .replace(/\.json$/i, '')
+    .trim();
   let editedCount = 0;
 
   const editedRegex = /^\[Edited(\d*)\]/;
@@ -86,6 +90,96 @@ export function parseSRT(content: string): SubtitleSegment[] {
   });
 
   return segments;
+}
+
+function cleanCapCutText(raw: unknown): string {
+  if (raw === null || raw === undefined) return '';
+  let text = String(raw);
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/\\n/g, '\n');
+  text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+  text = text
+    .split('\n')
+    .map(line => {
+      let cleaned = line.trim();
+      if (cleaned.startsWith('[') && cleaned.endsWith(']') && cleaned.length >= 2) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned;
+    })
+    .filter(line => line.length > 0)
+    .join('\n');
+
+  let trimmed = text.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']') && trimmed.length >= 2) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function getCapCutTimerangeSeconds(timerange?: { start?: number; duration?: number } | null): { start: number; end: number } | null {
+  if (!timerange) return null;
+  const startUs = typeof timerange.start === 'number' ? timerange.start : null;
+  const durUs = typeof timerange.duration === 'number' ? timerange.duration : null;
+  if (startUs === null || durUs === null) return null;
+  const start = startUs / 1_000_000;
+  const end = (startUs + durUs) / 1_000_000;
+  return { start, end };
+}
+
+/**
+ * Parses CapCut draft_content.json into SubtitleSegment[].
+ */
+export function parseCapCutDraft(content: string): { segments: SubtitleSegment[], title: string } {
+  const json = JSON.parse(content);
+  const materials = Array.isArray(json.materials?.texts) ? json.materials.texts : [];
+  const materialMap = new Map<string, string>();
+
+  materials.forEach((m: any) => {
+    const id = m?.id;
+    if (!id) return;
+    const raw = m.content ?? m.text ?? m.name ?? '';
+    const cleaned = cleanCapCutText(raw);
+    materialMap.set(id, cleaned);
+  });
+
+  const tracks = Array.isArray(json.tracks) ? json.tracks : [];
+  const textTracks = tracks.filter((t: any) => ['text', 'subtitle', 'captions'].includes(String(t?.type)));
+
+  const collected: { start: number; end: number; text: string }[] = [];
+
+  textTracks.forEach((track: any) => {
+    const segments = Array.isArray(track.segments) ? track.segments : [];
+    segments.forEach((seg: any) => {
+      const materialId = seg?.material_id;
+      const rawText = materialId ? materialMap.get(materialId) : '';
+      const text = cleanCapCutText(rawText);
+      if (!text) return;
+      const range = getCapCutTimerangeSeconds(seg?.target_timerange || seg?.source_timerange);
+      if (!range) return;
+      collected.push({ start: range.start, end: range.end, text });
+    });
+  });
+
+  if (collected.length === 0) {
+    throw new Error('No CapCut text tracks found.');
+  }
+
+  collected.sort((a, b) => a.start - b.start);
+
+  const segments: SubtitleSegment[] = collected.map((item, index) => ({
+    id: index + 1,
+    startTime: secondsToTime(item.start),
+    endTime: secondsToTime(item.end),
+    originalText: item.text,
+    translatedText: null,
+    errors: [],
+    severity: 'safe',
+    cps: 0,
+    issueList: []
+  }));
+
+  return { segments, title: 'CapCut Draft' };
 }
 
 /**

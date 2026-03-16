@@ -1,6 +1,7 @@
 import { 
   parseSRT, 
   parseSktProject,
+  parseCapCutDraft,
   generateSktProject,
   analyzeSegments, 
   performLocalFix, 
@@ -696,6 +697,10 @@ const App: React.FC = () => {
     }
   };
 
+  const displayFileName = fileName.toLowerCase().endsWith('.srt')
+    ? fileName.slice(0, -4)
+    : fileName;
+
   const handleDNAAnalyze = async (input: string) => {
     if (!settings.apiKey?.trim()) {
       showToast("Please enter your Gemini API Key in Settings.");
@@ -784,14 +789,14 @@ const App: React.FC = () => {
 
   const processFile = useCallback((file: File) => {
     const ext = file.name.toLowerCase();
-    if (!ext.endsWith('.srt') && !ext.endsWith('.sktproject')) {
-      alert('Please select a .srt or .sktproject file.');
+    if (!ext.endsWith('.srt') && !ext.endsWith('.sktproject') && !ext.endsWith('.json')) {
+      alert('Please select a .srt, .sktproject, or CapCut draft_content.json file.');
       setStatus('error');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size exceeds 5MB.');
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File size exceeds 50MB.');
       setStatus('error');
       return;
     }
@@ -814,10 +819,14 @@ const App: React.FC = () => {
         if (ext.endsWith('.srt')) {
           parsedSegments = parseSRT(content);
           setProjectCreatedAt(new Date().toISOString());
-        } else {
+        } else if (ext.endsWith('.sktproject')) {
           const res = parseSktProject(content);
           parsedSegments = res.segments;
           preset = res.preset || null;
+          setProjectCreatedAt(null);
+        } else {
+          const res = parseCapCutDraft(content);
+          parsedSegments = res.segments;
           setProjectCreatedAt(null);
         }
         
@@ -1429,7 +1438,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(fileName)}>{fileName}</h2>
+              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(displayFileName)}>{displayFileName}</h2>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
                 <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
@@ -1566,9 +1575,9 @@ const App: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
             <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">Professional subtitle translation and optimization.</p>
             <label className={`relative group flex flex-col items-center justify-center w-full h-52 sm:h-64 border-2 border-dashed rounded-3xl cursor-pointer ${isDragging ? 'bg-blue-600/10 border-blue-500' : 'bg-slate-900/40 border-slate-800'}`}>
-              <input type="file" accept=".srt,.sktproject" className="hidden" onChange={handleFileUpload} />
+              <input type="file" accept=".srt,.sktproject,.json" className="hidden" onChange={handleFileUpload} />
               <div className="p-4 sm:p-5 bg-blue-600/10 rounded-full border border-blue-500/20 mb-4 sm:mb-5">{ICONS.Upload}</div>
-              <p className="text-base sm:text-lg font-bold text-slate-200">Drag & drop SRT/SKTPROJECT file here</p>
+              <p className="text-base sm:text-lg font-bold text-slate-200">Drag & drop .srt/.sktproject/CapCut draft_content.json here</p>
             </label>
           </div>
         </div>
