@@ -959,7 +959,8 @@ const App: React.FC = () => {
     let completedInSession = 0;
     try {
       const batchSize = settings.translationBatchSize || 100;
-      for (let i = 0; i < needingTranslation.length; i += batchSize) {
+      let queue = [...needingTranslation];
+      while (queue.length > 0) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
           setIsStoppingTranslate(false);
@@ -967,22 +968,40 @@ const App: React.FC = () => {
           setStatus('success');
           return;
         }
-        const currentBatch = needingTranslation.slice(i, i + batchSize);
+        const currentBatch = queue.slice(0, batchSize);
         const firstIdx = segments.findIndex(s => s.id === currentBatch[0].id);
         const lastIdx = segments.findIndex(s => s.id === currentBatch[currentBatch.length - 1].id);
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
         setSegments(prev => prev.map(s => currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
         const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel, settings.apiKey);
+        const translationMap = new Map<number, string>();
+        for (const item of translatedTexts) {
+          if (item && typeof item.id === 'number' && typeof item.text === 'string' && item.text.trim().length > 0) {
+            translationMap.set(item.id, item.text);
+          }
+        }
+
+        const usableCount = currentBatch.filter(s => translationMap.has(s.id)).length;
+        if (usableCount === 0) {
+          throw new Error("AI returned no results for this batch. Translation cannot continue.");
+        }
+
         setSegments(prev => prev.map(s => {
-          const bIdx = currentBatch.findIndex(cb => cb.id === s.id);
-          if (bIdx !== -1) return { ...s, translatedText: translatedTexts[bIdx], isProcessing: false };
+          if (translationMap.has(s.id)) {
+            return { ...s, translatedText: translationMap.get(s.id), isProcessing: false };
+          }
+          if (currentBatch.some(cb => cb.id === s.id)) return { ...s, isProcessing: false };
           return s;
         }));
-        completedInSession += currentBatch.length;
-        setApiUsage(prev => ({ ...prev, translate: { requests: prev.translate.requests + 1, tokens: prev.translate.tokens + tokens, segments: (prev.translate.segments || 0) + currentBatch.length } }));
+        completedInSession += usableCount;
+        setApiUsage(prev => ({ ...prev, translate: { requests: prev.translate.requests + 1, tokens: prev.translate.tokens + tokens, segments: (prev.translate.segments || 0) + usableCount } }));
         setTranslationState(prev => ({ ...prev, processed: completedInSession }));
         setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
+
+        // Drop only translated items; missing segments stay at the front for the next batch
+        const translatedIds = new Set(Array.from(translationMap.keys()));
+        queue = queue.filter(s => !translatedIds.has(s.id));
       }
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setIsStoppingTranslate(false);

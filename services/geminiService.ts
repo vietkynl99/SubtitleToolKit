@@ -12,7 +12,7 @@ export async function translateBatch(
   preset: TranslationPreset | null,
   model: AiModel,
   apiKey: string
-): Promise<{ translatedTexts: string[]; tokens: number }> {
+): Promise<{ translatedTexts: { id: number; text: string }[]; tokens: number }> {
 
   const ai = new GoogleGenAI({ apiKey });
 
@@ -105,7 +105,12 @@ Next: ${JSON.stringify(contextAfter)}
 Translate Chinese subtitles into natural Vietnamese.
 
 Output format:
-JSON array of strings.
+JSON array of objects: [{"id": number, "text": string}]
+
+IMPORTANT:
+Return one object per input line using the exact id.
+Do not reorder items.
+Do not omit items.
 
 Core rules:
 
@@ -155,7 +160,7 @@ ${storyContext}
 ${neighborContext}
 
 Subtitle data:
-${JSON.stringify(batch.map(s => s.originalText))}
+${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
 `;
 
   try {
@@ -166,7 +171,14 @@ ${JSON.stringify(batch.map(s => s.originalText))}
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
-          items: { type: Type.STRING }
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.INTEGER },
+              text: { type: Type.STRING }
+            },
+            required: ["id", "text"]
+          }
         }
       }
     });
