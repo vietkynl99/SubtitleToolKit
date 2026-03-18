@@ -107,6 +107,8 @@ const App: React.FC = () => {
   const [segmentToDelete, setSegmentToDelete] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
+  const [toastHistory, setToastHistory] = useState<Array<{ id: number; message: string; time: number }>>([]);
+  const [showToastHistory, setShowToastHistory] = useState<boolean>(false);
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
   const [apiUsage, setApiUsage] = useState<ApiUsage>(INITIAL_USAGE);
@@ -143,6 +145,7 @@ const App: React.FC = () => {
   const searchAreaRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const toastHistoryRef = useRef<HTMLDivElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const videoResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -151,6 +154,10 @@ const App: React.FC = () => {
 
   const showToast = (message: string) => {
     setToast({ message, visible: true });
+    setToastHistory(prev => {
+      const next = [{ id: Date.now() + Math.random(), message, time: Date.now() }, ...prev];
+      return next.slice(0, 200);
+    });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
   };
 
@@ -268,6 +275,18 @@ const App: React.FC = () => {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizingVideoPanel]);
+
+  useEffect(() => {
+    if (!showToastHistory) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!toastHistoryRef.current) return;
+      if (!toastHistoryRef.current.contains(event.target as Node)) {
+        setShowToastHistory(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showToastHistory]);
 
   // Reset pagination when filter changes
   useEffect(() => {
@@ -1489,7 +1508,7 @@ const App: React.FC = () => {
       )}
 
       {segments.length > 0 && fileName && (
-        <div className="bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-20">
+        <div className="relative bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-40 overflow-visible">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
@@ -1504,7 +1523,7 @@ const App: React.FC = () => {
             </div>
           </div>
           {activeTab === 'editor' && (
-            <div className="shrink-0 sm:ml-4">
+            <div className="shrink-0 sm:ml-4 flex items-start gap-2">
               <div ref={searchAreaRef}>
                 {!showSearchBox ? (
                   <button
@@ -1616,6 +1635,47 @@ const App: React.FC = () => {
                         Replace
                       </button>
                     )}
+                  </div>
+                )}
+              </div>
+
+              <div ref={toastHistoryRef} className="relative">
+                <button
+                  onClick={() => setShowToastHistory(prev => !prev)}
+                  aria-label="Notification history"
+                  title="Notification history"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
+                >
+                  <span className="shrink-0">{ICONS.Notification}</span>
+                </button>
+
+                {showToastHistory && (
+                  <div className="absolute right-0 mt-2 z-[60] w-[320px] max-h-[420px] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Notification History</div>
+                      <button
+                        onClick={() => setShowToastHistory(false)}
+                        aria-label="Close notification history"
+                        title="Close"
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 transition-colors"
+                      >
+                        {ICONS.Close}
+                      </button>
+                    </div>
+                    <div className="max-h-[360px] overflow-y-auto p-3 space-y-2">
+                      {toastHistory.length === 0 ? (
+                        <div className="text-sm text-slate-500">No notifications yet.</div>
+                      ) : (
+                        toastHistory.map(item => (
+                          <div key={item.id} className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2">
+                            <div className="text-[10px] text-slate-500 mb-1">
+                              {new Date(item.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </div>
+                            <div className="text-sm text-slate-200">{item.message}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

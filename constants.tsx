@@ -17,7 +17,9 @@ import {
   RefreshCw,
   FileText,
   Scissors,
-  Repeat
+  Repeat,
+  Bell,
+  X
 } from 'lucide-react';
 
 export const ICONS = {
@@ -39,7 +41,9 @@ export const ICONS = {
   Retry: <RefreshCw size={18} />,
   File: <FileText size={18} />,
   Split: <Scissors size={18} />,
-  Replace: <Repeat size={16} />
+  Replace: <Repeat size={16} />,
+  Notification: <Bell size={18} />,
+  Close: <X size={14} />
 };
 
 export const DEFAULT_SETTINGS = {
