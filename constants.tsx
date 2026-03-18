@@ -42,7 +42,7 @@ export const ICONS = {
   File: <FileText size={18} />,
   Split: <Scissors size={18} />,
   Replace: <Repeat size={16} />,
-  Notification: <Bell size={18} />,
+  Notification: <Bell size={14} />,
   Close: <X size={14} />
 };
 

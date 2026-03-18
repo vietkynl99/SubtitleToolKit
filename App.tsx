@@ -1545,117 +1545,128 @@ const App: React.FC = () => {
           </div>
           {activeTab === 'editor' && (
             <div className="shrink-0 sm:ml-4 flex items-start gap-2">
-              <div ref={searchAreaRef}>
-                {!showSearchBox ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSearchBox(true);
+              <div ref={searchAreaRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSearchBox(prev => !prev);
+                    if (!showSearchBox) {
                       setShowReplaceBox(false);
-                    }}
-                    className="p-1.5 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
-                    title="Search segments"
-                    aria-label="Search segments"
-                  >
-                    <Search size={14} />
-                  </button>
-                ) : (
-                  <div className="inline-flex flex-col gap-1 p-1.5 bg-slate-800 border border-slate-700 rounded-md min-w-[220px] sm:min-w-[280px]">
-                    <div className="inline-flex items-center gap-2 px-1 py-0.5">
-                      <span className="text-slate-400"><Search size={14} /></span>
-                      <input
-                        ref={searchInputRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search"
-                        className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setSearchCaseSensitive(prev => !prev)}
-                        title="Case sensitive"
-                        aria-label="Case sensitive"
-                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                          searchCaseSensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Aa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSearchWholeWord(prev => !prev)}
-                        title="Match whole word"
-                        aria-label="Match whole word"
-                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                          searchWholeWord ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
-                        }`}
-                      >
-                        ab
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSearchRegexMode(prev => !prev)}
-                        title="Regex search"
-                        aria-label="Regex search"
-                        className={`px-1 rounded text-[11px] font-semibold transition-colors ${
-                          searchRegexMode ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        .*
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearAndCloseSearch}
-                        title="Clear and close search"
-                        aria-label="Clear and close search"
-                        className="px-1.5 rounded text-[11px] font-bold text-slate-400 hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
-                      >
-                        x
-                      </button>
-                    </div>
+                      setTimeout(() => searchInputRef.current?.focus(), 0);
+                    }
+                  }}
+                  className={`inline-flex items-center justify-center w-7 h-7 p-0 leading-none rounded-md border transition-colors ${
+                    showSearchBox
+                      ? 'bg-blue-600/20 border-blue-500/40 text-blue-200'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-slate-100'
+                  }`}
+                  title="Search segments"
+                  aria-label="Search segments"
+                >
+                  <Search size={14} />
+                </button>
 
-                    {showReplaceBox ? (
-                      <div className="inline-flex items-center gap-2 px-1 py-0.5 border-t border-slate-700/70">
-                        <span className="text-[11px] text-slate-400">R</span>
-                        <input
-                          ref={replaceInputRef}
-                          type="text"
-                          value={replaceQuery}
-                          onChange={(e) => setReplaceQuery(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleReplaceNext();
-                            }
-                          }}
-                          placeholder="Replace"
-                          className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleReplaceAll}
-                          className="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
-                          title="Replace all"
-                          aria-label="Replace all"
-                        >
-                          All
-                        </button>
-                      </div>
-                    ) : (
+                {showSearchBox && (
+                  <div className="absolute right-0 top-0 -mt-1 z-[60] flex items-stretch p-0.5 bg-slate-800 border border-slate-700 rounded-md min-w-[140px] sm:min-w-[180px] shadow-xl overflow-hidden">
+                    <div className="w-[22px] shrink-0 border-r border-slate-700/70 flex">
                       <button
                         type="button"
                         onClick={() => {
-                          setShowReplaceBox(true);
-                          setTimeout(() => replaceInputRef.current?.focus(), 0);
+                          setShowReplaceBox(prev => !prev);
+                          if (!showReplaceBox) {
+                            setTimeout(() => replaceInputRef.current?.focus(), 0);
+                          }
                         }}
-                        className="self-end px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
-                        title="Open replace box (Ctrl+H)"
-                        aria-label="Open replace box"
+                        title={showReplaceBox ? "Hide replace" : "Show replace"}
+                        aria-label={showReplaceBox ? "Hide replace" : "Show replace"}
+                        className={`flex-1 flex items-center justify-center transition-all ${showReplaceBox ? 'text-blue-300 rotate-90' : 'text-slate-400 hover:text-slate-200'}`}
                       >
-                        Replace
+                        {ICONS.Next}
                       </button>
-                    )}
+                    </div>
+
+                    <div className="flex flex-col min-w-0 pl-0.5">
+                      <div className="inline-flex items-center gap-1 px-0.5 py-0.5">
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search"
+                          className="w-full min-w-[120px] sm:min-w-[160px] bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setSearchCaseSensitive(prev => !prev)}
+                          title="Case sensitive"
+                          aria-label="Case sensitive"
+                          className={`px-0.5 rounded text-[11px] font-semibold transition-colors ${
+                            searchCaseSensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          Aa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSearchWholeWord(prev => !prev)}
+                          title="Match whole word"
+                          aria-label="Match whole word"
+                          className={`px-0.5 rounded text-[11px] font-semibold transition-colors ${
+                            searchWholeWord ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
+                          }`}
+                        >
+                          ab
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSearchRegexMode(prev => !prev)}
+                          title="Regex search"
+                          aria-label="Regex search"
+                          className={`px-0.5 rounded text-[11px] font-semibold transition-colors ${
+                            searchRegexMode ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          .*
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearAndCloseSearch}
+                          title="Clear and close search"
+                          aria-label="Clear and close search"
+                          className="ml-1 px-1.5 rounded text-[12px] font-bold text-slate-300 border border-slate-700/60 hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
+                        >
+                          x
+                        </button>
+                      </div>
+
+                      {showReplaceBox ? (
+                        <div className="inline-flex items-center gap-2 px-1 py-0.5 border-t border-slate-700/70">
+                          <input
+                            ref={replaceInputRef}
+                            type="text"
+                            value={replaceQuery}
+                            onChange={(e) => setReplaceQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleReplaceNext();
+                              }
+                            }}
+                            placeholder="Replace"
+                            className="w-full bg-transparent text-[12px] text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleReplaceAll}
+                            className="px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-[10px] font-bold text-slate-200"
+                            title="Replace all"
+                            aria-label="Replace all"
+                          >
+                            All
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1665,7 +1676,7 @@ const App: React.FC = () => {
                   onClick={() => setShowToastHistory(prev => !prev)}
                   aria-label="Notification history"
                   title="Notification history"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
+                  className="inline-flex items-center justify-center w-7 h-7 p-0 leading-none rounded-md bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700 transition-colors"
                 >
                   <span className="shrink-0">{ICONS.Notification}</span>
                 </button>
