@@ -913,7 +913,11 @@ const App: React.FC = () => {
           }
           
           if (parsedSegments.length === 0) {
-            alert('File has no valid segments or has an invalid format.');
+            if (ext.endsWith('.json')) {
+              alert('Invalid CapCut draft_content.json format. Please upload the correct file and try again.');
+            } else {
+              alert('File has no valid segments or has an invalid format.');
+            }
             setStatus('error');
             setIsFileLoading(false);
             return;
@@ -937,7 +941,11 @@ const App: React.FC = () => {
           setSelectedIds(new Set());
           setIsFileLoading(false);
         } catch (err) {
-          alert('Error while parsing file: ' + (err as Error).message);
+          if (ext.endsWith('.json')) {
+            alert('Invalid CapCut draft_content.json format. Please upload the correct file and try again.');
+          } else {
+            alert('Error while parsing file: ' + (err as Error).message);
+          }
           setStatus('error');
           setIsFileLoading(false);
         }

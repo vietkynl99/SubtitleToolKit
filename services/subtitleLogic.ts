@@ -92,9 +92,58 @@ export function parseSRT(content: string): SubtitleSegment[] {
   return segments;
 }
 
+function extractCapCutTextValue(value: unknown, depth = 0): string | null {
+  if (depth > 4) return null;
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const parts = value
+      .map(item => extractCapCutTextValue(item, depth + 1))
+      .filter((item): item is string => !!item && item.trim().length > 0);
+    if (parts.length > 0) return parts.join('\n');
+    return null;
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const preferredKeys = ['text', 'content', 'value', 'name', 'caption', 'subtitle', 'title'];
+
+    for (const key of preferredKeys) {
+      const v = obj[key];
+      if (typeof v === 'string' && v.trim()) return v;
+      if (Array.isArray(v)) {
+        const arrText = extractCapCutTextValue(v, depth + 1);
+        if (arrText) return arrText;
+      }
+      if (v && typeof v === 'object') {
+        const nested = extractCapCutTextValue(v, depth + 1);
+        if (nested) return nested;
+      }
+    }
+
+    for (const v of Object.values(obj)) {
+      const nested = extractCapCutTextValue(v, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
 function cleanCapCutText(raw: unknown): string {
   if (raw === null || raw === undefined) return '';
-  let text = String(raw);
+  let text = extractCapCutTextValue(raw) ?? String(raw);
+  const trimmedCandidate = text.trim();
+  if (
+    (trimmedCandidate.startsWith('{') && trimmedCandidate.endsWith('}')) ||
+    (trimmedCandidate.startsWith('[') && trimmedCandidate.endsWith(']'))
+  ) {
+    try {
+      const parsed = JSON.parse(trimmedCandidate);
+      const extracted = extractCapCutTextValue(parsed);
+      if (extracted) text = extracted;
+    } catch {
+      // ignore JSON parse errors and fall back to string content
+    }
+  }
   text = text.replace(/<[^>]+>/g, '');
   text = text.replace(/\\n/g, '\n');
   text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
@@ -132,6 +181,15 @@ function getCapCutTimerangeSeconds(timerange?: { start?: number; duration?: numb
  */
 export function parseCapCutDraft(content: string): { segments: SubtitleSegment[], title: string } {
   const json = JSON.parse(content);
+  if (!json || typeof json !== 'object') {
+    throw new Error('Invalid CapCut draft_content.json format.');
+  }
+
+  const hasTracks = Array.isArray((json as any).tracks);
+  const hasMaterials = Array.isArray((json as any).materials?.texts);
+  if (!hasTracks && !hasMaterials) {
+    throw new Error('Invalid CapCut draft_content.json format.');
+  }
   const materials = Array.isArray(json.materials?.texts) ? json.materials.texts : [];
   const materialMap = new Map<string, string>();
 
