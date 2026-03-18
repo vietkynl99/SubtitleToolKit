@@ -320,10 +320,19 @@ const App: React.FC = () => {
   const filteredSegments = useMemo(() => {
     const hasTimelineIssue = (segment: SubtitleSegment) =>
       segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
+    const hasOriginLangIssue = (segment: SubtitleSegment) =>
+      segment.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
+    const hasTranslatedLangIssue = (segment: SubtitleSegment) =>
+      segment.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
+    const hasLangIssue = (segment: SubtitleSegment) =>
+      hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment);
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
       return processedSegments.filter(hasTimelineIssue);
+    }
+    if (filter === 'lang') {
+      return processedSegments.filter(hasLangIssue);
     }
     if (filter === 'translated') {
       return processedSegments.filter(s => (s.translatedText || '').trim() !== '');
@@ -1807,6 +1816,7 @@ const App: React.FC = () => {
                     <option value="warning">Warning</option>
                     <option value="critical">Critical</option>
                     <option value="timeline">Timeline Issues</option>
+                    <option value="lang">Language Issues</option>
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
                   </select>

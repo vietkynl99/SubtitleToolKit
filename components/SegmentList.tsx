@@ -172,6 +172,8 @@ const SegmentList: React.FC<SegmentListProps> = ({
               const isSelected = selectedIds.has(seg.id);
               const isActiveByVideo = activeSegmentId === seg.id;
               const hasTimelineIssue = seg.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
+              const hasOriginLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
+              const hasTranslatedLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
 
               return (
                 <div
@@ -261,7 +263,13 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   </div>
 
                   <div className="pt-0.5">
-                    <p className="text-[13px] text-slate-300 leading-snug font-medium whitespace-pre-wrap break-words">
+                    <p
+                      className={`text-[13px] leading-snug font-medium whitespace-pre-wrap break-words ${
+                        hasOriginLangIssue
+                          ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                          : 'text-slate-300'
+                      }`}
+                    >
                       {seg.originalText ? renderHighlightedText(seg.originalText, searchQuery) : <span className="text-slate-700 italic text-sm">No original text</span>}
                     </p>
                   </div>
@@ -292,7 +300,13 @@ const SegmentList: React.FC<SegmentListProps> = ({
                             className="w-full text-left bg-transparent border-none p-0"
                             title="Click to edit translation"
                           >
-                            <div className="text-[13px] font-semibold leading-snug text-blue-100 whitespace-pre-wrap break-words min-h-[20px]">
+                            <div
+                              className={`text-[13px] font-semibold leading-snug whitespace-pre-wrap break-words min-h-[20px] ${
+                                hasTranslatedLangIssue
+                                  ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                                  : 'text-blue-100'
+                              }`}
+                            >
                               {seg.translatedText
                                 ? renderHighlightedText(seg.translatedText, searchQuery)
                                 : <span className="text-slate-700 italic">No translation yet...</span>}
@@ -308,7 +322,11 @@ const SegmentList: React.FC<SegmentListProps> = ({
                               translationTextareaRefs.current[seg.id] = el;
                               if (el) resizeTranslationTextarea(el);
                             }}
-                            className="w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic text-blue-100"
+                            className={`w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic ${
+                              hasTranslatedLangIssue
+                                ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                                : 'text-blue-100'
+                            }`}
                             placeholder="No translation yet..."
                             rows={1}
                             value={seg.translatedText || ''}

@@ -60,7 +60,11 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   }));
 
   const isFilterRange = typeof activeFilter === 'object' && activeFilter?.type === 'range';
-  const hasIssueAlerts = data.timelineOverlapLines > 0 || data.tooLongLines > 0;
+  const langIssueTotal = data.originalLangIssueLines + data.translatedLangIssueLines;
+  const hasIssueAlerts =
+    data.timelineOverlapLines > 0 ||
+    data.tooLongLines > 0 ||
+    langIssueTotal > 0;
 
   // Requirement: Translation Progress (v2.2.0)
   const translatedCount = segments.filter(s => s.translatedText && s.translatedText.trim() !== '').length;
@@ -98,6 +102,24 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                   <p className="text-[10px] text-amber-400/60 leading-normal">More than 2 lines. Viewers may find it hard to read quickly.</p>
                 </div>
               </div>
+            )}
+            {langIssueTotal > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'lang' ? 'all' : 'lang')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'lang'
+                    ? 'bg-rose-500/20 border border-rose-400/50 shadow-lg shadow-rose-500/10'
+                    : 'bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/15'
+                }`}
+                title="Click to show only language issues"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-rose-400">{langIssueTotal} language issues</p>
+                  <p className="text-[10px] text-rose-400/60 leading-normal">Origin must be Chinese, translation must be Vietnamese.</p>
+                </div>
+              </button>
             )}
           </div>
         )}

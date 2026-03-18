@@ -176,6 +176,38 @@ function getCapCutTimerangeSeconds(timerange?: { start?: number; duration?: numb
   return { start, end };
 }
 
+function containsNonHanLetters(text: string): boolean {
+  for (const ch of text) {
+    if (/\p{L}/u.test(ch) && !/\p{Script=Han}/u.test(ch)) return true;
+  }
+  return false;
+}
+
+function containsNonLatinLetters(text: string): boolean {
+  for (const ch of text) {
+    if (/\p{L}/u.test(ch) && !/\p{Script=Latin}/u.test(ch)) return true;
+  }
+  return false;
+}
+
+const ISSUE_ORIGINAL_LANG = 'Original contains non-Chinese characters';
+const ISSUE_TRANSLATION_LANG = 'Translation contains non-Vietnamese characters';
+
+function getLanguageIssues(
+  textKey: 'originalText' | 'translatedText',
+  text: string
+): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (textKey === 'originalText' && containsNonHanLetters(trimmed)) {
+    return [ISSUE_ORIGINAL_LANG];
+  }
+  if (textKey === 'translatedText' && containsNonLatinLetters(trimmed)) {
+    return [ISSUE_TRANSLATION_LANG];
+  }
+  return [];
+}
+
 /**
  * Parses CapCut draft_content.json into SubtitleSegment[].
  */
@@ -342,6 +374,7 @@ export function getSegmentMetadata(
   cpsThreshold: { safeMax: number; warningMax: number }
 ): { severity: Severity, cps: number, issueList: string[] } {
   const text = (segment[textKey] || segment.originalText || segment.translatedText || "").trim();
+  const langSource = (segment[textKey] || '').trim();
   const cps = calculateCPS(segment, text);
   const issueList: string[] = [];
   let severity: Severity = 'safe';
@@ -361,6 +394,13 @@ export function getSegmentMetadata(
     issueList.push('Subtitle has more than 2 lines');
   }
 
+  if (langSource) {
+    const langIssues = getLanguageIssues(textKey, langSource);
+    if (langIssues.length > 0) {
+      issueList.push(...langIssues);
+    }
+  }
+
   return { severity, cps, issueList };
 }
 
@@ -372,6 +412,8 @@ export function analyzeSegments(
   let tooLongLines = 0;
   let tooFastLines = 0;
   let timelineOverlapLines = 0;
+  let originalLangIssueLines = 0;
+  let translatedLangIssueLines = 0;
   let totalCPS = 0;
   let minCPS = Infinity;
   let maxCPS = -Infinity;
@@ -382,12 +424,23 @@ export function analyzeSegments(
 
   const enrichedSegments = segments.map(s => {
     const meta = getSegmentMetadata(s, textKey, cpsThreshold);
+    let mergedIssueList = [...meta.issueList];
+    let mergedSeverity: Severity = meta.severity;
+
+    if (textKey === 'translatedText') {
+      const originalIssues = getLanguageIssues('originalText', s.originalText || '');
+      if (originalIssues.length > 0) {
+        for (const issue of originalIssues) {
+          if (!mergedIssueList.includes(issue)) mergedIssueList.push(issue);
+        }
+      }
+    }
     
     const enriched = {
       ...s,
-      severity: meta.severity,
+      severity: mergedSeverity,
       cps: meta.cps,
-      issueList: meta.issueList
+      issueList: mergedIssueList
     };
 
     totalCPS += meta.cps;
@@ -397,6 +450,8 @@ export function analyzeSegments(
 
     if (meta.issueList.some(i => i.toLowerCase().includes('subtitle has more than 2 lines'.toLowerCase()))) tooLongLines++;
     if (meta.severity === 'critical') tooFastLines++;
+    if (mergedIssueList.includes(ISSUE_ORIGINAL_LANG)) originalLangIssueLines++;
+    if (mergedIssueList.includes(ISSUE_TRANSLATION_LANG)) translatedLangIssueLines++;
 
     groups[meta.severity]++;
 
@@ -427,6 +482,8 @@ export function analyzeSegments(
         tooLongLines: 0,
         tooFastLines: 0,
         timelineOverlapLines: 0,
+        originalLangIssueLines: 0,
+        translatedLangIssueLines: 0,
         avgCPS: 0,
         minCPS: 0,
         maxCPS: 0,
@@ -474,6 +531,8 @@ export function analyzeSegments(
       tooLongLines,
       tooFastLines,
       timelineOverlapLines,
+      originalLangIssueLines,
+      translatedLangIssueLines,
       avgCPS: totalCPS / totalLines,
       minCPS,
       maxCPS,
