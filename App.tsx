@@ -244,6 +244,21 @@ const App: React.FC = () => {
   }, [settings]);
 
   useEffect(() => {
+    const preload = async () => {
+      try {
+        await import('./components/SegmentList');
+        await import('./components/AnalyzerPanel');
+        await import('./components/FileToolsPage');
+        await import('./components/PresetPage');
+      } catch {
+        // ignore preload errors; lazy components will still load on demand
+      }
+    };
+
+    preload();
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (videoPreviewUrl) {
         URL.revokeObjectURL(videoPreviewUrl);
