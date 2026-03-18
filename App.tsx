@@ -109,6 +109,7 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
   const [toastHistory, setToastHistory] = useState<Array<{ id: number; message: string; time: number }>>([]);
   const [showToastHistory, setShowToastHistory] = useState<boolean>(false);
+  const [isFileLoading, setIsFileLoading] = useState<boolean>(false);
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
   const [apiUsage, setApiUsage] = useState<ApiUsage>(INITIAL_USAGE);
@@ -868,61 +869,69 @@ const App: React.FC = () => {
     setBaseFileName(baseName);
     setEditedCount(count);
 
+    setIsFileLoading(true);
     setStatus('processing');
     setProgress(20);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      
-      try {
-        let parsedSegments: SubtitleSegment[] = [];
-        let preset: TranslationPreset | null = null;
 
-        if (ext.endsWith('.srt')) {
-          parsedSegments = parseSRT(content);
-          setProjectCreatedAt(new Date().toISOString());
-        } else if (ext.endsWith('.sktproject')) {
-          const res = parseSktProject(content);
-          parsedSegments = res.segments;
-          preset = res.preset || null;
-          setProjectCreatedAt(null);
-        } else {
-          const res = parseCapCutDraft(content);
-          parsedSegments = res.segments;
-          setProjectCreatedAt(null);
-        }
-        
-        if (parsedSegments.length === 0) {
-          alert('File has no valid segments or has an invalid format.');
+      // Allow UI to paint loading state before heavy parsing
+      setTimeout(() => {
+        try {
+          let parsedSegments: SubtitleSegment[] = [];
+          let preset: TranslationPreset | null = null;
+
+          if (ext.endsWith('.srt')) {
+            parsedSegments = parseSRT(content);
+            setProjectCreatedAt(new Date().toISOString());
+          } else if (ext.endsWith('.sktproject')) {
+            const res = parseSktProject(content);
+            parsedSegments = res.segments;
+            preset = res.preset || null;
+            setProjectCreatedAt(null);
+          } else {
+            const res = parseCapCutDraft(content);
+            parsedSegments = res.segments;
+            setProjectCreatedAt(null);
+          }
+          
+          if (parsedSegments.length === 0) {
+            alert('File has no valid segments or has an invalid format.');
+            setStatus('error');
+            setIsFileLoading(false);
+            return;
+          }
+
+          if (settings.autoFixOnUpload) {
+            parsedSegments = parsedSegments.map(s => ({ ...s, originalText: performLocalFix(s.originalText || "") }));
+          }
+
+          setSegments(parsedSegments);
+          undoStackRef.current = [];
+          setTranslationPreset(preset);
+          setTranslationState({ status: 'idle', processed: 0, total: 0 });
+          setApiUsage(INITIAL_USAGE);
+          setProgress(100);
+          setStatus('success');
+          setActiveTab('editor');
+          setGeneratedFiles([]);
+          setFilter('all');
+          setCurrentPage(1); 
+          setSelectedIds(new Set());
+          setIsFileLoading(false);
+        } catch (err) {
+          alert('Error while parsing file: ' + (err as Error).message);
           setStatus('error');
-          return;
+          setIsFileLoading(false);
         }
-
-        if (settings.autoFixOnUpload) {
-          parsedSegments = parsedSegments.map(s => ({ ...s, originalText: performLocalFix(s.originalText || "") }));
-        }
-
-        setSegments(parsedSegments);
-        undoStackRef.current = [];
-        setTranslationPreset(preset);
-        setTranslationState({ status: 'idle', processed: 0, total: 0 });
-        setApiUsage(INITIAL_USAGE);
-        setProgress(100);
-        setStatus('success');
-        setActiveTab('editor');
-        setGeneratedFiles([]);
-        setFilter('all');
-        setCurrentPage(1); 
-        setSelectedIds(new Set());
-      } catch (err) {
-        alert('Error while parsing file: ' + (err as Error).message);
-        setStatus('error');
-      }
+      }, 0);
     };
     reader.onerror = () => {
       setStatus('error');
       alert('Error while reading file.');
+      setIsFileLoading(false);
     };
     reader.readAsText(file);
   }, [settings.autoFixOnUpload]);
@@ -1353,6 +1362,18 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {isFileLoading && (
+        <div className="fixed inset-0 z-[250] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl px-6 py-5 text-center shadow-2xl">
+            <div className="flex items-center justify-center gap-2 text-slate-200 text-sm font-bold">
+              {ICONS.Upload}
+              <span>Loading file, please wait...</span>
+            </div>
+            <div className="mt-2 text-[11px] text-slate-400">Parsing subtitles and preparing editor.</div>
+          </div>
+        </div>
+      )}
+
       {showClearModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
@@ -1685,7 +1706,7 @@ const App: React.FC = () => {
       )}
 
       {activeTab === 'upload' && (
-        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        <div className="relative flex-1 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
             <p className="text-slate-400 mb-6 sm:mb-8 text-sm sm:text-base">Professional subtitle translation and optimization.</p>
@@ -1695,6 +1716,17 @@ const App: React.FC = () => {
               <p className="text-base sm:text-lg font-bold text-slate-200">Drag & drop .srt/.sktproject/CapCut draft_content.json here</p>
             </label>
           </div>
+          {isFileLoading && (
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-40">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-center shadow-2xl">
+                <div className="flex items-center justify-center gap-2 text-slate-200 text-sm font-bold">
+                  {ICONS.Upload}
+                  <span>Loading file, please wait...</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-400">Parsing subtitles and preparing editor.</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
