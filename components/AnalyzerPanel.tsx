@@ -68,7 +68,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
 
   // Requirement: Translation Progress (v2.2.0)
   const translatedCount = segments.filter(s => s.translatedText && s.translatedText.trim() !== '').length;
-  const translationPercentage = segments.length > 0 ? Math.round((translatedCount / segments.length) * 100) : 0;
+  const translationPercentage = segments.length > 0 ? Math.floor((translatedCount / segments.length) * 100) : 0;
 
   return (
     <div className="p-4 space-y-6 h-full overflow-y-auto bg-slate-900 no-scrollbar pb-8">
