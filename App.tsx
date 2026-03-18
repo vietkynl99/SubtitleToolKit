@@ -339,24 +339,68 @@ const App: React.FC = () => {
     });
   }, [filteredSegments, searchQuery, compileSearch]);
 
-  const translateScope = useMemo(() => {
-    const selectedSegments = segments.filter(s => selectedIds.has(s.id));
-    const selectedNeedingTranslation = selectedSegments.filter(s => !(s.translatedText || '').trim());
-    if (selectedIds.size > 0) {
-      return { mode: 'selected' as const, targets: selectedNeedingTranslation };
+  const aiScope = useMemo(() => {
+    const mode = selectedIds.size > 0 ? 'selected' as const : 'all' as const;
+    const scopeSegments = mode === 'selected'
+      ? segments.filter(s => selectedIds.has(s.id))
+      : segments;
+    const untranslated = scopeSegments.filter(s => !(s.translatedText || '').trim());
+    const translated = scopeSegments.filter(s => (s.translatedText || '').trim());
+    let action: 'translate' | 'optimize' | 'none' = 'none';
+    if (untranslated.length > 0) action = 'translate';
+    else if (translated.length > 0) action = 'optimize';
+    return { mode, scopeSegments, untranslated, translated, action };
+  }, [segments, selectedIds]);
+
+  const aiActionTargets = aiScope.action === 'translate'
+    ? aiScope.untranslated
+    : aiScope.action === 'optimize'
+      ? aiScope.translated
+      : [];
+
+  const aiRunningMode = translationState.status === 'running'
+    ? 'translate'
+    : isOptimizing
+      ? 'optimize'
+      : null;
+
+  const aiButtonLabel = useMemo(() => {
+    if (aiRunningMode === 'translate') {
+      return isStoppingTranslate
+        ? 'Stopping...'
+        : `Stop (${translationState.processed}/${translationState.total} - ${progress}%)`;
     }
-    const allNeedingTranslation = segments.filter(s => !(s.translatedText || '').trim());
-    return { mode: 'all' as const, targets: allNeedingTranslation };
-  }, [segments, selectedIds]);
+    if (aiRunningMode === 'optimize') {
+      return isStoppingOptimize
+        ? 'Stopping...'
+        : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progress}%)`;
+    }
+    if (aiScope.action === 'translate') {
+      return aiScope.mode === 'selected' ? 'Translate Selected' : 'Translate All';
+    }
+    if (aiScope.action === 'optimize') {
+      return aiScope.mode === 'selected' ? 'Optimize Selected' : 'Optimize All';
+    }
+    return aiScope.mode === 'selected' ? 'Translate Selected' : 'Translate All';
+  }, [
+    aiRunningMode,
+    aiScope.action,
+    aiScope.mode,
+    isStoppingTranslate,
+    isStoppingOptimize,
+    translationState.processed,
+    translationState.total,
+    optimizeState.processed,
+    optimizeState.total,
+    progress
+  ]);
 
-  const hasTranslatableTarget = translateScope.targets.length > 0;
-
-  const canOptimizeSelected = useMemo(() => {
-    if (selectedIds.size === 0) return false;
-    const selectedSegments = segments.filter(s => selectedIds.has(s.id));
-    if (selectedSegments.length === 0) return false;
-    return selectedSegments.some(s => (s.translatedText || '').trim() !== '');
-  }, [segments, selectedIds]);
+  const isAiRunning = aiRunningMode !== null;
+  const aiButtonDisabled = aiRunningMode === 'translate'
+    ? isStoppingTranslate
+    : aiRunningMode === 'optimize'
+      ? isStoppingOptimize
+      : (status === 'processing' || aiScope.action === 'none' || aiActionTargets.length === 0);
 
   const captionTimeline = useMemo(() => {
     return segments
@@ -938,8 +982,8 @@ const App: React.FC = () => {
       return;
     }
     if (segments.length === 0) return;
-    const selectedMode = translateScope.mode === 'selected';
-    const needingTranslation = translateScope.targets;
+    const selectedMode = aiScope.mode === 'selected';
+    const needingTranslation = aiScope.untranslated;
     if (needingTranslation.length === 0) {
       showToast(selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
@@ -1029,9 +1073,8 @@ const App: React.FC = () => {
       setActiveTab('settings');
       return;
     }
-    if (selectedIds.size === 0) return;
-    if (!canOptimizeSelected) {
-      showToast("Only translated segments can be optimized.");
+    if (aiScope.translated.length === 0) {
+      showToast(aiScope.mode === 'selected' ? "Selected segments are not translated yet." : "All segments are not translated yet.");
       return;
     }
     setIsOptimizing(true);
@@ -1044,19 +1087,12 @@ const App: React.FC = () => {
     let safeCount = 0;
     let optimizedCount = 0;
     let requestCount = 0;
-    let untranslatedSkippedCount = 0;
+    let untranslatedSkippedCount = Math.max(0, aiScope.scopeSegments.length - aiScope.translated.length);
 
     const currentSegments = [...segments];
     const aiTargetSegments: SubtitleSegment[] = [];
-
-    for (const segId of Array.from(selectedIds)) {
-      const seg = currentSegments.find(s => s.id === segId);
-      if (!seg) continue;
-      if (!(seg.translatedText || '').trim()) {
-        untranslatedSkippedCount++;
-        continue;
-      }
-
+    const optimizeTargets = aiScope.translated;
+    for (const seg of optimizeTargets) {
       const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold);
       const severity = meta.enrichedSegments[0].severity;
 
@@ -1650,52 +1686,39 @@ const App: React.FC = () => {
                   </select>
 
                   <button
-                    onClick={translationState.status === 'running' ? handleStopTranslate : handleTranslate}
-                    disabled={translationState.status === 'running' ? isStoppingTranslate : (status === 'processing' || !hasTranslatableTarget)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[120px] sm:min-w-[152px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
-                      translationState.status === 'running'
+                    onClick={() => {
+                      if (aiRunningMode === 'translate') {
+                        handleStopTranslate();
+                        return;
+                      }
+                      if (aiRunningMode === 'optimize') {
+                        handleStopOptimize();
+                        return;
+                      }
+                      if (aiScope.action === 'translate') {
+                        handleTranslate();
+                        return;
+                      }
+                      if (aiScope.action === 'optimize') {
+                        handleAiOptimize();
+                      }
+                    }}
+                    disabled={aiButtonDisabled}
+                    className={`relative overflow-hidden inline-flex items-center justify-center w-auto gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
+                      isAiRunning
                         ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
-                        : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60'
+                        : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60 disabled:cursor-not-allowed'
                     }`}
                   >
-                    {translationState.status === 'running' && (
+                    {isAiRunning && (
                       <span
                         className="absolute left-0 top-0 h-full bg-white/10 pointer-events-none"
                         style={{ width: `${progress}%` }}
                       />
                     )}
                     <span className="relative z-10 shrink-0">{ICONS.AI}</span>
-                    <span className="relative z-10">
-                      {translationState.status === 'running'
-                        ? (isStoppingTranslate
-                          ? 'Stopping...'
-                          : `Stop (${translationState.processed}/${translationState.total} - ${progress}%)`)
-                        : (translateScope.mode === 'selected' ? 'Translate Selected' : 'Translate All')}
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={isOptimizing ? handleStopOptimize : handleAiOptimize}
-                    disabled={isOptimizing ? isStoppingOptimize : (status === 'processing' || !canOptimizeSelected)}
-                    className={`relative overflow-hidden inline-flex items-center justify-center min-w-[130px] sm:min-w-[170px] gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold transition-colors ${
-                      isOptimizing
-                        ? 'bg-rose-600/80 border border-rose-500/50 text-rose-100 hover:bg-rose-500/80 disabled:opacity-70'
-                        : 'bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-50 disabled:cursor-not-allowed'
-                    }`}
-                  >
-                    {isOptimizing && (
-                      <span
-                        className="absolute left-0 top-0 h-full bg-white/10 pointer-events-none"
-                        style={{ width: `${progress}%` }}
-                      />
-                    )}
-                    <span className="relative z-10 shrink-0">{ICONS.AI}</span>
-                    <span className="relative z-10">
-                      {isOptimizing
-                        ? (isStoppingOptimize
-                          ? 'Stopping...'
-                          : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progress}%)`)
-                        : 'Optimize Selected'}
+                    <span className="relative z-10 whitespace-nowrap">
+                      {aiButtonLabel}
                     </span>
                   </button>
 
