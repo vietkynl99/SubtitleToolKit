@@ -116,6 +116,7 @@ const App: React.FC = () => {
   });
   const [toastHistory, setToastHistory] = useState<Array<{ id: number; message: string; time: number; type: 'info' | 'success' | 'warning' | 'error' }>>([]);
   const [showToastHistory, setShowToastHistory] = useState<boolean>(false);
+  const [inlineStatus, setInlineStatus] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
   const [isFileLoading, setIsFileLoading] = useState<boolean>(false);
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
   
@@ -154,6 +155,7 @@ const App: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const toastHistoryRef = useRef<HTMLDivElement | null>(null);
+  const inlineStatusTimerRef = useRef<number | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
   const videoResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -226,6 +228,17 @@ const App: React.FC = () => {
       return next.slice(0, 200);
     });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
+  };
+
+  const showInlineStatus = (type: 'info' | 'success' | 'warning' | 'error', message: string, durationMs: number = 5000) => {
+    setInlineStatus({ type, message });
+    if (inlineStatusTimerRef.current) {
+      window.clearTimeout(inlineStatusTimerRef.current);
+    }
+    inlineStatusTimerRef.current = window.setTimeout(() => {
+      setInlineStatus(null);
+      inlineStatusTimerRef.current = null;
+    }, durationMs);
   };
 
   const clearAndCloseSearch = useCallback(() => {
@@ -687,7 +700,11 @@ const App: React.FC = () => {
     });
     commitSegmentsChange(updated);
     setReplaceCursor(null);
-    showToast(count > 0 ? 'success' : 'info', count > 0 ? `Replaced ${count} match(es).` : 'No matches to replace.');
+    if (count > 0) {
+      showToast('success', `Replaced ${count} match(es).`);
+    } else {
+      showInlineStatus('info', 'No matches to replace.');
+    }
   }, [compileSearch, searchQuery, segments, replaceQuery, commitSegmentsChange]);
 
   const buildTermReplacePreview = useCallback(() => {
@@ -876,7 +893,7 @@ const App: React.FC = () => {
 
   const handleDNAAnalyze = async (input: string) => {
     if (!settings.apiKey?.trim()) {
-      showToast('warning', "Please enter your Gemini API Key in Settings.");
+      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -1124,7 +1141,7 @@ const App: React.FC = () => {
 
   const handleTranslate = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast('warning', "Please enter your Gemini API Key in Settings.");
+      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -1132,12 +1149,12 @@ const App: React.FC = () => {
     const selectedMode = aiScope.mode === 'selected';
     const needingTranslation = aiScope.untranslated;
     if (needingTranslation.length === 0) {
-      showToast('warning', selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
+      showInlineStatus('warning', selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
     if (!translationPreset) {
-      showToast('warning', "Please configure Translation Style first.");
+      showInlineStatus('warning', "Please configure Translation Style first.");
       setActiveTab('translation-style');
       return;
     }
@@ -1155,7 +1172,7 @@ const App: React.FC = () => {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
           setIsStoppingTranslate(false);
-          showToast('info', "Translation process has been stopped.");
+          showInlineStatus('info', "Translation process has been stopped.");
           setStatus('success');
           return;
         }
@@ -1211,17 +1228,17 @@ const App: React.FC = () => {
     if (isStoppingTranslate) return;
     stopRequestedRef.current = true;
     setIsStoppingTranslate(true);
-    showToast('info', "Stopping translation...");
+    showInlineStatus('info', "Stopping translation...");
   };
 
   const handleAiOptimize = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast('warning', "Please enter your Gemini API Key in Settings.");
+      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
     if (aiScope.translated.length === 0) {
-      showToast('warning', aiScope.mode === 'selected' ? "Selected segments are not translated yet." : "All segments are not translated yet.");
+      showInlineStatus('warning', aiScope.mode === 'selected' ? "Selected segments are not translated yet." : "All segments are not translated yet.");
       return;
     }
     setIsOptimizing(true);
@@ -1337,7 +1354,7 @@ const App: React.FC = () => {
     }
     
     if (wasStopped) {
-      showToast('warning', `Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
+      showInlineStatus('warning', `Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
       return;
     }
     if (hadOptimizeErrors && requestCount === 0) {
@@ -1349,7 +1366,7 @@ const App: React.FC = () => {
       return;
     }
     if (optimizedCount === 0) {
-      showToast('info', `Optimization finished: No changes applied. Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments. Total requests: ${requestCount}.`);
+      showInlineStatus('info', `Optimization finished: No changes applied. Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments. Total requests: ${requestCount}.`);
       return;
     }
     showToast('success', `Optimization finished: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
@@ -1359,7 +1376,7 @@ const App: React.FC = () => {
     if (isStoppingOptimize) return;
     optimizeStopRequestedRef.current = true;
     setIsStoppingOptimize(true);
-    showToast('info', "Stopping optimization...");
+    showInlineStatus('info', "Stopping optimization...");
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -1432,7 +1449,7 @@ const App: React.FC = () => {
 
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
-    showToast('info', "Temporary split file removed.");
+    showInlineStatus('info', "Temporary split file removed.");
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -1539,6 +1556,25 @@ const App: React.FC = () => {
     }
   } as const;
 
+  const inlineTone = {
+    info: {
+      container: 'bg-slate-900 border-slate-700 text-slate-200',
+      icon: ICONS.Notification
+    },
+    success: {
+      container: 'bg-emerald-950 border-emerald-500/40 text-emerald-200',
+      icon: ICONS.Success
+    },
+    warning: {
+      container: 'bg-amber-950 border-amber-500/40 text-amber-200',
+      icon: ICONS.Warning
+    },
+    error: {
+      container: 'bg-rose-950 border-rose-500/40 text-rose-200',
+      icon: ICONS.Error
+    }
+  } as const;
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress} hasProject={segments.length > 0} onClearProject={handleClearProjectRequest} onExportProject={() => setShowExportModal(true)}>
       {toast.visible && (
@@ -1547,6 +1583,14 @@ const App: React.FC = () => {
             {toastTone[toast.type].icon}
             <span>{toast.message}</span>
           </p>
+        </div>
+      )}
+      {inlineStatus && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[190] pointer-events-none">
+          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs sm:text-[13px] font-semibold shadow-lg ${inlineTone[inlineStatus.type].container}`}>
+            <span className="shrink-0">{inlineTone[inlineStatus.type].icon}</span>
+            <span>{inlineStatus.message}</span>
+          </div>
         </div>
       )}
 
