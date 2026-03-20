@@ -1934,8 +1934,8 @@ const App: React.FC = () => {
                 </button>
 
                 {showToastHistory && (
-                  <div className="absolute right-0 mt-2 z-[60] w-[320px] max-h-[420px] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                  <div className="absolute right-0 mt-2 z-[60] w-[320px] max-h-[420px] bg-slate-800/90 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-blue-500/15">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/60 bg-slate-900/70">
                       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Notification History</div>
                       <button
                         onClick={() => setShowToastHistory(false)}
@@ -1946,7 +1946,7 @@ const App: React.FC = () => {
                         {ICONS.Close}
                       </button>
                     </div>
-                    <div className="max-h-[360px] overflow-y-auto p-3 space-y-2">
+                    <div className="max-h-[360px] overflow-y-auto p-3 space-y-2 bg-slate-900/50">
                       {toastHistory.length === 0 ? (
                         <div className="text-sm text-slate-500">No notifications yet.</div>
                       ) : (
