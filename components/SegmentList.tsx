@@ -10,6 +10,7 @@ interface SegmentListProps {
   onUpdateTime: (id: number, field: 'startTime' | 'endTime', value: string) => void;
   onDeleteSegment: (id: number) => void;
   onSegmentClick?: (id: number) => void;
+  onShowOptimizeHistory?: (id: number) => void;
   currentPage: number;
   searchQuery: string;
   searchCaseSensitive: boolean;
@@ -28,6 +29,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
   onUpdateTime,
   onDeleteSegment,
   onSegmentClick,
+  onShowOptimizeHistory,
   currentPage,
   searchQuery,
   searchCaseSensitive,
@@ -174,6 +176,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               const hasTimelineIssue = seg.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
               const hasOriginLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
               const hasTranslatedLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
+              const optimizeCount = seg.optimizeHistory?.length || 0;
 
               return (
                 <div
@@ -300,16 +303,33 @@ const SegmentList: React.FC<SegmentListProps> = ({
                             className="w-full text-left bg-transparent border-none p-0"
                             title="Click to edit translation"
                           >
-                            <div
-                              className={`text-[13px] font-semibold leading-snug whitespace-pre-wrap break-words min-h-[20px] ${
-                                hasTranslatedLangIssue
-                                  ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
-                                  : 'text-blue-100'
-                              }`}
-                            >
-                              {seg.translatedText
-                                ? renderHighlightedText(seg.translatedText, searchQuery)
-                                : <span className="text-slate-700 italic">No translation yet...</span>}
+                            <div className="flex items-start gap-2">
+                              {optimizeCount > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onShowOptimizeHistory?.(seg.id);
+                                  }}
+                                  className="mt-[2px] shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
+                                  title="View optimization history"
+                                >
+                                  optimized
+                                </button>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div
+                                  className={`text-[13px] font-semibold leading-snug whitespace-pre-wrap break-words min-h-[20px] ${
+                                    hasTranslatedLangIssue
+                                      ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                                      : 'text-blue-100'
+                                  }`}
+                                >
+                                  {seg.translatedText
+                                    ? renderHighlightedText(seg.translatedText, searchQuery)
+                                    : <span className="text-slate-700 italic">No translation yet...</span>}
+                                </div>
+                              </div>
                             </div>
                           </button>
                         );
@@ -317,27 +337,44 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
                       return (
                         <>
-                          <textarea
-                            ref={(el) => {
-                              translationTextareaRefs.current[seg.id] = el;
-                              if (el) resizeTranslationTextarea(el);
-                            }}
-                            className={`w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic ${
-                              hasTranslatedLangIssue
-                                ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
-                                : 'text-blue-100'
-                            }`}
-                            placeholder="No translation yet..."
-                            rows={1}
-                            value={seg.translatedText || ''}
-                            onChange={(e) => {
-                              onUpdateText(seg.id, e.target.value);
-                              resizeTranslationTextarea(e.currentTarget);
-                            }}
-                            autoFocus={editingTranslationId === seg.id}
-                            onBlur={() => setEditingTranslationId(null)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <textarea
+                                ref={(el) => {
+                                  translationTextareaRefs.current[seg.id] = el;
+                                  if (el) resizeTranslationTextarea(el);
+                                }}
+                                className={`w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic ${
+                                  hasTranslatedLangIssue
+                                    ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                                    : 'text-blue-100'
+                                }`}
+                                placeholder="No translation yet..."
+                                rows={1}
+                                value={seg.translatedText || ''}
+                                onChange={(e) => {
+                                  onUpdateText(seg.id, e.target.value);
+                                  resizeTranslationTextarea(e.currentTarget);
+                                }}
+                                autoFocus={editingTranslationId === seg.id}
+                                onBlur={() => setEditingTranslationId(null)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                            {optimizeCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onShowOptimizeHistory?.(seg.id);
+                                }}
+                                className="mt-[2px] shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
+                                title="View optimization history"
+                              >
+                                optimized
+                              </button>
+                            )}
+                          </div>
                           {searchQuery.trim() && (seg.translatedText || '').toLowerCase().includes(searchQuery.toLowerCase()) && (
                             <div className="mt-1 text-[10px] text-slate-400">
                               Matched: {renderHighlightedText(getMatchSnippet(seg.translatedText || '', searchQuery) || '', searchQuery)}

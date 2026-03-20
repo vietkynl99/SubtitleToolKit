@@ -14,7 +14,8 @@ import {
   timeToSeconds,
   secondsToTime,
   parseFileName,
-  generateExportFileName
+  generateExportFileName,
+  calculateCPS
 } from './services/subtitleLogic';
 import React, { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { Search, CopyCheck, CopyX, Eye, EyeOff } from 'lucide-react';
@@ -91,6 +92,8 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showTermReplaceModal, setShowTermReplaceModal] = useState<boolean>(false);
+  const [optimizeHistorySegmentId, setOptimizeHistorySegmentId] = useState<number | null>(null);
+  const [optimizeHistoryIndex, setOptimizeHistoryIndex] = useState<number>(0);
   const [termReplacePreview, setTermReplacePreview] = useState<{
     total: number;
     items: Array<{
@@ -152,6 +155,38 @@ const App: React.FC = () => {
   const videoResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const editorPaneRef = useRef<HTMLDivElement | null>(null);
   const undoStackRef = useRef<SubtitleSegment[][]>([]);
+
+  const optimizeHistorySegment = useMemo(() => {
+    if (optimizeHistorySegmentId === null) return null;
+    return segments.find(seg => seg.id === optimizeHistorySegmentId) || null;
+  }, [segments, optimizeHistorySegmentId]);
+
+  const handleShowOptimizeHistory = useCallback((id: number) => {
+    setOptimizeHistorySegmentId(id);
+    const seg = segments.find(s => s.id === id);
+    const history = seg?.optimizeHistory || [];
+    const currentText = seg?.translatedText || '';
+    const matchedIndex = history.length > 0
+      ? history.findLastIndex(h => h === currentText)
+      : -1;
+    const lastIndex = Math.max(0, history.length - 1);
+    setOptimizeHistoryIndex(matchedIndex >= 0 ? matchedIndex : lastIndex);
+  }, [segments]);
+
+  const handleCloseOptimizeHistory = useCallback(() => {
+    setOptimizeHistorySegmentId(null);
+    setOptimizeHistoryIndex(0);
+  }, []);
+
+  const getCpsTone = useCallback((cps: number) => {
+    if (cps > settings.cpsThreshold.warningMax) {
+      return { text: 'text-rose-300', bg: 'bg-rose-500' };
+    }
+    if (cps >= settings.cpsThreshold.safeMax) {
+      return { text: 'text-amber-300', bg: 'bg-amber-500' };
+    }
+    return { text: 'text-emerald-300', bg: 'bg-emerald-500' };
+  }, [settings.cpsThreshold]);
 
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -233,6 +268,14 @@ const App: React.FC = () => {
       setFileName(generateExportFileName(baseFileName, editedCount));
     }
   }, [baseFileName, editedCount]);
+
+  useEffect(() => {
+    if (!optimizeHistorySegment) return;
+    const maxIndex = Math.max(0, (optimizeHistorySegment.optimizeHistory?.length || 0) - 1);
+    if (optimizeHistoryIndex > maxIndex) {
+      setOptimizeHistoryIndex(maxIndex);
+    }
+  }, [optimizeHistorySegment, optimizeHistoryIndex]);
 
   useEffect(() => {
     localStorage.setItem('subtitle_settings', JSON.stringify(settings));
@@ -1185,8 +1228,25 @@ const App: React.FC = () => {
           fixed.forEach(f => {
             const idx = currentSegments.findIndex(s => s.id === f.id);
             if (idx !== -1) {
-              currentSegments[idx] = { ...f }; 
-              optimizedCount++;
+              const prev = currentSegments[idx];
+              const prevText = prev.translatedText || '';
+              const nextText = f.translatedText || '';
+              let nextHistory = prev.optimizeHistory ? [...prev.optimizeHistory] : [];
+
+              if (nextText) {
+                if (prevText && nextHistory[nextHistory.length - 1] !== prevText) {
+                  nextHistory.push(prevText);
+                }
+                nextHistory.push(nextText);
+              }
+
+              currentSegments[idx] = {
+                ...prev,
+                ...f,
+                translatedText: nextText || prev.translatedText,
+                optimizeHistory: nextHistory
+              };
+              if (nextText && nextText !== prevText) optimizedCount++;
             }
           });
           
@@ -1515,6 +1575,77 @@ const App: React.FC = () => {
               <button onClick={() => setShowTermReplaceModal(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Cancel</button>
               <button onClick={handleConfirmTermReplace} className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold transition-colors">Apply</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {optimizeHistorySegmentId !== null && optimizeHistorySegment && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[210] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 animate-in zoom-in duration-200">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold mb-1">Optimize History</h3>
+                <div className="text-xs text-slate-400">
+                  Segment #{optimizeHistorySegment.id} · {optimizeHistorySegment.startTime} → {optimizeHistorySegment.endTime}
+                </div>
+              </div>
+              <button
+                onClick={handleCloseOptimizeHistory}
+                className="p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800 hover:bg-slate-700 transition"
+                aria-label="Close"
+                title="Close"
+              >
+                {ICONS.Close}
+              </button>
+            </div>
+
+            {(optimizeHistorySegment.optimizeHistory?.length || 0) === 0 ? (
+              <div className="mt-6 text-slate-400 text-sm">No optimize history found for this segment.</div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-3">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Origin</div>
+                  <div className="text-[12px] text-slate-300 whitespace-pre-wrap break-words">
+                    {optimizeHistorySegment.originalText || <span className="text-slate-600 italic">No original text</span>}
+                  </div>
+                </div>
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                  {optimizeHistorySegment.optimizeHistory?.map((entry, idx) => {
+                    const cps = calculateCPS(optimizeHistorySegment, entry || '');
+                    const colors = getCpsTone(cps);
+                    const isActive = idx === optimizeHistoryIndex;
+                    return (
+                      <button
+                        key={`${optimizeHistorySegment.id}-${idx}`}
+                        onClick={() => {
+                          setOptimizeHistoryIndex(idx);
+                          commitSegmentsChange(prev => prev.map(seg => (
+                            seg.id === optimizeHistorySegment.id
+                              ? { ...seg, translatedText: entry || seg.translatedText }
+                              : seg
+                          )));
+                        }}
+                        className={`w-full text-left grid grid-cols-[minmax(240px,1.6fr)_90px] gap-2 px-3 py-2 rounded-xl border transition ${
+                          isActive
+                            ? 'border-emerald-400 bg-emerald-500/10'
+                            : 'border-slate-800 bg-slate-900 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="text-[12px] text-blue-100 whitespace-pre-wrap break-words">
+                          {entry || <span className="text-slate-600 italic">Empty</span>}
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className={`text-[11px] font-bold font-mono ${colors.text}`}>
+                            {cps.toFixed(1)}
+                          </span>
+                          <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1935,6 +2066,7 @@ const App: React.FC = () => {
                 onUpdateTime={updateSegmentTime}
                 onDeleteSegment={deleteSegment}
                 onSegmentClick={handleSeekToSegmentStart}
+                onShowOptimizeHistory={handleShowOptimizeHistory}
                 currentPage={currentPage}
                 searchQuery={searchQuery}
                 searchCaseSensitive={searchCaseSensitive}

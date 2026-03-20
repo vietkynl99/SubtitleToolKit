@@ -24,6 +24,7 @@ export interface SubtitleSegment {
   endTime: string;
   originalText: string | null; // Nullable for VN-only segments
   translatedText: string | null; // Nullable for CN-only segments
+  optimizeHistory?: string[];
   isProcessing?: boolean;
   errors: SubtitleError[];
   severity: Severity;
@@ -43,6 +44,7 @@ export interface SktProject {
     end: string;
     original: string;
     translated: string;
+    optimize_history?: string[];
   }[];
 }
 

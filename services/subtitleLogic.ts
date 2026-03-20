@@ -80,6 +80,7 @@ export function parseSRT(content: string): SubtitleSegment[] {
           endTime,
           originalText,
           translatedText,
+          optimizeHistory: [],
           errors: [],
           severity: 'safe',
           cps: 0,
@@ -263,6 +264,7 @@ export function parseCapCutDraft(content: string): { segments: SubtitleSegment[]
     endTime: secondsToTime(item.end),
     originalText: item.text,
     translatedText: null,
+    optimizeHistory: [],
     errors: [],
     severity: 'safe',
     cps: 0,
@@ -285,6 +287,15 @@ export function parseSktProject(content: string): { segments: SubtitleSegment[],
     endTime: s.end,
     originalText: s.original || null,
     translatedText: s.translated || null,
+    optimizeHistory: Array.isArray(s.optimize_history)
+      ? s.optimize_history
+          .map((h: any) => {
+            if (typeof h === 'string') return h.trim();
+            if (h && typeof h === 'object' && typeof h.after === 'string') return h.after.trim();
+            return '';
+          })
+          .filter((h: string) => h.length > 0)
+      : [],
     errors: [],
     severity: 'safe',
     cps: 0,
@@ -332,7 +343,8 @@ export function generateSktProject(segments: SubtitleSegment[], title: string, p
       start: s.startTime,
       end: s.endTime,
       original: s.originalText || "",
-      translated: s.translatedText || ""
+      translated: s.translatedText || "",
+      optimize_history: s.optimizeHistory && s.optimizeHistory.length > 0 ? s.optimizeHistory : undefined
     }))
   };
   return JSON.stringify(project, null, 2);
