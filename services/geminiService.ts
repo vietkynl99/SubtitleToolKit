@@ -1,6 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
 
+function normalizeAiText(raw: string): string {
+  return raw.replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
+}
+
 /**
  * Translates a single batch of segments with surrounding context. 
  * Tolerant to partial AI responses for improved reliability.
@@ -124,13 +128,12 @@ Do not change who is speaking in the subtitle.
 3. Subtitle readability
 Use natural spoken Vietnamese suitable for storytelling subtitles.
 
-4. Length control
-Keep Vietnamese subtitles concise.
-Target: <1.4× the Chinese line  
-Hard limit: <2×
-
-If a line becomes long, shorten phrasing and simplify structure.
+4. Length control + line breaking
+Keep subtitles concise (target <1.4×, max <2×).
+If the subtitle would exceed 10 words on one line, you MUST insert a line break and return 2 lines.
+Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.
 Prefer the shorter expression when meaning is the same.
+Prefer 1 line if short.
 
 5. Short line rule
 Chinese ≤4 characters → Vietnamese 1–3 words.
@@ -141,10 +144,9 @@ Avoid overly formal written language.
 
 7. Names and proper nouns
 Keep all character names and proper nouns consistent.
-
-• The same Chinese name must always use the same Vietnamese form.
-• Do not create different spellings for similar names.
-• If a term looks like a name, treat it as a name rather than translating its meaning.
+- The same Chinese name must always use the same Vietnamese form.
+- Do not create different spellings for similar names.
+- If a term looks like a name, treat it as a name rather than translating its meaning.
 
 8. Word choice
 If multiple Vietnamese expressions are possible, prefer the more vivid and entertaining wording.
@@ -183,7 +185,12 @@ ${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
       }
     });
 
-    const translatedBatch = JSON.parse(response.text?.trim() || "[]");
+    const translatedBatch = JSON.parse(response.text?.trim() || "[]").map((item: any) => {
+      if (item && typeof item.text === 'string') {
+        return { ...item, text: normalizeAiText(item.text) };
+      }
+      return item;
+    });
 
     if (!Array.isArray(translatedBatch)) {
       throw new Error("Invalid response format: Expected a JSON array.");
@@ -354,7 +361,7 @@ ${JSON.stringify(payload)}
       const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
       const maxChars = Math.max(Math.floor(duration * targetCPS), 3);
 
-      let text = fix.fixedText.trim();
+      let text = normalizeAiText(fix.fixedText.trim());
 
       // Hard trim fallback
       if (text.length > maxChars) {
