@@ -109,8 +109,12 @@ const App: React.FC = () => {
   const [termReplacePage, setTermReplacePage] = useState<number>(1);
   const [segmentToDelete, setSegmentToDelete] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: '', visible: false});
-  const [toastHistory, setToastHistory] = useState<Array<{ id: number; message: string; time: number }>>([]);
+  const [toast, setToast] = useState<{message: string, visible: boolean, type: 'info' | 'success' | 'warning' | 'error'}>({
+    message: '',
+    visible: false,
+    type: 'info'
+  });
+  const [toastHistory, setToastHistory] = useState<Array<{ id: number; message: string; time: number; type: 'info' | 'success' | 'warning' | 'error' }>>([]);
   const [showToastHistory, setShowToastHistory] = useState<boolean>(false);
   const [isFileLoading, setIsFileLoading] = useState<boolean>(false);
   const [generatedFiles, setGeneratedFiles] = useState<SplitResult[]>([]);
@@ -214,10 +218,11 @@ const App: React.FC = () => {
     return { text: 'text-emerald-300', bg: 'bg-emerald-500' };
   }, [settings.cpsThreshold]);
 
-  const showToast = (message: string) => {
-    setToast({ message, visible: true });
+  const showToast = (type: 'info' | 'success' | 'warning' | 'error', message: string) => {
+    const nextType = type;
+    setToast({ message, visible: true, type: nextType });
     setToastHistory(prev => {
-      const next = [{ id: Date.now() + Math.random(), message, time: Date.now() }, ...prev];
+      const next = [{ id: Date.now() + Math.random(), message, time: Date.now(), type: nextType }, ...prev];
       return next.slice(0, 200);
     });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 6000);
@@ -249,7 +254,7 @@ const App: React.FC = () => {
     if (!last) return;
     setSegments(cloneSegments(last));
     setSelectedIds(new Set());
-    showToast('Undo applied.');
+    showToast('success', 'Undo applied.');
   }, [cloneSegments]);
 
   const handleVideoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -677,7 +682,7 @@ const App: React.FC = () => {
     });
     commitSegmentsChange(updated);
     setReplaceCursor(null);
-    showToast(count > 0 ? `Replaced ${count} match(es).` : 'No matches to replace.');
+    showToast(count > 0 ? 'success' : 'info', count > 0 ? `Replaced ${count} match(es).` : 'No matches to replace.');
   }, [compileSearch, searchQuery, segments, replaceQuery, commitSegmentsChange]);
 
   const buildTermReplacePreview = useCallback(() => {
@@ -831,7 +836,7 @@ const App: React.FC = () => {
   
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    showToast("File name copied to clipboard");
+    showToast('success', "File name copied to clipboard");
   };
 
   const handleToggleSelect = (id: number) => {
@@ -866,7 +871,7 @@ const App: React.FC = () => {
 
   const handleDNAAnalyze = async (input: string) => {
     if (!settings.apiKey?.trim()) {
-      showToast("Please enter your Gemini API Key in Settings.");
+      showToast('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -884,10 +889,10 @@ const App: React.FC = () => {
         }
       }));
 
-      showToast("DNA analysis complete. Translation style initialized.");
+      showToast('success', "DNA analysis complete. Translation style initialized.");
     } catch (err) {
       console.error("DNA analysis failed", err);
-      showToast("Failed to analyze translation style.");
+      showToast('error', "Failed to analyze translation style.");
     } finally {
       setIsPresetLoading(false);
     }
@@ -938,12 +943,12 @@ const App: React.FC = () => {
             humor_level: json.humor_level
           };
           setTranslationPreset(cleaned);
-          showToast("DNA preset imported successfully.");
+          showToast('success', "DNA preset imported successfully.");
         } else {
-          showToast("Invalid DNA file or incompatible version.");
+          showToast('error', "Invalid DNA file or incompatible version.");
         }
       } catch (err) {
-        showToast("Error while reading DNA file.");
+        showToast('error', "Error while reading DNA file.");
       }
     };
     reader.readAsText(file);
@@ -1063,7 +1068,7 @@ const App: React.FC = () => {
     setActiveTab('upload');
     setSelectedIds(new Set());
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!skipFeedback) showToast("Project has been cleared.");
+    if (!skipFeedback) showToast('success', "Project has been cleared.");
   };
 
   const handleClearProjectRequest = () => {
@@ -1112,7 +1117,7 @@ const App: React.FC = () => {
 
   const handleTranslate = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast("Please enter your Gemini API Key in Settings.");
+      showToast('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -1120,12 +1125,12 @@ const App: React.FC = () => {
     const selectedMode = aiScope.mode === 'selected';
     const needingTranslation = aiScope.untranslated;
     if (needingTranslation.length === 0) {
-      showToast(selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
+      showToast('warning', selectedMode ? "Selected segments are already translated." : "All segments are already translated.");
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
     if (!translationPreset) {
-      showToast("Please configure Translation Style first.");
+      showToast('warning', "Please configure Translation Style first.");
       setActiveTab('translation-style');
       return;
     }
@@ -1143,7 +1148,7 @@ const App: React.FC = () => {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
           setIsStoppingTranslate(false);
-          showToast("Translation process has been stopped.");
+          showToast('info', "Translation process has been stopped.");
           setStatus('success');
           return;
         }
@@ -1185,12 +1190,12 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setIsStoppingTranslate(false);
       setStatus('success');
-      showToast(selectedMode ? "Selected segments translated." : "All segments translated.");
+      showToast('success', selectedMode ? "Selected segments translated." : "All segments translated.");
     } catch (err: any) {
       setStatus('error');
       setTranslationState(prev => ({ ...prev, status: 'error' }));
       setIsStoppingTranslate(false);
-      showToast(`Error: ${formatAiErrorMessage(err)}`);
+      showToast('error', `Error: ${formatAiErrorMessage(err)}`);
       setSegments(prev => prev.map(s => ({ ...s, isProcessing: false })));
     }
   };
@@ -1199,17 +1204,17 @@ const App: React.FC = () => {
     if (isStoppingTranslate) return;
     stopRequestedRef.current = true;
     setIsStoppingTranslate(true);
-    showToast("Stopping translation...");
+    showToast('info', "Stopping translation...");
   };
 
   const handleAiOptimize = async () => {
     if (!settings.apiKey?.trim()) {
-      showToast("Please enter your Gemini API Key in Settings.");
+      showToast('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
     }
     if (aiScope.translated.length === 0) {
-      showToast(aiScope.mode === 'selected' ? "Selected segments are not translated yet." : "All segments are not translated yet.");
+      showToast('warning', aiScope.mode === 'selected' ? "Selected segments are not translated yet." : "All segments are not translated yet.");
       return;
     }
     setIsOptimizing(true);
@@ -1301,7 +1306,7 @@ const App: React.FC = () => {
         setIsStoppingOptimize(false);
         optimizeStopRequestedRef.current = false;
         setOptimizeState({ processed: 0, total: 0 });
-        showToast(`Error: ${formatAiErrorMessage(err) || 'Optimization failed.'}`);
+        showToast('error', `Error: ${formatAiErrorMessage(err) || 'Optimization failed.'}`);
         return;
       }
     }
@@ -1325,29 +1330,29 @@ const App: React.FC = () => {
     }
     
     if (wasStopped) {
-      showToast(`Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
+      showToast('warning', `Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
       return;
     }
     if (hadOptimizeErrors && requestCount === 0) {
-      showToast("Optimization failed due to API errors. Please try again.");
+      showToast('error', "Optimization failed due to API errors. Please try again.");
       return;
     }
     if (hadOptimizeErrors) {
-      showToast(`Optimization finished with errors: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
+      showToast('warning', `Optimization finished with errors: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
       return;
     }
     if (optimizedCount === 0) {
-      showToast(`Optimization finished: No changes applied. Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments. Total requests: ${requestCount}.`);
+      showToast('info', `Optimization finished: No changes applied. Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments. Total requests: ${requestCount}.`);
       return;
     }
-    showToast(`Optimization finished: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
+    showToast('success', `Optimization finished: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
   };
 
   const handleStopOptimize = () => {
     if (isStoppingOptimize) return;
     optimizeStopRequestedRef.current = true;
     setIsStoppingOptimize(true);
-    showToast("Stopping optimization...");
+    showToast('info', "Stopping optimization...");
   };
 
   const downloadFile = (content: string, name: string) => {
@@ -1367,24 +1372,24 @@ const App: React.FC = () => {
       const name = generateExportFileName(baseFileName, editedCount, '.sktproject');
       downloadFile(json, name);
       setEditedCount(prev => prev + 1);
-      showToast("Project saved.");
+      showToast('success', "Project saved.");
     } else if (type === 'srt-orig') {
       const srt = generateSRT(segments, 'original');
       const name = `[Origin]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
-      showToast("Original SRT exported.");
+      showToast('success', "Original SRT exported.");
     } else if (type === 'srt-tran') {
       const srt = generateSRT(segments, 'translated');
       const name = `[Translated]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
-      showToast("Translated SRT exported.");
+      showToast('success', "Translated SRT exported.");
     } else if (type === 'preset') {
       if (!translationPreset) {
-        showToast("No translation preset to export.");
+      showToast('warning', "No translation preset to export.");
         return;
       }
       handleExportPreset();
-      showToast("Preset exported.");
+      showToast('success', "Preset exported.");
     }
   };
 
@@ -1395,7 +1400,7 @@ const App: React.FC = () => {
     else if (mode === 'count') res = splitByCount(segments, value as number, fileName, includeMetadata);
     else if (mode === 'manual') res = splitByManual(segments, (value as string).split('\n').filter(x => x.trim()), fileName, includeMetadata);
     else if (mode === 'range') res = splitByRange(segments, value.start, value.end, fileName, includeMetadata);
-    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast(`File has been split into ${res.length} parts.`); }
+    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast('success', `File has been split into ${res.length} parts.`); }
   };
 
   const handleDownloadGenerated = (file: SplitResult) => {
@@ -1420,7 +1425,7 @@ const App: React.FC = () => {
 
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
-    showToast("Temporary split file removed.");
+    showToast('info', "Temporary split file removed.");
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -1446,7 +1451,7 @@ const App: React.FC = () => {
     setSelectedIds(new Set());
     setShowDeleteModal(false);
     setSegmentToDelete(null);
-    showToast("Segment deleted and indices have been re-numbered.");
+    showToast('success', "Segment deleted and indices have been re-numbered.");
   };
 
   const updateThreshold = (key: 'safeMax' | 'warningMax', val: number) => {
@@ -1474,7 +1479,7 @@ const App: React.FC = () => {
     }
     applyTermReplacements();
     setShowTermReplaceModal(false);
-    showToast(`Auto replaced ${termReplacePreview.total} match(es).`);
+    showToast('success', `Auto replaced ${termReplacePreview.total} match(es).`);
   };
 
   const renderTermReplacePreview = (text: string, find: string, replaceWith: string) => {
@@ -1508,11 +1513,33 @@ const App: React.FC = () => {
     return parts.length > 0 ? parts : text;
   };
 
+  const toastTone = {
+    info: {
+      container: 'bg-slate-900 border-slate-700 text-blue-300',
+      icon: ICONS.Notification
+    },
+    success: {
+      container: 'bg-emerald-950 border-emerald-500/50 text-emerald-200',
+      icon: ICONS.Success
+    },
+    warning: {
+      container: 'bg-amber-950 border-amber-500/50 text-amber-200',
+      icon: ICONS.Warning
+    },
+    error: {
+      container: 'bg-rose-950 border-rose-500/50 text-rose-200',
+      icon: ICONS.Error
+    }
+  } as const;
+
   return (
     <Layout activeTab={activeTab} setActiveTab={setActiveTab} progress={progress} hasProject={segments.length > 0} onClearProject={handleClearProjectRequest} onExportProject={() => setShowExportModal(true)}>
       {toast.visible && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] bg-slate-800 border border-slate-700 px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
-          <p className="text-sm font-bold text-blue-400 flex items-center gap-2">{ICONS.Success} {toast.message}</p>
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] border px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300 ${toastTone[toast.type].container}`}>
+          <p className="text-sm font-bold flex items-center gap-2">
+            {toastTone[toast.type].icon}
+            <span>{toast.message}</span>
+          </p>
         </div>
       )}
 
@@ -1924,11 +1951,38 @@ const App: React.FC = () => {
                         <div className="text-sm text-slate-500">No notifications yet.</div>
                       ) : (
                         toastHistory.map(item => (
-                          <div key={item.id} className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2">
+                          <div key={item.id} className={`border rounded-xl px-3 py-2 ${
+                            item.type === 'success'
+                              ? 'bg-emerald-500/10 border-emerald-500/30'
+                              : item.type === 'warning'
+                                ? 'bg-amber-500/10 border-amber-500/30'
+                                : item.type === 'error'
+                                  ? 'bg-rose-500/10 border-rose-500/30'
+                                  : 'bg-slate-950/60 border-slate-800'
+                          }`}>
                             <div className="text-[10px] text-slate-500 mb-1">
                               {new Date(item.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </div>
-                            <div className="text-sm text-slate-200">{item.message}</div>
+                            <div className={`text-sm flex items-center gap-2 ${
+                              item.type === 'success'
+                                ? 'text-emerald-200'
+                                : item.type === 'warning'
+                                  ? 'text-amber-200'
+                                  : item.type === 'error'
+                                    ? 'text-rose-200'
+                                    : 'text-slate-200'
+                            }`}>
+                              <span className="shrink-0">
+                                {item.type === 'success'
+                                  ? ICONS.Success
+                                  : item.type === 'warning'
+                                    ? ICONS.Warning
+                                    : item.type === 'error'
+                                      ? ICONS.Error
+                                      : ICONS.Notification}
+                              </span>
+                              <span>{item.message}</span>
+                            </div>
                           </div>
                         ))
                       )}
