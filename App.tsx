@@ -400,6 +400,8 @@ const App: React.FC = () => {
       segment.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
     const hasLangIssue = (segment: SubtitleSegment) =>
       hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment);
+    const isTooLong = (segment: SubtitleSegment) =>
+      segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines'));
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
@@ -416,6 +418,9 @@ const App: React.FC = () => {
     }
     if (filter === 'optimized') {
       return processedSegments.filter(s => (s.optimizeHistory?.length || 0) > 0);
+    }
+    if (filter === 'too-long') {
+      return processedSegments.filter(isTooLong);
     }
     if (typeof filter === 'string') {
       return processedSegments.filter(s => s.severity === filter);
@@ -2064,6 +2069,7 @@ const App: React.FC = () => {
                     <option value="critical">Critical</option>
                     <option value="timeline">Timeline Issues</option>
                     <option value="lang">Language Issues</option>
+                    <option value="too-long">Too Long (3+ lines)</option>
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
                     <option value="optimized">Optimized</option>

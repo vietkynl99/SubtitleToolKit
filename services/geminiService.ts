@@ -1,8 +1,24 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
+import { DEFAULT_SETTINGS } from "../constants";
 
 function normalizeAiText(raw: string): string {
   return raw.replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
+}
+
+function countWords(text: string): number {
+  const normalized = text
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return 0;
+  return normalized.split(' ').length;
+}
+
+function collapseToSingleLineIfShort(text: string, maxWords: number = 10): string {
+  if (!text.includes('\n')) return text;
+  const singleLine = text.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  if (countWords(singleLine) <= maxWords) return singleLine;
+  return text;
 }
 
 function getHumorRule(humorLevel: number): string {
@@ -130,7 +146,7 @@ Use natural spoken Vietnamese suitable for storytelling subtitles.
 
 4. Length control + line breaking
 Keep subtitles concise (target <1.4×, max <2×).
-If the subtitle would exceed 10 words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
+If the subtitle would exceed ${DEFAULT_SETTINGS.maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
 Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.
 Prefer the shorter expression when meaning is the same.
 Prefer 1 line if short.
@@ -187,7 +203,9 @@ ${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
 
     const translatedBatch = JSON.parse(response.text?.trim() || "[]").map((item: any) => {
       if (item && typeof item.text === 'string') {
-        return { ...item, text: normalizeAiText(item.text) };
+        const normalized = normalizeAiText(item.text);
+        const collapsed = collapseToSingleLineIfShort(normalized, DEFAULT_SETTINGS.maxSingleLineWords);
+        return { ...item, text: collapsed };
       }
       return item;
     });

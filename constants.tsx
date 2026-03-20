@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS = {
   },
   autoFixOnUpload: false,
   translationBatchSize: 100,
+  maxSingleLineWords: 10,
   aiModel: 'gemini-2.5-flash' as const,
   apiKey: ''
 };
