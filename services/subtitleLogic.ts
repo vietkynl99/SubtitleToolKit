@@ -177,9 +177,12 @@ function getCapCutTimerangeSeconds(timerange?: { start?: number; duration?: numb
   return { start, end };
 }
 
-function containsNonHanLetters(text: string): boolean {
+function containsDisallowedOriginalLetters(text: string): boolean {
   for (const ch of text) {
-    if (/\p{L}/u.test(ch) && !/\p{Script=Han}/u.test(ch)) return true;
+    if (!/\p{L}/u.test(ch)) continue;
+    if (/\p{Script=Han}/u.test(ch)) continue;
+    if (/[A-Za-z]/.test(ch)) continue;
+    return true;
   }
   return false;
 }
@@ -200,7 +203,7 @@ function getLanguageIssues(
 ): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
-  if (textKey === 'originalText' && containsNonHanLetters(trimmed)) {
+  if (textKey === 'originalText' && containsDisallowedOriginalLetters(trimmed)) {
     return [ISSUE_ORIGINAL_LANG];
   }
   if (textKey === 'translatedText' && containsNonLatinLetters(trimmed)) {
