@@ -178,6 +178,32 @@ const App: React.FC = () => {
     setOptimizeHistoryIndex(0);
   }, []);
 
+  const formatAiErrorMessage = useCallback((err: any) => {
+    if (err?.error?.message) return String(err.error.message);
+    if (typeof err?.message === 'string') {
+      const msg = err.message.trim().replace(/^Error:\s*/i, '');
+      const jsonStart = msg.indexOf('{');
+      const jsonEnd = msg.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        try {
+          const parsed = JSON.parse(msg.slice(jsonStart, jsonEnd + 1));
+          const extracted =
+            parsed?.error?.message ||
+            parsed?.message ||
+            parsed?.error?.status ||
+            parsed?.error ||
+            parsed?.status ||
+            parsed?.code;
+          if (extracted) return String(extracted);
+        } catch {
+          // fall through
+        }
+      }
+      return msg;
+    }
+    return String(err || 'Unknown error');
+  }, []);
+
   const getCpsTone = useCallback((cps: number) => {
     if (cps > settings.cpsThreshold.warningMax) {
       return { text: 'text-rose-300', bg: 'bg-rose-500' };
@@ -1161,7 +1187,7 @@ const App: React.FC = () => {
       setStatus('error');
       setTranslationState(prev => ({ ...prev, status: 'error' }));
       setIsStoppingTranslate(false);
-      showToast(`Error: ${err.message}`);
+      showToast(`Error: ${formatAiErrorMessage(err)}`);
       setSegments(prev => prev.map(s => ({ ...s, isProcessing: false })));
     }
   };
@@ -1194,6 +1220,7 @@ const App: React.FC = () => {
     let optimizedCount = 0;
     let requestCount = 0;
     let untranslatedSkippedCount = Math.max(0, aiScope.scopeSegments.length - aiScope.translated.length);
+    let hadOptimizeErrors = false;
 
     const currentSegments = [...segments];
     const aiTargetSegments: SubtitleSegment[] = [];
@@ -1214,15 +1241,15 @@ const App: React.FC = () => {
       let processedForOptimize = 0;
       setOptimizeState({ processed: 0, total: aiTargetSegments.length });
 
-      for (let i = 0; i < aiTargetSegments.length; i += batchSize) {
-        if (optimizeStopRequestedRef.current) {
-          break;
-        }
-        const currentBatch = aiTargetSegments.slice(i, i + batchSize);
-        const batchIdx = Math.floor(i / batchSize) + 1;
+      try {
+        for (let i = 0; i < aiTargetSegments.length; i += batchSize) {
+          if (optimizeStopRequestedRef.current) {
+            break;
+          }
+          const currentBatch = aiTargetSegments.slice(i, i + batchSize);
+          const batchIdx = Math.floor(i / batchSize) + 1;
 
-        try {
-          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, settings.aiModel, settings.apiKey);
+          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, translationPreset, settings.aiModel, settings.apiKey);
           requestCount++;
           
           fixed.forEach(f => {
@@ -1234,10 +1261,13 @@ const App: React.FC = () => {
               let nextHistory = prev.optimizeHistory ? [...prev.optimizeHistory] : [];
 
               if (nextText) {
-                if (prevText && nextHistory[nextHistory.length - 1] !== prevText) {
-                  nextHistory.push(prevText);
+                if (nextHistory.length === 0) {
+                  if (prevText) nextHistory.push(prevText);
+                  nextHistory.push(nextText);
+                } else {
+                  const last = nextHistory[nextHistory.length - 1];
+                  if (last !== nextText) nextHistory.push(nextText);
                 }
-                nextHistory.push(nextText);
               }
 
               currentSegments[idx] = {
@@ -1254,21 +1284,35 @@ const App: React.FC = () => {
             ...prev, 
             optimize: { requests: prev.optimize.requests + 1, tokens: prev.optimize.tokens + tokens } 
           }));
-        } catch (err) {
-          console.error(`Error processing batch ${batchIdx}`, err);
-        }
 
-        const progressPercent = Math.floor(((i + currentBatch.length) / aiTargetSegments.length) * 100);
-        processedForOptimize = Math.min(aiTargetSegments.length, i + currentBatch.length);
-        setOptimizeState({ processed: processedForOptimize, total: aiTargetSegments.length });
-        setProgress(progressPercent);
+          const progressPercent = Math.floor(((i + currentBatch.length) / aiTargetSegments.length) * 100);
+          processedForOptimize = Math.min(aiTargetSegments.length, i + currentBatch.length);
+          setOptimizeState({ processed: processedForOptimize, total: aiTargetSegments.length });
+          setProgress(progressPercent);
+        }
+      } catch (err: any) {
+        hadOptimizeErrors = true;
+        console.error("Error processing optimize batch", err);
+        setStatus('error');
+        setIsOptimizing(false);
+        setIsStoppingOptimize(false);
+        optimizeStopRequestedRef.current = false;
+        setOptimizeState({ processed: 0, total: 0 });
+        showToast(`Error: ${formatAiErrorMessage(err) || 'Optimization failed.'}`);
+        return;
       }
     }
 
     const wasStopped = optimizeStopRequestedRef.current;
     commitSegmentsChange(currentSegments);
     if (!wasStopped) setProgress(100);
-    setStatus('success');
+    if (hadOptimizeErrors && requestCount === 0) {
+      setStatus('error');
+    } else if (hadOptimizeErrors) {
+      setStatus('partial-success');
+    } else {
+      setStatus('success');
+    }
     setIsOptimizing(false);
     setIsStoppingOptimize(false);
     optimizeStopRequestedRef.current = false;
@@ -1279,6 +1323,18 @@ const App: React.FC = () => {
     
     if (wasStopped) {
       showToast(`Optimization stopped: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, optimized ${optimizedCount} segments so far.`);
+      return;
+    }
+    if (hadOptimizeErrors && requestCount === 0) {
+      showToast("Optimization failed due to API errors. Please try again.");
+      return;
+    }
+    if (hadOptimizeErrors) {
+      showToast(`Optimization finished with errors: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);
+      return;
+    }
+    if (optimizedCount === 0) {
+      showToast(`Optimization finished: No changes applied. Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments. Total requests: ${requestCount}.`);
       return;
     }
     showToast(`Optimization finished: Skipped ${safeCount} safe segments, skipped ${untranslatedSkippedCount} untranslated segments, AI optimized ${optimizedCount} segments. Total requests: ${requestCount}.`);

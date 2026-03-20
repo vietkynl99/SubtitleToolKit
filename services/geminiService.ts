@@ -5,6 +5,57 @@ function normalizeAiText(raw: string): string {
   return raw.replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
 }
 
+function getHumorRule(humorLevel: number): string {
+  if (humorLevel <= 2) {
+    return `
+Neutral narration.
+Translate faithfully with clear Vietnamese subtitles.
+No sarcasm or exaggeration.
+`;
+  }
+  if (humorLevel <= 4) {
+    return `
+Natural conversational narration.
+Subtitles should sound like natural spoken Vietnamese.
+Very mild humor allowed.
+`;
+  }
+  if (humorLevel <= 6) {
+    return `
+Playful narration style.
+
+Guidelines:
+â€¢ Prefer lively spoken Vietnamese
+â€¢ Slightly expressive wording allowed
+â€¢ Mild humor or playful tone may appear
+`;
+  }
+  if (humorLevel <= 8) {
+    return `
+Energetic recap-style narration.
+
+Guidelines:
+â€¢ Prefer expressive and dynamic Vietnamese phrasing
+â€¢ Light sarcasm or teasing tone allowed
+â€¢ Slight exaggeration allowed if meaning remains accurate
+â€¢ Subtitles should feel entertaining and vivid
+`;
+  }
+  return `
+High-intensity comedic narration.
+
+Guidelines:
+â€¢ Strongly prefer vivid, punchy Vietnamese expressions
+â€¢ Sarcasm, teasing tone, and playful exaggeration allowed
+â€¢ Subtitles may sound like an energetic storyteller narrating events
+â€¢ Avoid flat or overly literal translation
+â€¢ Entertainment value is important while preserving original meaning
+
+The emotional tone may be amplified
+for entertainment as long as the original meaning stays correct.
+`;
+}
+
 /**
  * Translates a single batch of segments with surrounding context. 
  * Tolerant to partial AI responses for improved reliability.
@@ -23,58 +74,7 @@ export async function translateBatch(
   // -------- HUMOR STYLE --------
   const humorLevel = preset?.humor_level ?? 0;
 
-  let humorRule = "";
-
-  if (humorLevel <= 2) {
-    humorRule = `
-Neutral narration.
-Translate faithfully with clear Vietnamese subtitles.
-No sarcasm or exaggeration.
-`;
-  }
-  else if (humorLevel <= 4) {
-    humorRule = `
-Natural conversational narration.
-Subtitles should sound like natural spoken Vietnamese.
-Very mild humor allowed.
-`;
-  }
-  else if (humorLevel <= 6) {
-    humorRule = `
-Playful narration style.
-
-Guidelines:
-• Prefer lively spoken Vietnamese
-• Slightly expressive wording allowed
-• Mild humor or playful tone may appear
-`;
-  }
-  else if (humorLevel <= 8) {
-    humorRule = `
-Energetic recap-style narration.
-
-Guidelines:
-• Prefer expressive and dynamic Vietnamese phrasing
-• Light sarcasm or teasing tone allowed
-• Slight exaggeration allowed if meaning remains accurate
-• Subtitles should feel entertaining and vivid
-`;
-  }
-  else {
-    humorRule = `
-High-intensity comedic narration.
-
-Guidelines:
-• Strongly prefer vivid, punchy Vietnamese expressions
-• Sarcasm, teasing tone, and playful exaggeration allowed
-• Subtitles may sound like an energetic storyteller narrating events
-• Avoid flat or overly literal translation
-• Entertainment value is important while preserving original meaning
-
-The emotional tone may be amplified
-for entertainment as long as the original meaning stays correct.
-`;
-  }
+  const humorRule = getHumorRule(humorLevel);
 
   // -------- STYLE BLOCK --------
   const styleBlock = preset
@@ -282,46 +282,66 @@ Genres: ${taxonomy.genres.join(', ')}`,
 
 export async function aiFixSegments(
   segments: SubtitleSegment[],
+  preset: TranslationPreset | null,
   model: AiModel,
   apiKey: string,
-  targetCPS: number = 15
+  targetCPS: number = 20
 ): Promise<{ segments: SubtitleSegment[]; tokens: number }> {
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const instruction = "Compress aggressively. Use very short Vietnamese phrases. Removing subjects is allowed.";
+  const humorLevel = preset?.humor_level ?? 0;
+  const humorRule = getHumorRule(humorLevel);
+
+  const styleBlock = preset
+    ? `
+Genres: ${preset.genres.join(", ")}
+
+Narration style:
+${humorRule}
+`
+    : `
+Narration intensity level: 0/10
+Neutral Vietnamese subtitle narration.
+`;
+
+  const storyContext = preset?.reference?.title_or_summary
+    ? `Story context: ${preset.reference.title_or_summary}`
+    : "";
 
   const payload = segments.map((s) => {
     const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
-    const maxChars = Math.max(Math.floor(duration * targetCPS), 3);
+    const currentText = s.translatedText || "";
+    const currentCps = currentText.length / duration;
 
     return {
       id: s.id,
       cn: s.originalText || "",
-      vn: s.translatedText || "",
+      vn: currentText,
       duration,
-      maxChars,
+      currentCps,
     };
   });
 
   const prompt = `
 Optimize Vietnamese subtitles for readability and CPS.
 
-${instruction}
+${styleBlock}
+${storyContext}
 
 Rules:
 - Each segment is independent.
 - Do NOT merge or split segments.
 - Preserve core meaning when possible.
-- Prefer short Vietnamese words.
-- Remove filler words if needed.
+- Prefer concise Vietnamese.
+- Remove filler words if needed, but do not lose meaning.
 
-CRITICAL LENGTH RULE:
-Each segment has a maxChars limit.
-The output MUST be <= maxChars characters.
+Goal:
+- Reduce CPS compared to currentCps while preserving meaning and fluency.
+- If currentCps is already low, keep it similar and avoid over-shortening.
 
 Special rule:
-If Chinese text length ≤4 characters → output ≤3 Vietnamese words.
+If Chinese text length ≤4 characters → output 2–4 Vietnamese words if possible.
 
 Output format:
 JSON array [{id, fixedText}]
@@ -369,6 +389,6 @@ ${JSON.stringify(payload)}
     return { segments: updatedSegments, tokens };
   } catch (error) {
     console.error("AI Fix error:", error);
-    return { segments, tokens: 0 };
+    throw error;
   }
 }
