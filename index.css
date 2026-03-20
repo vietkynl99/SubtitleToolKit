@@ -31,6 +31,19 @@ body {
   outline: none !important;
 }
 
+button,
+select,
+option,
+[role="button"],
+svg,
+svg *,
+.icon,
+.lucide {
+  user-select: none;
+  -webkit-user-select: none;
+  caret-color: transparent;
+}
+
 /* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
   width: 8px;
