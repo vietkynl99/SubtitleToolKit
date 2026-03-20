@@ -358,15 +358,7 @@ ${JSON.stringify(payload)}
 
       if (!fix) return s;
 
-      const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
-      const maxChars = Math.max(Math.floor(duration * targetCPS), 3);
-
       let text = normalizeAiText(fix.fixedText.trim());
-
-      // Hard trim fallback
-      if (text.length > maxChars) {
-        text = text.slice(0, maxChars);
-      }
 
       return {
         ...s,
