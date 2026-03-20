@@ -173,11 +173,11 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
       {/* CPS Histogram Chart */}
       <section>
         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">CPS Distribution</h3>
-        <div ref={chartWrapRef} className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 relative">
+        <div ref={chartWrapRef} tabIndex={-1} className="h-56 w-full bg-slate-800/30 rounded-2xl p-4 border border-slate-800 relative overflow-hidden outline-none focus:outline-none">
           {formattedHistogramData.length > 0 ? (
             chartSize.width > 0 && chartSize.height > 0 ? (
             <ResponsiveContainer width={chartSize.width} height={chartSize.height} minWidth={0}>
-              <BarChart data={formattedHistogramData} margin={{ top: 5, right: 5, bottom: 20, left: -25 }}>
+              <BarChart data={formattedHistogramData} margin={{ top: 6, right: 18, bottom: 34, left: 0 }} style={{ outline: 'none' }}>
                 <XAxis 
                   dataKey="range" 
                   axisLine={false} 
@@ -186,8 +186,10 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                   interval={0}
                   angle={-45}
                   textAnchor="end"
+                  tickMargin={8}
+                  padding={{ left: 2, right: 10 }}
                 />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 9}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 9}} width={26} tickMargin={4} />
                 <Tooltip 
                   cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                   content={({ active, payload }) => {
@@ -207,7 +209,6 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <Bar 
                   dataKey="count" 
                   radius={[3, 3, 0, 0]} 
-                  onClick={(d: any) => onFilterTrigger({ type: 'range', min: d.min, max: d.max, label: d.range })}
                 >
                   {formattedHistogramData.map((entry, index) => {
                     const isActive = isFilterRange && activeFilter.label === entry.range;
@@ -217,7 +218,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                         key={`cell-h-${index}`} 
                         fill={entry.color} 
                         fillOpacity={isAll || isActive ? 0.8 : 0.2} 
-                        className="cursor-pointer transition-all duration-300 hover:fill-opacity-100" 
+                        className="transition-all duration-300 hover:fill-opacity-100" 
                       />
                     );
                   })}
