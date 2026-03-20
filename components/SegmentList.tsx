@@ -240,7 +240,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                         : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  <div className="pt-1 flex justify-center">
+                  <div className="pt-2 flex justify-center">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -311,7 +311,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                     )}
                   </div>
 
-                  <div className="pt-0.5">
+                  <div className="pt-1">
                     <p
                       className={`text-[13px] leading-snug font-medium whitespace-pre-wrap break-words ${
                         hasOriginLangIssue
@@ -357,7 +357,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                     e.stopPropagation();
                                     onShowOptimizeHistory?.(seg.id);
                                   }}
-                                  className="mt-[2px] shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
+                                  className="shrink-0 self-start mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
                                   title="View optimization history"
                                 >
                                   optimized
@@ -420,7 +420,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                   e.stopPropagation();
                                   onShowOptimizeHistory?.(seg.id);
                                 }}
-                                className="mt-[2px] shrink-0 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
+                                className="shrink-0 self-start mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
                                 title="View optimization history"
                               >
                                 optimized

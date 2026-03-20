@@ -409,6 +409,9 @@ const App: React.FC = () => {
     if (filter === 'untranslated') {
       return processedSegments.filter(s => (s.translatedText || '').trim() === '');
     }
+    if (filter === 'optimized') {
+      return processedSegments.filter(s => (s.optimizeHistory?.length || 0) > 0);
+    }
     if (typeof filter === 'string') {
       return processedSegments.filter(s => s.severity === filter);
     }
@@ -2009,6 +2012,7 @@ const App: React.FC = () => {
                     <option value="lang">Language Issues</option>
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
+                    <option value="optimized">Optimized</option>
                   </select>
 
                   <button
