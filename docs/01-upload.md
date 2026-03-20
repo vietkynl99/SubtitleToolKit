@@ -1,33 +1,32 @@
 # MODULE: Upload
 
-Version: 2.0.0  
-Last Updated: 2026-02-14  
+Version: 2.1.0
+Last Updated: 2026-03-20
 
 ---
 
-# 1. Thông số kỹ thuật
-- **Định dạng:** Chỉ chấp nhận `.srt`.
-- **Dung lượng:** Tối đa 5MB.
-- **Phương thức:** Drag & Drop hoặc Click to Select.
+# 1. Supported Inputs
+- File types: `.srt`, `.sktproject`, `.json` (CapCut draft_content.json)
+- Max size: 50MB
+- Method: Drag & drop or click to select
 
 ---
 
-# 2. Quy trình Parser (Pipeline)
-1. **Validation:** Kiểm tra đuôi file và kích thước.
-2. **Naming Logic:** 
-   - Sử dụng regex `^\[Edited(\d*)\]` để tách số lần đã sửa.
-   - Nếu là `[Edited]` -> count = 1.
-   - Nếu là `[Edited15]` -> count = 15.
-3. **Content Parsing:** 
-   - Tự động tách text Trung (Original) và Việt (Translated) dựa trên Regex ngôn ngữ.
-   - Khởi tạo CPS và Severity mặc định.
-4. **Auto-fix:** Hệ thống luôn tự động chuẩn hóa khoảng trắng (trim + gộp space) cho cả original và translated ngay sau khi upload.
+# 2. Parser Pipeline
+1. Validate file size and extension.
+2. Parse:
+   - `.srt` -> parse SRT, split CN/VN by language detection
+   - `.sktproject` -> load segments + preset
+   - `.json` -> parse CapCut draft_content.json
+3. Auto-fix (always on):
+   - Trim and collapse whitespace for both `originalText` and `translatedText`
+4. Initialize runtime fields (CPS, severity, issue list).
 
 ---
 
-# 3. Ràng buộc
-- Khi có project đang active, upload file mới sẽ trigger **Replace Modal**.
-- Sau khi upload thành công, hệ thống tự động chuyển sang tab **Editor**.
+# 3. Behavior
+- If a project is active, upload triggers a replace confirmation modal.
+- After successful upload, app switches to **Editor** tab.
 
 ---
 

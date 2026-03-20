@@ -1,33 +1,38 @@
 # MODULE: AI Translation
 
-Version: 2.0.0  
-Last Updated: 2026-02-14  
+Version: 2.1.0
+Last Updated: 2026-03-20
 
 ---
 
-# 1. Cơ chế Batching (Cơ bản)
-- Lấy `Batch Size` từ Settings (mặc định 100).
-- Chỉ gửi các dòng chưa có bản dịch (Translated Text rỗng).
+# 1. Batching
+- Batch size from settings (`translationBatchSize`, default 100).
+- Only untranslated segments are sent.
 
 ---
 
-# 2. Contextual Logic (Ngữ cảnh)
-Mỗi đợt gửi (batch) bao gồm:
-- **Main Segments:** Các dòng cần dịch.
-- **Context Before:** 2 dòng đã dịch ngay phía trước batch.
-- **Context After:** 2 dòng gốc ngay phía sau batch.
-- **Style DNA:** Gửi thông tin Genre/Tone để AI chọn xưng hô (nhân xưng) chuẩn xác.
+# 2. Context
+- Context Before: 2 previous original lines.
+- Context After: 2 next original lines.
+- Preset (genres + humor_level) included in prompt.
 
 ---
 
-# 3. Điều khiển Tiến trình
-- **Real-time Progress:** Cập nhật số dòng đã xử lý lên Global Progress Bar.
-- **Stop/Resume:** User có thể dừng quá trình dịch bất kỳ lúc nào. Các dòng đã dịch xong sẽ được lưu lại. Có thể tiếp tục dịch từ vị trí dừng sau đó.
+# 3. Progress Control
+- Real-time progress and stop capability.
+- Already translated items are kept; you can run translation again to continue.
 
 ---
 
-# 4. Model sử dụng
-- Mặc định: `gemini-3-flash-preview`.
+# 4. Model
+- Default: `gemini-2.5-flash`
+- Selectable in Settings.
+
+---
+
+# 5. Line Break Rule
+- If a single line would exceed `maxSingleLineWords`, AI must insert `\n`.
+- Post-processing collapses to one line when total words <= `maxSingleLineWords`.
 
 ---
 
