@@ -1017,9 +1017,11 @@ const App: React.FC = () => {
             return;
           }
 
-          if (settings.autoFixOnUpload) {
-            parsedSegments = parsedSegments.map(s => ({ ...s, originalText: performLocalFix(s.originalText || "") }));
-          }
+          parsedSegments = parsedSegments.map(s => ({
+            ...s,
+            originalText: performLocalFix(s.originalText || ""),
+            translatedText: performLocalFix(s.translatedText || "")
+          }));
 
           setSegments(parsedSegments);
           undoStackRef.current = [];
@@ -1051,7 +1053,7 @@ const App: React.FC = () => {
       setIsFileLoading(false);
     };
     reader.readAsText(file);
-  }, [settings.autoFixOnUpload]);
+  }, []);
 
   const performClear = async (skipFeedback = false) => {
     setStatus('clearing');

@@ -21,7 +21,7 @@ Last Updated: 2026-02-14
 3. **Content Parsing:** 
    - Tự động tách text Trung (Original) và Việt (Translated) dựa trên Regex ngôn ngữ.
    - Khởi tạo CPS và Severity mặc định.
-4. **Auto-fix:** Nếu cài đặt `autoFixOnUpload` bật, hệ thống tự động chuẩn hóa space và ngắt dòng dài ngay lập tức.
+4. **Auto-fix:** Hệ thống luôn tự động chuẩn hóa khoảng trắng (trim + gộp space) cho cả original và translated ngay sau khi upload.
 
 ---
 

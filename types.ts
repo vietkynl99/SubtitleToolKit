@@ -92,10 +92,10 @@ export interface AppSettings {
     safeMax: number;
     warningMax: number;
   };
-  autoFixOnUpload: boolean;
   translationBatchSize: number;
   aiModel: AiModel;
   apiKey: string;
+  maxSingleLineWords: number;
 }
 
 export interface SplitMetadata {

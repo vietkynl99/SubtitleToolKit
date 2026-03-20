@@ -562,13 +562,6 @@ export function analyzeSegments(
 export function performLocalFix(text: string): string {
   let fixed = text.trim();
   fixed = fixed.replace(/\s+/g, ' ');
-  if (fixed.length > 40 && !fixed.includes('\n')) {
-    const mid = Math.floor(fixed.length / 2);
-    const spaceIndex = fixed.indexOf(' ', mid);
-    if (spaceIndex !== -1) {
-      fixed = fixed.substring(0, spaceIndex) + '\n' + fixed.substring(spaceIndex + 1);
-    }
-  }
   return fixed;
 }
 
