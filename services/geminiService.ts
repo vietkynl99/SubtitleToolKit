@@ -130,7 +130,7 @@ Use natural spoken Vietnamese suitable for storytelling subtitles.
 
 4. Length control + line breaking
 Keep subtitles concise (target <1.4×, max <2×).
-If the subtitle would exceed 10 words on one line, you MUST insert a line break and return 2 lines.
+If the subtitle would exceed 10 words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
 Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.
 Prefer the shorter expression when meaning is the same.
 Prefer 1 line if short.
