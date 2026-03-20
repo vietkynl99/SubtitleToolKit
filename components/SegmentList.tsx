@@ -20,6 +20,7 @@ interface SegmentListProps {
 }
 
 const PAGE_SIZE = 30;
+const UPDATE_DEBOUNCE_MS = 300;
 
 const SegmentList: React.FC<SegmentListProps> = ({
   segments,
@@ -39,8 +40,10 @@ const SegmentList: React.FC<SegmentListProps> = ({
 }) => {
   const [editingTranslationId, setEditingTranslationId] = React.useState<number | null>(null);
   const [editingTime, setEditingTime] = React.useState<{ id: number; field: 'startTime' | 'endTime' } | null>(null);
+  const [localText, setLocalText] = React.useState<Record<number, string>>({});
   const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
   const segmentRowRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+  const pendingUpdateRef = React.useRef<Map<number, number>>(new Map());
 
   const getSeverityClasses = (severity: Severity) => {
     switch (severity) {
@@ -153,6 +156,48 @@ const SegmentList: React.FC<SegmentListProps> = ({
     row.focus({ preventScroll: true });
   }, [activeSegmentId, pagedSegments, currentPage]);
 
+  const scheduleUpdate = React.useCallback((id: number, text: string) => {
+    const existing = pendingUpdateRef.current.get(id);
+    if (existing) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      pendingUpdateRef.current.delete(id);
+      onUpdateText(id, text);
+    }, UPDATE_DEBOUNCE_MS);
+    pendingUpdateRef.current.set(id, timer);
+  }, [onUpdateText]);
+
+  const flushUpdate = React.useCallback((id: number, text: string) => {
+    const existing = pendingUpdateRef.current.get(id);
+    if (existing) window.clearTimeout(existing);
+    pendingUpdateRef.current.delete(id);
+    onUpdateText(id, text);
+  }, [onUpdateText]);
+
+  React.useEffect(() => {
+    setLocalText(prev => {
+      let changed = false;
+      const next = { ...prev };
+      pagedSegments.forEach(seg => {
+        if (editingTranslationId === seg.id) return;
+        const value = seg.translatedText || '';
+        if (next[seg.id] !== value) {
+          next[seg.id] = value;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [pagedSegments, editingTranslationId]);
+
+  React.useEffect(() => {
+    return () => {
+      for (const timer of pendingUpdateRef.current.values()) {
+        window.clearTimeout(timer);
+      }
+      pendingUpdateRef.current.clear();
+    };
+  }, []);
+
   const idSearchQuery = searchQuery.trim().startsWith('#') ? searchQuery.trim().slice(1).trim() : '';
 
   return (
@@ -177,6 +222,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               const hasOriginLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
               const hasTranslatedLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
               const optimizeCount = seg.optimizeHistory?.length || 0;
+              const displayedTranslation = localText[seg.id] ?? (seg.translatedText || '');
 
               return (
                 <div
@@ -325,9 +371,9 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                       : 'text-blue-100'
                                   }`}
                                 >
-                                  {seg.translatedText
-                                    ? renderHighlightedText(seg.translatedText, searchQuery)
-                                    : <span className="text-slate-700 italic">No translation yet...</span>}
+                              {displayedTranslation
+                                ? renderHighlightedText(displayedTranslation, searchQuery)
+                                : <span className="text-slate-700 italic">No translation yet...</span>}
                                 </div>
                               </div>
                             </div>
@@ -351,13 +397,19 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                 }`}
                                 placeholder="No translation yet..."
                                 rows={1}
-                                value={seg.translatedText || ''}
-                                onChange={(e) => {
-                                  onUpdateText(seg.id, e.target.value);
-                                  resizeTranslationTextarea(e.currentTarget);
-                                }}
-                                autoFocus={editingTranslationId === seg.id}
-                                onBlur={() => setEditingTranslationId(null)}
+                            value={displayedTranslation}
+                            onChange={(e) => {
+                              const nextValue = e.target.value;
+                              setLocalText(prev => ({ ...prev, [seg.id]: nextValue }));
+                              scheduleUpdate(seg.id, nextValue);
+                              resizeTranslationTextarea(e.currentTarget);
+                            }}
+                            onFocus={() => setEditingTranslationId(seg.id)}
+                            autoFocus={editingTranslationId === seg.id}
+                            onBlur={() => {
+                              flushUpdate(seg.id, localText[seg.id] ?? displayedTranslation);
+                              setEditingTranslationId(null);
+                            }}
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </div>
@@ -375,9 +427,9 @@ const SegmentList: React.FC<SegmentListProps> = ({
                               </button>
                             )}
                           </div>
-                          {searchQuery.trim() && (seg.translatedText || '').toLowerCase().includes(searchQuery.toLowerCase()) && (
+                          {searchQuery.trim() && displayedTranslation.toLowerCase().includes(searchQuery.toLowerCase()) && (
                             <div className="mt-1 text-[10px] text-slate-400">
-                              Matched: {renderHighlightedText(getMatchSnippet(seg.translatedText || '', searchQuery) || '', searchQuery)}
+                              Matched: {renderHighlightedText(getMatchSnippet(displayedTranslation || '', searchQuery) || '', searchQuery)}
                             </div>
                           )}
                         </>
