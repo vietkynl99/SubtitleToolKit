@@ -409,6 +409,8 @@ const App: React.FC = () => {
       : null;
 
   const aiButtonLabel = useMemo(() => {
+    const selectedCount = selectedIds.size;
+    const selectedSuffix = aiScope.mode === 'selected' ? ` (${selectedCount})` : '';
     if (aiRunningMode === 'translate') {
       return isStoppingTranslate
         ? 'Stopping...'
@@ -420,16 +422,17 @@ const App: React.FC = () => {
         : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progress}%)`;
     }
     if (aiScope.action === 'translate') {
-      return aiScope.mode === 'selected' ? 'Translate Selected' : 'Translate All';
+      return aiScope.mode === 'selected' ? `Translate Selected${selectedSuffix}` : 'Translate All';
     }
     if (aiScope.action === 'optimize') {
-      return aiScope.mode === 'selected' ? 'Optimize Selected' : 'Optimize All';
+      return aiScope.mode === 'selected' ? `Optimize Selected${selectedSuffix}` : 'Optimize All';
     }
-    return aiScope.mode === 'selected' ? 'Translate Selected' : 'Translate All';
+    return aiScope.mode === 'selected' ? `Translate Selected${selectedSuffix}` : 'Translate All';
   }, [
     aiRunningMode,
     aiScope.action,
     aiScope.mode,
+    selectedIds,
     isStoppingTranslate,
     isStoppingOptimize,
     translationState.processed,
