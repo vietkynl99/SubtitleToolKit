@@ -225,7 +225,7 @@ ${autoSplitLongLines
 Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.`
   : `Line breaks are optional. Do not force a line break based only on word count.`}
 Prefer the shorter expression when meaning is the same.
-Prefer 1 line if short.
+Maximum 2 lines.
 
 5. Short line rule
 Chinese ≤4 characters → Vietnamese 1–3 words.
