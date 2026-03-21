@@ -113,9 +113,9 @@ Very mild humor allowed.
 Playful narration style.
 
 Guidelines:
-â€¢ Prefer lively spoken Vietnamese
-â€¢ Slightly expressive wording allowed
-â€¢ Mild humor or playful tone may appear
+- Prefer lively spoken Vietnamese
+- Slightly expressive wording allowed
+- Mild humor or playful tone may appear
 `;
   }
   if (humorLevel <= 8) {
@@ -123,21 +123,21 @@ Guidelines:
 Energetic recap-style narration.
 
 Guidelines:
-â€¢ Prefer expressive and dynamic Vietnamese phrasing
-â€¢ Light sarcasm or teasing tone allowed
-â€¢ Slight exaggeration allowed if meaning remains accurate
-â€¢ Subtitles should feel entertaining and vivid
+- Prefer expressive and dynamic Vietnamese phrasing
+- Light sarcasm or teasing tone allowed
+- Slight exaggeration allowed if meaning remains accurate
+- Subtitles should feel entertaining and vivid
 `;
   }
   return `
 High-intensity comedic narration.
 
 Guidelines:
-â€¢ Strongly prefer vivid, punchy Vietnamese expressions
-â€¢ Sarcasm, teasing tone, and playful exaggeration allowed
-â€¢ Subtitles may sound like an energetic storyteller narrating events
-â€¢ Avoid flat or overly literal translation
-â€¢ Entertainment value is important while preserving original meaning
+- Strongly prefer vivid, punchy Vietnamese expressions
+- Sarcasm, teasing tone, and playful exaggeration allowed
+- Subtitles may sound like an energetic storyteller narrating events
+- Avoid flat or overly literal translation
+- Entertainment value is important while preserving original meaning
 
 The emotional tone may be amplified
 for entertainment as long as the original meaning stays correct.
