@@ -524,14 +524,14 @@ const App: React.FC = () => {
     const mode = selectedIds.size > 0 ? 'selected' as const : 'all' as const;
     const scopeSegments = mode === 'selected'
       ? segments.filter(s => selectedIds.has(s.id))
-      : segments;
+      : filteredSegments;
     const untranslated = scopeSegments.filter(s => !(s.translatedText || '').trim());
     const translated = scopeSegments.filter(s => (s.translatedText || '').trim());
     let action: 'translate' | 'optimize' | 'none' = 'none';
     if (untranslated.length > 0) action = 'translate';
     else if (translated.length > 0) action = 'optimize';
     return { mode, scopeSegments, untranslated, translated, action };
-  }, [segments, selectedIds]);
+  }, [segments, selectedIds, filteredSegments]);
 
   const aiActionTargets = aiScope.action === 'translate'
     ? aiScope.untranslated
