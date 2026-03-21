@@ -1483,7 +1483,7 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadChoice = (type: 'project' | 'srt-orig' | 'srt-tran' | 'preset') => {
+  const handleDownloadChoice = (type: 'project' | 'srt-orig' | 'srt-tran' | 'srt-tran-flat' | 'preset') => {
     setShowExportModal(false);
     if (type === 'project') {
       const json = generateSktProject(segments, baseFileName, translationPreset, projectCreatedAt || undefined);
@@ -1501,6 +1501,11 @@ const App: React.FC = () => {
       const name = `[Translated]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
       downloadFile(srt, name);
       showToast('success', "Translated SRT exported.");
+    } else if (type === 'srt-tran-flat') {
+      const flattened = generateSRT(segments, 'translated', undefined, { flattenText: true });
+      const name = `[Translated-NoBreak]${generateExportFileName(baseFileName, editedCount, '.srt')}`;
+      downloadFile(flattened, name);
+      showToast('success', "Translated (no line breaks) exported.");
     } else if (type === 'preset') {
       if (!translationPreset) {
       showToast('warning', "No translation preset to export.");
@@ -1944,6 +1949,13 @@ const App: React.FC = () => {
                 >
                   <span className="block font-bold text-emerald-400">Export Translated (.srt)</span>
                   <span className="text-[10px] text-slate-500">Translated Vietnamese version.</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadChoice('srt-tran-flat')}
+                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between"
+                >
+                  <span className="block font-bold text-emerald-400">Export Translated (No Line Breaks) (.srt)</span>
+                  <span className="text-[10px] text-slate-500">All line break characters removed.</span>
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-orig')}

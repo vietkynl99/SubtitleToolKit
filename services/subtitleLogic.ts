@@ -593,14 +593,28 @@ export function performLocalFix(text: string): string {
   return lines.join('\n');
 }
 
-export function generateSRT(segments: SubtitleSegment[], mode: 'original' | 'translated' = 'translated', metadata?: SplitMetadata): string {
+export function generateSRT(
+  segments: SubtitleSegment[],
+  mode: 'original' | 'translated' = 'translated',
+  metadata?: SplitMetadata,
+  options?: { flattenText?: boolean }
+): string {
   let header = '';
   if (metadata) {
     header = `NOTE: Split Range Information\nRange: ${metadata.range}\nStart: ${metadata.start}\nEnd: ${metadata.end}\nSegments: ${metadata.segments}\nDuration: ${metadata.duration}\n\n`;
   }
   
   const content = segments.map((s, index) => {
-    const text = mode === 'translated' ? (s.translatedText || "") : (s.originalText || "");
+    const rawText = mode === 'translated' ? (s.translatedText || "") : (s.originalText || "");
+    const text = options?.flattenText
+      ? rawText
+          .replace(/\r\n/g, '\n')
+          .replace(/\r/g, '\n')
+          .split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+          .join(' ')
+      : rawText;
     return `${index + 1}\n${s.startTime} --> ${s.endTime}\n${text}\n`;
   }).join('\n');
 
