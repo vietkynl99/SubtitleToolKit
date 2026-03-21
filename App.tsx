@@ -235,6 +235,12 @@ const App: React.FC = () => {
     return list.reduce((total, seg) => {
       const original = seg.originalText || '';
       const translated = seg.translatedText || '';
+      const hasSplit = (original && original.includes('\n')) || (translated && translated.includes('\n'));
+      if (hasSplit) return total;
+      const originalNeedsCheck = original && !original.includes('\n');
+      const translatedNeedsCheck = translated && !translated.includes('\n');
+      const shouldCheck = (originalNeedsCheck || translatedNeedsCheck);
+      if (!shouldCheck) return total;
       return total + (hasLongLine(original, maxWords) || hasLongLine(translated, maxWords) ? 1 : 0);
     }, 0);
   }, [hasLongLine]);
