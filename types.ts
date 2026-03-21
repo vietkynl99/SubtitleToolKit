@@ -64,6 +64,7 @@ export interface HistogramBucket {
 export interface AnalysisResult {
   totalLines: number;
   tooLongLines: number;
+  singleLineLongLines: number;
   tooFastLines: number;
   timelineOverlapLines: number;
   originalLangIssueLines: number;

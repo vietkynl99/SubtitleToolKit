@@ -11,6 +11,7 @@ interface AnalyzerPanelProps {
   activeFilter: any;
   safeThreshold: number;
   criticalThreshold: number;
+  maxSingleLineWords: number;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
   onLoadGenerated?: (file: SplitResult) => void;
@@ -24,6 +25,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   activeFilter,
   safeThreshold,
   criticalThreshold,
+  maxSingleLineWords,
   generatedFiles,
   onDownloadGenerated,
   onLoadGenerated,
@@ -64,6 +66,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   const hasIssueAlerts =
     data.timelineOverlapLines > 0 ||
     data.tooLongLines > 0 ||
+    data.singleLineLongLines > 0 ||
     langIssueTotal > 0;
 
   // Requirement: Translation Progress (v2.2.0)
@@ -109,6 +112,24 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <div>
                   <p className="text-xs font-bold text-amber-400">{data.tooLongLines} segments too long</p>
                   <p className="text-[10px] text-amber-400/60 leading-normal">More than 2 lines. Viewers may find it hard to read quickly.</p>
+                </div>
+              </button>
+            )}
+            {data.singleLineLongLines > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'single-line-long' ? 'all' : 'single-line-long')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'single-line-long'
+                    ? 'bg-sky-500/20 border border-sky-400/50 shadow-lg shadow-sky-500/10'
+                    : 'bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/15'
+                }`}
+                title="Click to show only single-line subtitles with too many words"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-sky-400">{data.singleLineLongLines} single-line long</p>
+                  <p className="text-[10px] text-sky-400/60 leading-normal">Single line with at least {maxSingleLineWords} words.</p>
                 </div>
               </button>
             )}

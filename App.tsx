@@ -398,8 +398,8 @@ const App: React.FC = () => {
 
   const globalAnalysis = useMemo(() => {
     if (segments.length === 0) return null;
-    return analyzeSegments(segments, 'translatedText', settings.cpsThreshold);
-  }, [segments, settings.cpsThreshold]);
+    return analyzeSegments(segments, 'translatedText', settings.cpsThreshold, settings.maxSingleLineWords);
+  }, [segments, settings.cpsThreshold, settings.maxSingleLineWords]);
 
   const processedSegments = useMemo(() => globalAnalysis?.enrichedSegments || [], [globalAnalysis]);
   const allStats = useMemo(() => globalAnalysis?.stats, [globalAnalysis]);
@@ -415,6 +415,8 @@ const App: React.FC = () => {
       hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment);
     const isTooLong = (segment: SubtitleSegment) =>
       segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines'));
+    const isSingleLineLong = (segment: SubtitleSegment) =>
+      segment.issueList.some(issue => issue.toLowerCase().includes('single-line subtitle has too many words'));
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
@@ -434,6 +436,9 @@ const App: React.FC = () => {
     }
     if (filter === 'too-long') {
       return processedSegments.filter(isTooLong);
+    }
+    if (filter === 'single-line-long') {
+      return processedSegments.filter(isSingleLineLong);
     }
     if (typeof filter === 'string') {
       return processedSegments.filter(s => s.severity === filter);
@@ -1258,7 +1263,7 @@ const App: React.FC = () => {
     const aiTargetSegments: SubtitleSegment[] = [];
     const optimizeTargets = aiScope.translated;
     for (const seg of optimizeTargets) {
-      const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold);
+      const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold, settings.maxSingleLineWords);
       const severity = meta.enrichedSegments[0].severity;
 
       if (severity === 'safe') {
@@ -2118,6 +2123,7 @@ const App: React.FC = () => {
                     <option value="timeline">Timeline Issues</option>
                     <option value="lang">Language Issues</option>
                     <option value="too-long">Too Long (3+ lines)</option>
+                    <option value="single-line-long">Single Line Too Long</option>
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
                     <option value="optimized">Optimized</option>
@@ -2305,7 +2311,7 @@ const App: React.FC = () => {
           >
             {showQualityDashboard && (
               <Suspense fallback={<div className="h-full flex items-center justify-center text-slate-400 text-sm">Loading dashboard...</div>}>
-                <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+                <AnalyzerPanel data={allStats || ({} as AnalysisResult)} segments={segments} activeFilter={filter} onFilterTrigger={setFilter} safeThreshold={settings.cpsThreshold.safeMax} criticalThreshold={settings.cpsThreshold.warningMax} maxSingleLineWords={settings.maxSingleLineWords} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
               </Suspense>
             )}
           </div>
@@ -2372,6 +2378,90 @@ const App: React.FC = () => {
                   </p>
                 </div>
 
+              </div>
+            </section>
+
+            {/* Subtitle Settings */}
+            <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <span className="text-blue-500">{ICONS.Settings}</span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-100">Subtitle Settings</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    CPS Safe Max
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={settings.cpsThreshold.safeMax}
+                    onChange={(e) => updateThreshold('safeMax', Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                    CPS below this value is considered safe.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    CPS Warning Max
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={settings.cpsThreshold.warningMax}
+                    onChange={(e) => updateThreshold('warningMax', Math.max(1, Number(e.target.value) || 1))}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                    CPS at or above this value is critical.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Translation Batch Size
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={settings.translationBatchSize}
+                    onChange={(e) => {
+                      const next = Math.max(1, Number(e.target.value) || 1);
+                      setSettings(prev => ({ ...prev, translationBatchSize: next }));
+                    }}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                    Segments per AI translate request.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    Max Single Line Words
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={settings.maxSingleLineWords}
+                    onChange={(e) => {
+                      const next = Math.max(1, Number(e.target.value) || 1);
+                      setSettings(prev => ({ ...prev, maxSingleLineWords: next }));
+                    }}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                    Single-line subtitles with at least this many words will be flagged.
+                  </p>
+                </div>
               </div>
             </section>
 
