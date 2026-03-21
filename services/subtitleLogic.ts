@@ -196,7 +196,7 @@ function containsNonLatinLetters(text: string): boolean {
 
 const ISSUE_ORIGINAL_LANG = 'Original contains non-Chinese characters';
 const ISSUE_TRANSLATION_LANG = 'Translation contains non-Vietnamese characters';
-const ISSUE_SINGLE_LINE_LONG = 'Single-line subtitle has too many words';
+const ISSUE_SINGLE_LINE_LONG = 'Line has too many words';
 
 function countWords(text: string): number {
   return text
@@ -418,10 +418,14 @@ export function getSegmentMetadata(
   if (lines.length > 2) {
     issueList.push('Subtitle has more than 2 lines');
   }
-  if (lines.length === 1 && maxSingleLineWords > 0) {
-    const wordCount = countWords(text);
-    if (wordCount >= maxSingleLineWords) {
-      issueList.push(`${ISSUE_SINGLE_LINE_LONG} (${wordCount} words, >= ${maxSingleLineWords})`);
+  if (maxSingleLineWords > 0) {
+    const lineWordCounts = lines.map(line => countWords(line));
+    const maxLineWords = lineWordCounts.length > 0 ? Math.max(...lineWordCounts) : 0;
+    if (maxLineWords > maxSingleLineWords) {
+      issueList.push(`${ISSUE_SINGLE_LINE_LONG} (${maxLineWords} words, > ${maxSingleLineWords})`);
+      if (severity === 'safe') {
+        severity = 'warning';
+      }
     }
   }
 

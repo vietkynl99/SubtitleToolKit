@@ -26,7 +26,8 @@ Settings and API usage are stored in localStorage:
 - `cpsThreshold.safeMax` (default 25)
 - `cpsThreshold.warningMax` (default 40)
 - `translationBatchSize` (default 100)
-- `maxSingleLineWords` (default 10)
+- `maxSingleLineWords` (default 12)
+- `autoSplitLongLines` (default true)
 
 ---
 

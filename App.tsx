@@ -33,7 +33,8 @@ import {
 import { 
   translateBatch,
   aiFixSegments,
-  analyzeTranslationStyle
+  analyzeTranslationStyle,
+  splitToTwoLinesIfLong
 } from './services/geminiService';
 import Layout from './components/Layout';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
@@ -91,6 +92,13 @@ const App: React.FC = () => {
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [showAutoSplitModal, setShowAutoSplitModal] = useState<boolean>(false);
+  const [autoSplitChoice, setAutoSplitChoice] = useState<boolean>(DEFAULT_SETTINGS.autoSplitLongLines);
+  const [pendingImport, setPendingImport] = useState<{
+    segments: SubtitleSegment[];
+    preset: TranslationPreset | null;
+    longLineCount: number;
+  } | null>(null);
   const [showTermReplaceModal, setShowTermReplaceModal] = useState<boolean>(false);
   const [optimizeHistorySegmentId, setOptimizeHistorySegmentId] = useState<number | null>(null);
   const [optimizeHistoryIndex, setOptimizeHistoryIndex] = useState<number>(0);
@@ -208,6 +216,35 @@ const App: React.FC = () => {
       return msg;
     }
     return String(err || 'Unknown error');
+  }, []);
+
+  const countWords = useCallback((text: string) => {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    if (!normalized) return 0;
+    return normalized.split(' ').length;
+  }, []);
+
+  const hasLongLine = useCallback((text: string, maxWords: number) => {
+    if (!text) return false;
+    const normalized = text.replace(/\s*\n\s*/g, '\n').replace(/[ \t]+/g, ' ').trim();
+    if (!normalized) return false;
+    return normalized.split('\n').some(line => countWords(line) > maxWords);
+  }, [countWords]);
+
+  const countLongLineSegments = useCallback((list: SubtitleSegment[], maxWords: number) => {
+    return list.reduce((total, seg) => {
+      const original = seg.originalText || '';
+      const translated = seg.translatedText || '';
+      return total + (hasLongLine(original, maxWords) || hasLongLine(translated, maxWords) ? 1 : 0);
+    }, 0);
+  }, [hasLongLine]);
+
+  const applyAutoSplit = useCallback((list: SubtitleSegment[], maxWords: number) => {
+    return list.map(seg => ({
+      ...seg,
+      originalText: seg.originalText ? splitToTwoLinesIfLong(seg.originalText, maxWords) : seg.originalText,
+      translatedText: seg.translatedText ? splitToTwoLinesIfLong(seg.translatedText, maxWords) : seg.translatedText
+    }));
   }, []);
 
   const getCpsTone = useCallback((cps: number) => {
@@ -416,7 +453,7 @@ const App: React.FC = () => {
     const isTooLong = (segment: SubtitleSegment) =>
       segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines'));
     const isSingleLineLong = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('single-line subtitle has too many words'));
+      segment.issueList.some(issue => issue.toLowerCase().includes('line has too many words'));
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
@@ -982,6 +1019,43 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const finalizeImport = useCallback((parsedSegments: SubtitleSegment[], preset: TranslationPreset | null) => {
+    setSegments(parsedSegments);
+    undoStackRef.current = [];
+    setTranslationPreset(preset);
+    setTranslationState({ status: 'idle', processed: 0, total: 0 });
+    setApiUsage(INITIAL_USAGE);
+    setProgress(100);
+    setStatus('success');
+    setActiveTab('editor');
+    setGeneratedFiles([]);
+    setFilter('all');
+    setCurrentPage(1);
+    setSelectedIds(new Set());
+    setIsFileLoading(false);
+  }, []);
+
+  const handleConfirmAutoSplitImport = useCallback(() => {
+    if (!pendingImport) return;
+    const { segments: rawSegments, preset } = pendingImport;
+    const nextSegments = autoSplitChoice
+      ? applyAutoSplit(rawSegments, settings.maxSingleLineWords)
+      : rawSegments;
+    if (settings.autoSplitLongLines !== autoSplitChoice) {
+      setSettings(prev => ({ ...prev, autoSplitLongLines: autoSplitChoice }));
+    }
+    setPendingImport(null);
+    setShowAutoSplitModal(false);
+    finalizeImport(nextSegments, preset);
+  }, [pendingImport, autoSplitChoice, applyAutoSplit, settings.maxSingleLineWords, settings.autoSplitLongLines, finalizeImport]);
+
+  const handleCancelAutoSplitImport = useCallback(() => {
+    setPendingImport(null);
+    setShowAutoSplitModal(false);
+    setIsFileLoading(false);
+    setStatus('idle');
+  }, []);
+
   const processFile = useCallback((file: File) => {
     const ext = file.name.toLowerCase();
     if (!ext.endsWith('.srt') && !ext.endsWith('.sktproject') && !ext.endsWith('.json')) {
@@ -1044,20 +1118,16 @@ const App: React.FC = () => {
             originalText: performLocalFix(s.originalText || ""),
             translatedText: performLocalFix(s.translatedText || "")
           }));
+          const longLineCount = countLongLineSegments(parsedSegments, settings.maxSingleLineWords);
+          if (longLineCount > 0) {
+            setPendingImport({ segments: parsedSegments, preset, longLineCount });
+            setAutoSplitChoice(settings.autoSplitLongLines);
+            setShowAutoSplitModal(true);
+            setIsFileLoading(false);
+            return;
+          }
 
-          setSegments(parsedSegments);
-          undoStackRef.current = [];
-          setTranslationPreset(preset);
-          setTranslationState({ status: 'idle', processed: 0, total: 0 });
-          setApiUsage(INITIAL_USAGE);
-          setProgress(100);
-          setStatus('success');
-          setActiveTab('editor');
-          setGeneratedFiles([]);
-          setFilter('all');
-          setCurrentPage(1); 
-          setSelectedIds(new Set());
-          setIsFileLoading(false);
+          finalizeImport(parsedSegments, preset);
         } catch (err) {
           if (ext.endsWith('.json')) {
             alert('Invalid CapCut draft_content.json format. Please upload the correct file and try again.');
@@ -1075,7 +1145,7 @@ const App: React.FC = () => {
       setIsFileLoading(false);
     };
     reader.readAsText(file);
-  }, []);
+  }, [applyAutoSplit, countLongLineSegments, finalizeImport, settings.autoSplitLongLines, settings.maxSingleLineWords]);
 
   const performClear = async (skipFeedback = false) => {
     setStatus('clearing');
@@ -1187,7 +1257,16 @@ const App: React.FC = () => {
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
         setSegments(prev => prev.map(s => currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
-        const { translatedTexts, tokens } = await translateBatch(currentBatch, contextBefore, contextAfter, translationPreset, settings.aiModel, settings.apiKey);
+        const { translatedTexts, tokens } = await translateBatch(
+          currentBatch,
+          contextBefore,
+          contextAfter,
+          translationPreset,
+          settings.aiModel,
+          settings.apiKey,
+          settings.maxSingleLineWords,
+          settings.autoSplitLongLines
+        );
         const translationMap = new Map<number, string>();
         for (const item of translatedTexts) {
           if (item && typeof item.id === 'number' && typeof item.text === 'string' && item.text.trim().length > 0) {
@@ -1630,6 +1709,42 @@ const App: React.FC = () => {
             <div className="flex gap-3 mt-8">
               <button onClick={() => { setShowReplaceModal(false); setPendingFile(null); }} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
               <button onClick={handleReplaceConfirm} className="flex-1 py-3 bg-blue-600 rounded-xl">Confirm & Upload</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAutoSplitModal && pendingImport && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[210] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
+            <h3 className="text-xl font-bold mb-2">Auto split long lines?</h3>
+            <p className="text-slate-400 text-sm">
+              Found {pendingImport.longLineCount} segment(s) with lines longer than {settings.maxSingleLineWords} words.
+            </p>
+
+            <div className="mt-5 flex items-center justify-between gap-4 bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
+              <div>
+                <p className="text-xs font-bold text-slate-200 uppercase tracking-widest">Auto Split For This Import</p>
+                <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                  Insert line breaks so each line stays within the word limit.
+                </p>
+              </div>
+              <label className="inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={autoSplitChoice}
+                  onChange={(e) => setAutoSplitChoice(e.target.checked)}
+                />
+                <span className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${autoSplitChoice ? 'bg-blue-600' : 'bg-slate-700'}`}>
+                  <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${autoSplitChoice ? 'translate-x-5' : 'translate-x-0'}`} />
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button onClick={handleCancelAutoSplitImport} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
+              <button onClick={handleConfirmAutoSplitImport} className="flex-1 py-3 bg-blue-600 rounded-xl">Continue</button>
             </div>
           </div>
         </div>
@@ -2459,8 +2574,28 @@ const App: React.FC = () => {
                     className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-bold text-sm"
                   />
                   <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                    Single-line subtitles with at least this many words will be flagged.
+                    Single-line subtitles with more than this many words will be flagged.
                   </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-4 md:col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-200 uppercase tracking-widest">Auto Split Long Lines</p>
+                    <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                      Automatically insert a line break when total words exceed the threshold.
+                    </p>
+                  </div>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={settings.autoSplitLongLines}
+                      onChange={(e) => setSettings(prev => ({ ...prev, autoSplitLongLines: e.target.checked }))}
+                    />
+                    <span className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${settings.autoSplitLongLines ? 'bg-blue-600' : 'bg-slate-700'}`}>
+                      <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${settings.autoSplitLongLines ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </span>
+                  </label>
                 </div>
               </div>
             </section>

@@ -31,7 +31,7 @@ Last Updated: 2026-03-20
 ---
 
 # 5. Line Break Rule
-- If a single line would exceed `maxSingleLineWords`, AI must insert `\n`.
+- If `autoSplitLongLines` is enabled and a single line would exceed `maxSingleLineWords`, AI must insert `\n`.
 - Post-processing collapses to one line when total words <= `maxSingleLineWords`.
 
 ---

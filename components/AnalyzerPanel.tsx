@@ -121,15 +121,15 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 onClick={() => onFilterTrigger(activeFilter === 'single-line-long' ? 'all' : 'single-line-long')}
                 className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
                   activeFilter === 'single-line-long'
-                    ? 'bg-sky-500/20 border border-sky-400/50 shadow-lg shadow-sky-500/10'
-                    : 'bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/15'
+                    ? 'bg-amber-500/20 border border-amber-400/50 shadow-lg shadow-amber-500/10'
+                    : 'bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15'
                 }`}
-                title="Click to show only single-line subtitles with too many words"
+                title="Click to show only subtitles with a line that is too long"
               >
-                <div className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-2 shrink-0"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
                 <div>
-                  <p className="text-xs font-bold text-sky-400">{data.singleLineLongLines} single-line long</p>
-                  <p className="text-[10px] text-sky-400/60 leading-normal">Single line with at least {maxSingleLineWords} words.</p>
+                  <p className="text-xs font-bold text-amber-400">{data.singleLineLongLines} long line(s)</p>
+                  <p className="text-[10px] text-amber-400/60 leading-normal">Any line with more than {maxSingleLineWords} words.</p>
                 </div>
               </button>
             )}

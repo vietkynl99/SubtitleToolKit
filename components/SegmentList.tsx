@@ -232,7 +232,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   }}
                   tabIndex={-1}
                   onClick={() => onSegmentClick?.(seg.id)}
-                  className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all outline-none ${
+                  className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all outline-none select-none ${
                     isActiveByVideo
                       ? 'border-amber-400 ring-2 ring-amber-400/30 bg-amber-500/5'
                       : isSelected
@@ -251,7 +251,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   </div>
 
                   <div className="pt-1">
-                    <span className="inline-flex px-2 py-0.5 bg-slate-800 rounded-md text-[10px] font-bold font-mono text-slate-300">
+                    <span className="inline-flex px-2 py-0.5 bg-slate-800 rounded-md text-[10px] font-bold font-mono text-slate-300 select-text">
                       #{idSearchQuery ? renderHighlightedText(seg.id.toString(), idSearchQuery) : seg.id.toString()}
                     </span>
                   </div>
@@ -269,7 +269,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         onBlur={() => setEditingTime(null)}
                         autoFocus
-                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight"
+                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight select-text"
                         placeholder="00:00:00,000"
                       />
                     ) : (
@@ -293,7 +293,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                         onClick={(e) => e.stopPropagation()}
                         onBlur={() => setEditingTime(null)}
                         autoFocus
-                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight"
+                        className="w-full bg-transparent border-none outline-none text-[11px] font-bold font-mono leading-tight select-text"
                         placeholder="00:00:00,000"
                       />
                     ) : (
@@ -313,7 +313,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
 
                   <div className="pt-1">
                     <p
-                      className={`text-[13px] leading-snug font-medium whitespace-pre-wrap break-words ${
+                      className={`text-[13px] leading-snug font-medium whitespace-pre-wrap break-words select-text ${
                         hasOriginLangIssue
                           ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
                           : 'text-slate-300'
@@ -390,7 +390,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                   translationTextareaRefs.current[seg.id] = el;
                                   if (el) resizeTranslationTextarea(el);
                                 }}
-                                className={`w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic ${
+                                className={`w-full bg-transparent border-none outline-none resize-none text-[13px] font-semibold leading-snug placeholder:text-slate-700 placeholder:italic select-text ${
                                   hasTranslatedLangIssue
                                     ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
                                     : 'text-blue-100'

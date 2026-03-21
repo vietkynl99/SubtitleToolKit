@@ -1,6 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
-import { DEFAULT_SETTINGS } from "../constants";
 
 function normalizeAiText(raw: string): string {
   return raw.replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
@@ -12,6 +11,79 @@ function countWords(text: string): number {
     .trim();
   if (!normalized) return 0;
   return normalized.split(' ').length;
+}
+
+export function splitToTwoLinesIfLong(text: string, maxWords: number): string {
+  if (!text) return text;
+  const normalized = text.replace(/\s*\n\s*/g, '\n').replace(/[ \t]+/g, ' ').trim();
+  if (!normalized) return text;
+
+  const strongPunct = /[.!?…。！？]+$/;
+  const softPunct = /[,;:，、]+$/;
+  const minWordsPerLine = Math.min(2, maxWords);
+
+  const pickSplitIndex = (words: string[], max: number): number => {
+    const minIdx = minWordsPerLine;
+    const maxIdx = words.length - minWordsPerLine;
+    const target = Math.ceil(words.length / 2);
+    const window = Math.max(2, Math.floor(words.length * 0.2));
+    let bestIdx = Math.max(minIdx, Math.min(target, maxIdx));
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let i = minIdx; i <= maxIdx; i++) {
+      const w = words[i - 1];
+      const isStrong = strongPunct.test(w);
+      const isSoft = softPunct.test(w);
+      const punctWeight = isStrong ? 0 : isSoft ? 1 : 2;
+
+      const line1 = i;
+      const line2 = words.length - i;
+      const dist = Math.abs(i - target);
+      const imbalance = Math.abs(line1 - line2);
+      const maxLine = Math.max(line1, line2);
+      const overMax = Math.max(0, maxLine - max);
+
+      const nearMiddle = dist <= window;
+      const farFromMiddlePenalty = nearMiddle ? 0 : 1000;
+      const score = (farFromMiddlePenalty) + (punctWeight * 100) + (dist * 2) + (imbalance * 5) + (overMax * 10);
+      if (score < bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+
+    return bestIdx;
+  };
+
+  const splitLine = (line: string): string[] => {
+    const words = line.split(' ').filter(Boolean);
+    if (words.length <= maxWords) return [line];
+
+    // Prefer 2 lines even if a line exceeds maxWords.
+    let splitAt = pickSplitIndex(words, maxWords);
+    if (splitAt < minWordsPerLine) splitAt = minWordsPerLine;
+    if ((words.length - splitAt) < minWordsPerLine) splitAt = Math.max(minWordsPerLine, words.length - minWordsPerLine);
+
+    let first = words.slice(0, splitAt).join(' ');
+    let second = words.slice(splitAt).join(' ');
+
+    // If the second line is too short, rebalance while keeping 2 lines.
+    if (countWords(second) < minWordsPerLine) {
+      const firstWords = first.split(' ').filter(Boolean);
+      const secondWords = second.split(' ').filter(Boolean);
+      while (secondWords.length < minWordsPerLine && firstWords.length > minWordsPerLine) {
+        secondWords.unshift(firstWords.pop() as string);
+      }
+      first = firstWords.join(' ');
+      second = secondWords.join(' ');
+    }
+
+    return [first, second];
+  };
+
+  const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+  const finalLines = lines.flatMap(splitLine);
+  return finalLines.join('\n');
 }
 
 function collapseToSingleLineIfShort(text: string, maxWords: number = 10): string {
@@ -82,7 +154,9 @@ export async function translateBatch(
   contextAfter: string[],
   preset: TranslationPreset | null,
   model: AiModel,
-  apiKey: string
+  apiKey: string,
+  maxSingleLineWords: number,
+  autoSplitLongLines: boolean
 ): Promise<{ translatedTexts: { id: number; text: string }[]; tokens: number }> {
 
   const ai = new GoogleGenAI({ apiKey });
@@ -146,8 +220,10 @@ Use natural spoken Vietnamese suitable for storytelling subtitles.
 
 4. Length control + line breaking
 Keep subtitles concise (target <1.4×, max <2×).
-If the subtitle would exceed ${DEFAULT_SETTINGS.maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
-Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.
+${autoSplitLongLines
+  ? `If the subtitle would exceed ${maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
+Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.`
+  : `Line breaks are optional. Do not force a line break based only on word count.`}
 Prefer the shorter expression when meaning is the same.
 Prefer 1 line if short.
 
@@ -203,8 +279,11 @@ ${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
 
     const translatedBatch = JSON.parse(response.text?.trim() || "[]").map((item: any) => {
       if (item && typeof item.text === 'string') {
-        const normalized = normalizeAiText(item.text);
-        const collapsed = collapseToSingleLineIfShort(normalized, DEFAULT_SETTINGS.maxSingleLineWords);
+        let normalized = normalizeAiText(item.text);
+        if (autoSplitLongLines) {
+          normalized = splitToTwoLinesIfLong(normalized, maxSingleLineWords);
+        }
+        const collapsed = collapseToSingleLineIfShort(normalized, maxSingleLineWords);
         return { ...item, text: collapsed };
       }
       return item;

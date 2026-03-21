@@ -97,6 +97,7 @@ export interface AppSettings {
   aiModel: AiModel;
   apiKey: string;
   maxSingleLineWords: number;
+  autoSplitLongLines: boolean;
 }
 
 export interface SplitMetadata {
