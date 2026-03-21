@@ -242,8 +242,12 @@ const App: React.FC = () => {
   const applyAutoSplit = useCallback((list: SubtitleSegment[], maxWords: number) => {
     return list.map(seg => ({
       ...seg,
-      originalText: seg.originalText ? splitToTwoLinesIfLong(seg.originalText, maxWords) : seg.originalText,
-      translatedText: seg.translatedText ? splitToTwoLinesIfLong(seg.translatedText, maxWords) : seg.translatedText
+      originalText: seg.originalText
+        ? (seg.originalText.includes('\n') ? seg.originalText : splitToTwoLinesIfLong(seg.originalText, maxWords))
+        : seg.originalText,
+      translatedText: seg.translatedText
+        ? (seg.translatedText.includes('\n') ? seg.translatedText : splitToTwoLinesIfLong(seg.translatedText, maxWords))
+        : seg.translatedText
     }));
   }, []);
 

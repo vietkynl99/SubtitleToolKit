@@ -585,9 +585,12 @@ export function analyzeSegments(
 }
 
 export function performLocalFix(text: string): string {
-  let fixed = text.trim();
-  fixed = fixed.replace(/\s+/g, ' ');
-  return fixed;
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  const lines = normalized
+    .split('\n')
+    .map(line => line.trim().replace(/\s+/g, ' '))
+    .filter(line => line.length > 0);
+  return lines.join('\n');
 }
 
 export function generateSRT(segments: SubtitleSegment[], mode: 'original' | 'translated' = 'translated', metadata?: SplitMetadata): string {
