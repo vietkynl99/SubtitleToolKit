@@ -543,6 +543,15 @@ const App: React.FC = () => {
     return { mode, scopeSegments, untranslated, translated, action };
   }, [segments, selectedIds, filteredSegments]);
 
+  const autoSplitScope = useMemo(() => {
+    const mode = selectedIds.size > 0 ? 'selected' as const : 'all' as const;
+    const scopeSegments = mode === 'selected'
+      ? segments.filter(s => selectedIds.has(s.id))
+      : filteredSegments;
+    const longLineCount = countLongLineSegments(scopeSegments, settings.maxSingleLineWords);
+    return { mode, scopeSegments, longLineCount };
+  }, [segments, selectedIds, filteredSegments, countLongLineSegments, settings.maxSingleLineWords]);
+
   const aiActionTargets = aiScope.action === 'translate'
     ? aiScope.untranslated
     : aiScope.action === 'optimize'
@@ -595,6 +604,29 @@ const App: React.FC = () => {
     : aiRunningMode === 'optimize'
       ? isStoppingOptimize
       : (status === 'processing' || aiScope.action === 'none' || aiActionTargets.length === 0);
+
+  const handleAutoSplitLongLines = useCallback(() => {
+    if (autoSplitScope.longLineCount === 0) return;
+    const splitSegments = applyAutoSplit(autoSplitScope.scopeSegments, settings.maxSingleLineWords);
+    const splitMap = new Map(splitSegments.map(seg => [seg.id, seg]));
+    commitSegmentsChange(prev => prev.map(seg => splitMap.get(seg.id) || seg));
+    const selectedSuffix = autoSplitScope.mode === 'selected' ? ` (${selectedIds.size})` : '';
+    showToast(
+      'success',
+      autoSplitScope.mode === 'selected'
+        ? `Auto-split applied to selected segments${selectedSuffix}.`
+        : `Auto-split applied to all filtered segments.`
+    );
+  }, [
+    autoSplitScope.longLineCount,
+    autoSplitScope.mode,
+    autoSplitScope.scopeSegments,
+    applyAutoSplit,
+    settings.maxSingleLineWords,
+    commitSegmentsChange,
+    selectedIds.size,
+    showToast
+  ]);
 
   const captionTimeline = useMemo(() => {
     return segments
@@ -2302,6 +2334,23 @@ const App: React.FC = () => {
                       {aiButtonLabel}
                     </span>
                   </button>
+
+                  {!settings.autoSplitLongLines && autoSplitScope.longLineCount > 0 && (
+                    <button
+                      onClick={handleAutoSplitLongLines}
+                      disabled={status === 'processing' || isAiRunning}
+                      title={`Auto split ${autoSplitScope.longLineCount} long line(s)`}
+                      aria-label="Auto split long lines"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold transition-colors bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <span className="shrink-0">{ICONS.Split}</span>
+                      <span className="whitespace-nowrap">
+                        {autoSplitScope.mode === 'selected'
+                          ? `Auto Split Selected (${selectedIds.size})`
+                          : 'Auto Split All'}
+                      </span>
+                    </button>
+                  )}
 
                   {termReplaceCount > 0 && (
                     <button
