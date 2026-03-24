@@ -963,9 +963,10 @@ const App: React.FC = () => {
     const first = processedSegments[0];
     const last = processedSegments[processedSegments.length - 1];
     const totalSec = Math.max(0, timeToSeconds(last.endTime) - timeToSeconds(first.startTime));
-    const m = Math.floor(totalSec / 60);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
     const s = Math.floor(totalSec % 60);
-    return `${m}m ${s}s`;
+    return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
   }, [processedSegments]);
   
   const copyToClipboard = (text: string) => {
@@ -2064,8 +2065,6 @@ const App: React.FC = () => {
               <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(displayFileName)}>{displayFileName}</h2>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
-                <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
-                <span className="hidden sm:inline">{allStats?.avgCPS.toFixed(1) || 0} AVG CPS</span>
                 <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
                 <span>{totalDurationStr}</span>
               </div>
