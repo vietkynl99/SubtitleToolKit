@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SubtitleSegment, TranslationPreset, AiModel } from "../types";
+import { timeToSeconds } from "./subtitleLogic";
 
 function normalizeAiText(raw: string): string {
   return raw.replace(/\r\n/g, '\n').replace(/\\n/g, '\n');
@@ -407,7 +408,7 @@ Neutral Vietnamese subtitle narration.
     : "";
 
   const payload = segments.map((s) => {
-    const duration = Math.max((s.end || 0) - (s.start || 0), 0.1);
+    const duration = Math.max(timeToSeconds(s.endTime) - timeToSeconds(s.startTime), 0.1);
     const currentText = s.translatedText || "";
     const currentCps = currentText.length / duration;
 

@@ -7,10 +7,12 @@ interface SegmentListProps {
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onUpdateText: (id: number, text: string) => void;
+  onCommitText?: (id: number, text: string, prevText?: string) => void;
   onUpdateTime: (id: number, field: 'startTime' | 'endTime', value: string) => void;
   onDeleteSegment: (id: number) => void;
   onSegmentClick?: (id: number) => void;
   onShowOptimizeHistory?: (id: number) => void;
+  onEditingTranslationChange?: (id: number | null) => void;
   currentPage: number;
   searchQuery: string;
   searchCaseSensitive: boolean;
@@ -27,10 +29,12 @@ const SegmentList: React.FC<SegmentListProps> = ({
   selectedIds,
   onToggleSelect,
   onUpdateText,
+  onCommitText,
   onUpdateTime,
   onDeleteSegment,
   onSegmentClick,
   onShowOptimizeHistory,
+  onEditingTranslationChange,
   currentPage,
   searchQuery,
   searchCaseSensitive,
@@ -44,6 +48,11 @@ const SegmentList: React.FC<SegmentListProps> = ({
   const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
   const segmentRowRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
   const pendingUpdateRef = React.useRef<Map<number, number>>(new Map());
+  const editStartTextRef = React.useRef<Record<number, string>>({});
+
+  React.useEffect(() => {
+    onEditingTranslationChange?.(editingTranslationId);
+  }, [editingTranslationId, onEditingTranslationChange]);
 
   const getSeverityClasses = (severity: Severity) => {
     switch (severity) {
@@ -58,6 +67,14 @@ const SegmentList: React.FC<SegmentListProps> = ({
   };
 
   const pagedSegments = segments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const visibleSegments = React.useMemo(() => {
+    if (!editingTranslationId) return pagedSegments;
+    if (pagedSegments.some(seg => seg.id === editingTranslationId)) return pagedSegments;
+    const pinned = segments.find(seg => seg.id === editingTranslationId);
+    if (!pinned) return pagedSegments;
+    const trimmed = pagedSegments.slice(0, Math.max(0, pagedSegments.length - 1));
+    return [pinned, ...trimmed];
+  }, [pagedSegments, segments, editingTranslationId]);
 
   const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -141,20 +158,20 @@ const SegmentList: React.FC<SegmentListProps> = ({
   };
 
   React.useEffect(() => {
-    Object.values(translationTextareaRefs.current).forEach((el) => {
+    (Object.values(translationTextareaRefs.current) as Array<HTMLTextAreaElement | null>).forEach((el) => {
       if (el) resizeTranslationTextarea(el);
     });
-  }, [pagedSegments, editingTranslationId, searchQuery]);
+  }, [visibleSegments, editingTranslationId, searchQuery]);
 
   React.useEffect(() => {
     if (!activeSegmentId) return;
-    const existsOnPage = pagedSegments.some(seg => seg.id === activeSegmentId);
+    const existsOnPage = visibleSegments.some(seg => seg.id === activeSegmentId);
     if (!existsOnPage) return;
     const row = segmentRowRefs.current[activeSegmentId];
     if (!row) return;
     row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     row.focus({ preventScroll: true });
-  }, [activeSegmentId, pagedSegments, currentPage]);
+  }, [activeSegmentId, visibleSegments, currentPage]);
 
   const scheduleUpdate = React.useCallback((id: number, text: string) => {
     const existing = pendingUpdateRef.current.get(id);
@@ -170,14 +187,18 @@ const SegmentList: React.FC<SegmentListProps> = ({
     const existing = pendingUpdateRef.current.get(id);
     if (existing) window.clearTimeout(existing);
     pendingUpdateRef.current.delete(id);
-    onUpdateText(id, text);
-  }, [onUpdateText]);
+    if (onCommitText) {
+      onCommitText(id, text, editStartTextRef.current[id]);
+    } else {
+      onUpdateText(id, text);
+    }
+  }, [onUpdateText, onCommitText]);
 
   React.useEffect(() => {
     setLocalText(prev => {
       let changed = false;
       const next = { ...prev };
-      pagedSegments.forEach(seg => {
+      visibleSegments.forEach(seg => {
         if (editingTranslationId === seg.id) return;
         const value = seg.translatedText || '';
         if (next[seg.id] !== value) {
@@ -187,7 +208,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
       });
       return changed ? next : prev;
     });
-  }, [pagedSegments, editingTranslationId]);
+  }, [visibleSegments, editingTranslationId]);
 
   React.useEffect(() => {
     return () => {
@@ -214,7 +235,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
           </div>
 
           <div className="space-y-2">
-            {pagedSegments.map((seg) => {
+            {visibleSegments.map((seg) => {
               const colors = getSeverityClasses(seg.severity);
               const isSelected = selectedIds.has(seg.id);
               const isActiveByVideo = activeSegmentId === seg.id;
@@ -404,11 +425,17 @@ const SegmentList: React.FC<SegmentListProps> = ({
                               scheduleUpdate(seg.id, nextValue);
                               resizeTranslationTextarea(e.currentTarget);
                             }}
-                            onFocus={() => setEditingTranslationId(seg.id)}
+                            onFocus={() => {
+                              editStartTextRef.current[seg.id] = displayedTranslation;
+                              setEditingTranslationId(seg.id);
+                              onEditingTranslationChange?.(seg.id);
+                            }}
                             autoFocus={editingTranslationId === seg.id}
                             onBlur={() => {
                               flushUpdate(seg.id, localText[seg.id] ?? displayedTranslation);
+                              delete editStartTextRef.current[seg.id];
                               setEditingTranslationId(null);
+                              onEditingTranslationChange?.(null);
                             }}
                                 onClick={(e) => e.stopPropagation()}
                               />

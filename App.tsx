@@ -102,6 +102,8 @@ const App: React.FC = () => {
   const [showTermReplaceModal, setShowTermReplaceModal] = useState<boolean>(false);
   const [optimizeHistorySegmentId, setOptimizeHistorySegmentId] = useState<number | null>(null);
   const [optimizeHistoryIndex, setOptimizeHistoryIndex] = useState<number>(0);
+  const [editingTranslationId, setEditingTranslationId] = useState<number | null>(null);
+  const frozenFilteredRef = useRef<SubtitleSegment[] | null>(null);
   const [termReplacePreview, setTermReplacePreview] = useState<{
     total: number;
     items: Array<{
@@ -464,7 +466,7 @@ const App: React.FC = () => {
   const isSingleLineLong = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('line has too many words')), []);
 
-  const filteredSegments = useMemo(() => {
+  const filteredSegmentsRaw = useMemo(() => {
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
@@ -497,6 +499,20 @@ const App: React.FC = () => {
     return processedSegments;
   }, [processedSegments, filter, hasLangIssue, hasTimelineIssue, isSingleLineLong, isTooLong]);
 
+  useEffect(() => {
+    if (editingTranslationId == null) {
+      frozenFilteredRef.current = null;
+      return;
+    }
+    if (!frozenFilteredRef.current) {
+      frozenFilteredRef.current = filteredSegmentsRaw;
+    }
+  }, [editingTranslationId, filteredSegmentsRaw]);
+
+  const filteredSegments = editingTranslationId == null
+    ? filteredSegmentsRaw
+    : (frozenFilteredRef.current || filteredSegmentsRaw);
+
   const compileSearch = useCallback((rawQuery: string) => {
     const q = rawQuery.trim();
     if (!q) return null;
@@ -519,17 +535,27 @@ const App: React.FC = () => {
 
   const editorSegments = useMemo(() => {
     const compiled = compileSearch(searchQuery);
-    if (!compiled) return searchQuery.trim() ? [] : filteredSegments;
+    if (!compiled) {
+      if (!searchQuery.trim()) return filteredSegments;
+      return [];
+    }
     const { regex: matcher, isIdSearch } = compiled;
 
+    let base: SubtitleSegment[];
     if (isIdSearch) {
-      return filteredSegments.filter(s => matcher.test(s.id.toString()));
+      base = filteredSegments.filter(s => matcher.test(s.id.toString()));
+    } else {
+      base = filteredSegments.filter(s => {
+        const fields = [s.startTime, s.endTime, s.originalText || '', s.translatedText || ''];
+        return fields.some(field => matcher.test(field));
+      });
     }
-    return filteredSegments.filter(s => {
-      const fields = [s.startTime, s.endTime, s.originalText || '', s.translatedText || ''];
-      return fields.some(field => matcher.test(field));
-    });
-  }, [filteredSegments, searchQuery, compileSearch]);
+
+    if (editingTranslationId == null) return base;
+    if (base.some(s => s.id === editingTranslationId)) return base;
+    const pinned = processedSegments.find(s => s.id === editingTranslationId);
+    return pinned ? [...base, pinned] : base;
+  }, [filteredSegments, searchQuery, compileSearch, editingTranslationId, processedSegments]);
 
   const aiScope = useMemo(() => {
     const mode = selectedIds.size > 0 ? 'selected' as const : 'all' as const;
@@ -1589,6 +1615,28 @@ const App: React.FC = () => {
     commitSegmentsChange(prev => prev.map(s => s.id === id ? { ...s, translatedText: text } : s));
   };
 
+  const commitSegmentText = (id: number, text: string, prevTextOverride?: string) => {
+    commitSegmentsChange(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const prevText = (prevTextOverride ?? (s.translatedText || ''));
+      const nextText = text;
+      if (prevText === nextText) return s;
+
+      let nextHistory = s.optimizeHistory ? [...s.optimizeHistory] : [];
+      if (nextText.trim()) {
+        if (nextHistory.length === 0) {
+          if (prevText.trim()) nextHistory.push(prevText);
+          nextHistory.push(nextText);
+        } else {
+          const last = nextHistory[nextHistory.length - 1];
+          if (last !== nextText) nextHistory.push(nextText);
+        }
+      }
+
+      return { ...s, translatedText: nextText, optimizeHistory: nextHistory };
+    }));
+  };
+
   const updateSegmentTime = (id: number, field: 'startTime' | 'endTime', value: string) => {
     commitSegmentsChange(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
   };
@@ -2425,10 +2473,12 @@ const App: React.FC = () => {
                 selectedIds={selectedIds} 
                 onToggleSelect={handleToggleSelect} 
                 onUpdateText={updateSegmentText} 
+                onCommitText={commitSegmentText}
                 onUpdateTime={updateSegmentTime}
                 onDeleteSegment={deleteSegment}
                 onSegmentClick={handleSeekToSegmentStart}
                 onShowOptimizeHistory={handleShowOptimizeHistory}
+                onEditingTranslationChange={setEditingTranslationId}
                 currentPage={currentPage}
                 searchQuery={searchQuery}
                 searchCaseSensitive={searchCaseSensitive}
