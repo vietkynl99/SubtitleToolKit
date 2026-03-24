@@ -467,6 +467,33 @@ const App: React.FC = () => {
   const isSingleLineLong = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('line has too many words')), []);
 
+  const issueFilterAvailability = useMemo(() => {
+    let timeline = 0;
+    let lang = 0;
+    let tooLong = 0;
+    let singleLineLong = 0;
+    for (const seg of processedSegments) {
+      if (hasTimelineIssue(seg)) timeline++;
+      if (hasLangIssue(seg)) lang++;
+      if (isTooLong(seg)) tooLong++;
+      if (isSingleLineLong(seg)) singleLineLong++;
+    }
+    return {
+      timeline,
+      lang,
+      tooLong,
+      singleLineLong
+    };
+  }, [processedSegments, hasTimelineIssue, hasLangIssue, isTooLong, isSingleLineLong]);
+
+  useEffect(() => {
+    if (typeof filter !== 'string') return;
+    if (filter === 'timeline' && issueFilterAvailability.timeline === 0) setFilter('all');
+    if (filter === 'lang' && issueFilterAvailability.lang === 0) setFilter('all');
+    if (filter === 'too-long' && issueFilterAvailability.tooLong === 0) setFilter('all');
+    if (filter === 'single-line-long' && issueFilterAvailability.singleLineLong === 0) setFilter('all');
+  }, [filter, issueFilterAvailability]);
+
   const filteredSegmentsRaw = useMemo(() => {
 
     if (filter === 'all') return processedSegments;
@@ -2376,10 +2403,10 @@ const App: React.FC = () => {
                     <option value="safe">Safe</option>
                     <option value="warning">Warning</option>
                     <option value="critical">Critical</option>
-                    <option value="timeline">Timeline Issues</option>
-                    <option value="lang">Language Issues</option>
-                    <option value="too-long">Too Long (3+ lines)</option>
-                    <option value="single-line-long">Single Line Too Long</option>
+                    {issueFilterAvailability.timeline > 0 && <option value="timeline">Timeline Issues</option>}
+                    {issueFilterAvailability.lang > 0 && <option value="lang">Language Issues</option>}
+                    {issueFilterAvailability.tooLong > 0 && <option value="too-long">Too Long (3+ lines)</option>}
+                    {issueFilterAvailability.singleLineLong > 0 && <option value="single-line-long">Single Line Too Long</option>}
                     <option value="translated">Translated</option>
                     <option value="untranslated">Untranslated</option>
                     <option value="optimized">Optimized</option>
