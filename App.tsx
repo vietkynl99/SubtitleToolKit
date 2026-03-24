@@ -591,18 +591,19 @@ const App: React.FC = () => {
       ? 'optimize'
       : null;
 
+  const progressDisplay = Math.floor(progress);
   const aiButtonLabel = useMemo(() => {
     const selectedCount = selectedIds.size;
     const selectedSuffix = aiScope.mode === 'selected' ? ` (${selectedCount})` : '';
     if (aiRunningMode === 'translate') {
       return isStoppingTranslate
         ? 'Stopping...'
-        : `Stop (${translationState.processed}/${translationState.total} - ${progress}%)`;
+        : `Stop (${translationState.processed}/${translationState.total} - ${progressDisplay}%)`;
     }
     if (aiRunningMode === 'optimize') {
       return isStoppingOptimize
         ? 'Stopping...'
-        : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progress}%)`;
+        : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progressDisplay}%)`;
     }
     if (aiScope.action === 'translate') {
       return aiScope.mode === 'selected' ? `Translate Selected${selectedSuffix}` : 'Translate All';
@@ -622,7 +623,7 @@ const App: React.FC = () => {
     translationState.total,
     optimizeState.processed,
     optimizeState.total,
-    progress
+    progressDisplay
   ]);
 
   const isAiRunning = aiRunningMode !== null;
