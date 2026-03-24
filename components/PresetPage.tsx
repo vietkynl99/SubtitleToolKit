@@ -10,6 +10,8 @@ interface PresetPageProps {
   isLoading: boolean;
   fileName: string;
   totalSegments: number;
+  draftSummary: string;
+  onDraftSummaryChange: (value: string) => void;
 }
 
 const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onRemove }) => (
@@ -40,17 +42,19 @@ const PresetPage: React.FC<PresetPageProps> = ({
   onUpdatePreset,
   isLoading,
   fileName,
-  totalSegments
+  totalSegments,
+  draftSummary,
+  onDraftSummaryChange
 }) => {
   const [titleInput, setTitleInput] = useState('');
   const [genreInput, setGenreInput] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    if (preset?.reference.title_or_summary) {
-      setTitleInput(preset.reference.title_or_summary);
+    if (draftSummary !== titleInput) {
+      setTitleInput(draftSummary);
     }
-  }, [preset]);
+  }, [draftSummary, titleInput]);
 
   const handleAddTag = (type: 'genres', value: string) => {
     if (!preset) return;
@@ -155,7 +159,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
           <div className="flex gap-3">
             <label className={`flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20 ${isLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
               {ICONS.Upload} Import
-              {!isLoading && <input type="file" accept=".json" className="hidden" onChange={onImport} />}
+              {!isLoading && <input type="file" accept=".json,.sktproject" className="hidden" onChange={onImport} />}
             </label>
           </div>
         </div>
@@ -170,7 +174,11 @@ const PresetPage: React.FC<PresetPageProps> = ({
               <textarea
                 placeholder="Enter a title or plot summary for the AI to analyze the style..."
                 value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTitleInput(next);
+                  onDraftSummaryChange(next);
+                }}
                 disabled={isLoading}
                 className="flex-1 w-full bg-slate-800 border border-slate-700 focus:border-blue-500/50 outline-none p-4 sm:p-5 rounded-2xl text-slate-100 text-sm sm:text-base leading-relaxed resize-none font-medium transition-colors"
               />
@@ -184,14 +192,10 @@ const PresetPage: React.FC<PresetPageProps> = ({
                 ) : (
                   ICONS.AI
                 )}
-                Analyze DNA
+                Analyze
               </button>
             </div>
 
-            <div className="pt-6 border-t border-slate-800/50 flex items-center justify-between">
-              <div className="text-[12px] text-slate-500 opacity-50 font-medium">{totalSegments} segments analyzed</div>
-              <div className="text-[12px] text-slate-500 opacity-50 font-medium truncate max-w-[200px]">{fileName}</div>
-            </div>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-8 space-y-6 sm:space-y-8 shadow-xl flex flex-col relative overflow-hidden">

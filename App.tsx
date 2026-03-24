@@ -133,6 +133,7 @@ const App: React.FC = () => {
   const [apiUsage, setApiUsage] = useState<ApiUsage>(INITIAL_USAGE);
   const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
   const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
+  const [presetDraftSummary, setPresetDraftSummary] = useState<string>('');
 
   const [translationState, setTranslationState] = useState<{
     status: 'idle' | 'running' | 'stopped' | 'error' | 'completed';
@@ -1016,6 +1017,9 @@ const App: React.FC = () => {
       const { preset, tokens } = await analyzeTranslationStyle(input, settings.aiModel, settings.apiKey);
       
       setTranslationPreset(preset);
+      if (preset?.reference?.title_or_summary) {
+        setPresetDraftSummary(preset.reference.title_or_summary);
+      }
       setApiUsage(prev => ({
         ...prev,
         style: {
@@ -1050,37 +1054,56 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        const isValid = json.reference?.title_or_summary && 
-                        Array.isArray(json.genres) && 
-                        typeof json.humor_level === 'number';
-
-        if (isValid) {
-          const termReplacements = Array.isArray(json.term_replacements)
-            ? json.term_replacements
-                .filter((t: any) => t && typeof t.find === 'string' && typeof t.replace_with === 'string')
-                .map((t: any, i: number) => ({
-                  id: typeof t.id === 'number' && Number.isFinite(t.id) ? t.id : i + 1,
-                  find: t.find,
-                  replace_with: t.replace_with
-                }))
-            : [];
-          const termReplaceOptions = {
-            case_sensitive: !!json.term_replace_options?.case_sensitive,
-            whole_word: !!json.term_replace_options?.whole_word,
-            regex: !!json.term_replace_options?.regex
-          };
-          const cleaned: TranslationPreset = {
-            reference: { title_or_summary: json.reference.title_or_summary },
-            genres: json.genres,
-            term_replacements: termReplacements,
-            term_replace_options: termReplaceOptions,
-            humor_level: json.humor_level
-          };
-          setTranslationPreset(cleaned);
-          showToast('success', "DNA preset imported successfully.");
+        const content = event.target?.result as string;
+        const lowerName = file.name.toLowerCase();
+        if (lowerName.endsWith('.sktproject')) {
+          const res = parseSktProject(content);
+          const preset = res.preset;
+          if (!preset) {
+            showToast('error', "This project has no DNA preset.");
+          } else {
+            setTranslationPreset(preset);
+            if (preset.reference?.title_or_summary) {
+              setPresetDraftSummary(preset.reference.title_or_summary);
+            }
+            showToast('success', "DNA preset imported from project.");
+          }
         } else {
-          showToast('error', "Invalid DNA file or incompatible version.");
+          const json = JSON.parse(content);
+          const isValid = json.reference?.title_or_summary && 
+                          Array.isArray(json.genres) && 
+                          typeof json.humor_level === 'number';
+
+          if (isValid) {
+            const termReplacements = Array.isArray(json.term_replacements)
+              ? json.term_replacements
+                  .filter((t: any) => t && typeof t.find === 'string' && typeof t.replace_with === 'string')
+                  .map((t: any, i: number) => ({
+                    id: typeof t.id === 'number' && Number.isFinite(t.id) ? t.id : i + 1,
+                    find: t.find,
+                    replace_with: t.replace_with
+                  }))
+              : [];
+            const termReplaceOptions = {
+              case_sensitive: !!json.term_replace_options?.case_sensitive,
+              whole_word: !!json.term_replace_options?.whole_word,
+              regex: !!json.term_replace_options?.regex
+            };
+            const cleaned: TranslationPreset = {
+              reference: { title_or_summary: json.reference.title_or_summary },
+              genres: json.genres,
+              term_replacements: termReplacements,
+              term_replace_options: termReplaceOptions,
+              humor_level: json.humor_level
+            };
+            setTranslationPreset(cleaned);
+            if (cleaned.reference?.title_or_summary) {
+              setPresetDraftSummary(cleaned.reference.title_or_summary);
+            }
+            showToast('success', "DNA preset imported successfully.");
+          } else {
+            showToast('error', "Invalid DNA file or incompatible version.");
+          }
         }
       } catch (err) {
         showToast('error', "Error while reading DNA file.");
@@ -1094,6 +1117,9 @@ const App: React.FC = () => {
     setSegments(parsedSegments);
     undoStackRef.current = [];
     setTranslationPreset(preset);
+    if (preset?.reference?.title_or_summary) {
+      setPresetDraftSummary(preset.reference.title_or_summary);
+    }
     setTranslationState({ status: 'idle', processed: 0, total: 0 });
     setApiUsage(INITIAL_USAGE);
     setProgress(100);
@@ -1225,6 +1251,7 @@ const App: React.FC = () => {
     undoStackRef.current = [];
     setGeneratedFiles([]);
     setTranslationPreset(null);
+    setPresetDraftSummary('');
     setTranslationState({ status: 'idle', processed: 0, total: 0 });
     setApiUsage(INITIAL_USAGE);
     setFileName('');
@@ -2299,7 +2326,17 @@ const App: React.FC = () => {
 
       {activeTab === 'translation-style' && (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading translation style tools...</div>}>
-          <PresetPage preset={translationPreset} isLoading={isPresetLoading} onAnalyze={handleDNAAnalyze} onImport={handleImportPreset} onUpdatePreset={setTranslationPreset} fileName={fileName} totalSegments={segments.length} />
+          <PresetPage
+            preset={translationPreset}
+            isLoading={isPresetLoading}
+            onAnalyze={handleDNAAnalyze}
+            onImport={handleImportPreset}
+            onUpdatePreset={setTranslationPreset}
+            fileName={fileName}
+            totalSegments={segments.length}
+            draftSummary={presetDraftSummary}
+            onDraftSummaryChange={setPresetDraftSummary}
+          />
         </Suspense>
       )}
 
