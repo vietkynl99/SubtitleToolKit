@@ -451,19 +451,20 @@ const App: React.FC = () => {
   const processedSegments = useMemo(() => globalAnalysis?.enrichedSegments || [], [globalAnalysis]);
   const allStats = useMemo(() => globalAnalysis?.stats, [globalAnalysis]);
 
+  const hasTimelineIssue = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap')), []);
+  const hasOriginLangIssue = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters')), []);
+  const hasTranslatedLangIssue = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters')), []);
+  const hasLangIssue = useCallback((segment: SubtitleSegment) =>
+    hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment), [hasOriginLangIssue, hasTranslatedLangIssue]);
+  const isTooLong = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines')), []);
+  const isSingleLineLong = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('line has too many words')), []);
+
   const filteredSegments = useMemo(() => {
-    const hasTimelineIssue = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
-    const hasOriginLangIssue = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
-    const hasTranslatedLangIssue = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
-    const hasLangIssue = (segment: SubtitleSegment) =>
-      hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment);
-    const isTooLong = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines'));
-    const isSingleLineLong = (segment: SubtitleSegment) =>
-      segment.issueList.some(issue => issue.toLowerCase().includes('line has too many words'));
 
     if (filter === 'all') return processedSegments;
     if (filter === 'timeline') {
@@ -494,7 +495,7 @@ const App: React.FC = () => {
       return processedSegments.filter(s => s.cps >= filter.min && s.cps < filter.max);
     }
     return processedSegments;
-  }, [processedSegments, filter]);
+  }, [processedSegments, filter, hasLangIssue, hasTimelineIssue, isSingleLineLong, isTooLong]);
 
   const compileSearch = useCallback((rawQuery: string) => {
     const q = rawQuery.trim();
@@ -1386,8 +1387,9 @@ const App: React.FC = () => {
     for (const seg of optimizeTargets) {
       const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold, settings.maxSingleLineWords);
       const severity = meta.enrichedSegments[0].severity;
+      const hasLanguageIssue = hasLangIssue(seg);
 
-      if (severity === 'safe') {
+      if (severity === 'safe' && !hasLanguageIssue) {
         safeCount++;
       } else {
         aiTargetSegments.push(seg);

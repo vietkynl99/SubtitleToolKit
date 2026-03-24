@@ -432,6 +432,9 @@ Rules:
 - Preserve core meaning when possible.
 - Prefer concise Vietnamese.
 - Remove filler words if needed, but do not lose meaning.
+- Output must be Vietnamese only (Latin script). Do not include Chinese characters or any non-Latin letters.
+- If any Chinese characters appear in the input, translate them into Vietnamese words.
+- If the output still contains Chinese characters, it is invalid and must be rewritten.
 
 Goal:
 - Reduce CPS compared to currentCps while preserving meaning and fluency.
