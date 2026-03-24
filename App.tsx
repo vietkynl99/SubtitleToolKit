@@ -472,17 +472,26 @@ const App: React.FC = () => {
     let lang = 0;
     let tooLong = 0;
     let singleLineLong = 0;
+    let translated = 0;
+    let untranslated = 0;
+    let optimized = 0;
     for (const seg of processedSegments) {
       if (hasTimelineIssue(seg)) timeline++;
       if (hasLangIssue(seg)) lang++;
       if (isTooLong(seg)) tooLong++;
       if (isSingleLineLong(seg)) singleLineLong++;
+      if ((seg.translatedText || '').trim()) translated++;
+      else untranslated++;
+      if ((seg.optimizeHistory?.length || 0) > 0) optimized++;
     }
     return {
       timeline,
       lang,
       tooLong,
-      singleLineLong
+      singleLineLong,
+      translated,
+      untranslated,
+      optimized
     };
   }, [processedSegments, hasTimelineIssue, hasLangIssue, isTooLong, isSingleLineLong]);
 
@@ -492,6 +501,9 @@ const App: React.FC = () => {
     if (filter === 'lang' && issueFilterAvailability.lang === 0) setFilter('all');
     if (filter === 'too-long' && issueFilterAvailability.tooLong === 0) setFilter('all');
     if (filter === 'single-line-long' && issueFilterAvailability.singleLineLong === 0) setFilter('all');
+    if (filter === 'translated' && issueFilterAvailability.translated === 0) setFilter('all');
+    if (filter === 'untranslated' && issueFilterAvailability.untranslated === 0) setFilter('all');
+    if (filter === 'optimized' && issueFilterAvailability.optimized === 0) setFilter('all');
   }, [filter, issueFilterAvailability]);
 
   const filteredSegmentsRaw = useMemo(() => {
@@ -2407,9 +2419,9 @@ const App: React.FC = () => {
                     {issueFilterAvailability.lang > 0 && <option value="lang">Language Issues</option>}
                     {issueFilterAvailability.tooLong > 0 && <option value="too-long">Too Long (3+ lines)</option>}
                     {issueFilterAvailability.singleLineLong > 0 && <option value="single-line-long">Single Line Too Long</option>}
-                    <option value="translated">Translated</option>
-                    <option value="untranslated">Untranslated</option>
-                    <option value="optimized">Optimized</option>
+                    {issueFilterAvailability.translated > 0 && <option value="translated">Translated</option>}
+                    {issueFilterAvailability.untranslated > 0 && <option value="untranslated">Untranslated</option>}
+                    {issueFilterAvailability.optimized > 0 && <option value="optimized">Optimized</option>}
                   </select>
 
                   <button
