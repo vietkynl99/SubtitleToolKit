@@ -82,7 +82,10 @@ export function splitToTwoLinesIfLong(text: string, maxWords: number): string {
     return [first, second];
   };
 
-  const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+  let lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length > 2) {
+    lines = [lines.join(' ')];
+  }
   const finalLines = lines.flatMap(splitLine);
   return finalLines.join('\n');
 }

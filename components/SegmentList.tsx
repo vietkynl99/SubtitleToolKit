@@ -117,7 +117,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
       }
 
       nodes.push(
-        <mark key={`m-${start}`} className="bg-amber-300/30 text-amber-100 px-0.5 rounded">
+        <mark key={`m-${start}`} className="bg-amber-300/30 text-amber-100 rounded-sm px-0">
           {matched}
         </mark>
       );
@@ -371,6 +371,19 @@ const SegmentList: React.FC<SegmentListProps> = ({
                             title="Click to edit translation"
                           >
                             <div className="flex items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div
+                                  className={`text-[13px] font-semibold leading-snug whitespace-pre-wrap break-words min-h-[20px] ${
+                                    hasTranslatedLangIssue
+                                      ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
+                                      : 'text-blue-100'
+                                  }`}
+                                >
+                                  {displayedTranslation
+                                    ? renderHighlightedText(displayedTranslation, searchQuery)
+                                    : <span className="text-slate-700 italic">No translation yet...</span>}
+                                </div>
+                              </div>
                               {optimizeCount > 0 && (
                                 <button
                                   type="button"
@@ -384,19 +397,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                   optimized
                                 </button>
                               )}
-                              <div className="flex-1 min-w-0">
-                                <div
-                                  className={`text-[13px] font-semibold leading-snug whitespace-pre-wrap break-words min-h-[20px] ${
-                                    hasTranslatedLangIssue
-                                      ? 'text-rose-100 underline decoration-rose-400 decoration-wavy underline-offset-2'
-                                      : 'text-blue-100'
-                                  }`}
-                                >
-                              {displayedTranslation
-                                ? renderHighlightedText(displayedTranslation, searchQuery)
-                                : <span className="text-slate-700 italic">No translation yet...</span>}
-                                </div>
-                              </div>
                             </div>
                           </button>
                         );
@@ -454,11 +454,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                               </button>
                             )}
                           </div>
-                          {searchQuery.trim() && displayedTranslation.toLowerCase().includes(searchQuery.toLowerCase()) && (
-                            <div className="mt-1 text-[10px] text-slate-400">
-                              Matched: {renderHighlightedText(getMatchSnippet(displayedTranslation || '', searchQuery) || '', searchQuery)}
-                            </div>
-                          )}
                         </>
                       );
                     })()}
