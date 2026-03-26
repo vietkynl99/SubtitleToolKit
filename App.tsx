@@ -145,6 +145,14 @@ const App: React.FC = () => {
   const [isPageEditing, setIsPageEditing] = useState<boolean>(false);
   const [pageInputValue, setPageInputValue] = useState<string>('1');
   const settingsRef = useRef(settings);
+  const [focusSegmentId, setFocusSegmentId] = useState<number | null>(null);
+  const [pendingGoToSegmentId, setPendingGoToSegmentId] = useState<number | null>(null);
+  const [segmentContextMenu, setSegmentContextMenu] = useState<{
+    segmentId: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const segmentContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
   const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
@@ -391,6 +399,26 @@ const App: React.FC = () => {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    if (!segmentContextMenu) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (segmentContextMenuRef.current && target && segmentContextMenuRef.current.contains(target)) {
+        return;
+      }
+      setSegmentContextMenu(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSegmentContextMenu(null);
+    };
+    window.addEventListener('mousedown', handleClick);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [segmentContextMenu]);
 
   useEffect(() => {
     const preload = async () => {
@@ -650,6 +678,8 @@ const App: React.FC = () => {
   const progressDisplay = Math.floor(progress);
   const aiButtonLabel = useMemo(() => {
     const selectedCount = selectedIds.size;
+    const filterLabel = filter !== 'all' ? 'Filtered' : 'All';
+    const filteredSuffix = filter !== 'all' ? ` (${aiScope.scopeSegments.length})` : '';
     const selectedSuffix = aiScope.mode === 'selected' ? ` (${selectedCount})` : '';
     if (aiRunningMode === 'translate') {
       return isStoppingTranslate
@@ -662,16 +692,24 @@ const App: React.FC = () => {
         : `Stop (${optimizeState.processed}/${optimizeState.total} - ${progressDisplay}%)`;
     }
     if (aiScope.action === 'translate') {
-      return aiScope.mode === 'selected' ? `Translate Selected${selectedSuffix}` : 'Translate All';
+      return aiScope.mode === 'selected'
+        ? `Translate Selected${selectedSuffix}`
+        : `Translate ${filterLabel}${filteredSuffix}`;
     }
     if (aiScope.action === 'optimize') {
-      return aiScope.mode === 'selected' ? `Optimize Selected${selectedSuffix}` : 'Optimize All';
+      return aiScope.mode === 'selected'
+        ? `Optimize Selected${selectedSuffix}`
+        : `Optimize ${filterLabel}${filteredSuffix}`;
     }
-    return aiScope.mode === 'selected' ? `Translate Selected${selectedSuffix}` : 'Translate All';
+    return aiScope.mode === 'selected'
+      ? `Translate Selected${selectedSuffix}`
+      : `Translate ${filterLabel}${filteredSuffix}`;
   }, [
     aiRunningMode,
     aiScope.action,
     aiScope.mode,
+    aiScope.scopeSegments.length,
+    filter,
     selectedIds,
     isStoppingTranslate,
     isStoppingOptimize,
@@ -958,6 +996,16 @@ const App: React.FC = () => {
     copyToClipboard(text, `Copied ${list.length} segment(s).`);
   }, [selectedIds, segments, editorSegments, buildAiReviewPayload, copyToClipboard, showToast]);
 
+  useEffect(() => {
+    if (pendingGoToSegmentId == null) return;
+    const index = editorSegments.findIndex(s => s.id === pendingGoToSegmentId);
+    if (index === -1) return;
+    const targetPage = Math.floor(index / EDITOR_PAGE_SIZE) + 1;
+    setCurrentPage(targetPage);
+    setFocusSegmentId(pendingGoToSegmentId);
+    setPendingGoToSegmentId(null);
+  }, [pendingGoToSegmentId, editorSegments]);
+
   const handleToggleSelect = (id: number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -975,6 +1023,12 @@ const App: React.FC = () => {
     videoElementRef.current.currentTime = startSec;
     setVideoCurrentTime(startSec);
   }, [segments, videoPreviewUrl]);
+
+  const handleGoToSegment = useCallback((segmentId: number) => {
+    clearAndCloseSearch();
+    setFilter('all');
+    setPendingGoToSegmentId(segmentId);
+  }, [clearAndCloseSearch]);
 
   const handleSelectAll = () => {
     if (selectedIds.size === editorSegments.length) {
@@ -2445,11 +2499,16 @@ const App: React.FC = () => {
                 onSegmentClick={handleSeekToSegmentStart}
                 onShowOptimizeHistory={handleShowOptimizeHistory}
                 onEditingTranslationChange={setEditingTranslationId}
+                onOpenContextMenu={(segmentId, x, y) => setSegmentContextMenu({ segmentId, x, y })}
+                focusSegmentId={focusSegmentId}
+                onFocusDone={() => setFocusSegmentId(null)}
                 currentPage={currentPage}
+                pageSize={EDITOR_PAGE_SIZE}
                 searchQuery={searchQuery}
                 searchCaseSensitive={searchCaseSensitive}
                 searchWholeWord={searchWholeWord}
                 searchRegexMode={searchRegexMode}
+                filter={filter}
                 activeSegmentId={activeCaptionSegmentId}
               />
             </Suspense>
@@ -2519,6 +2578,41 @@ const App: React.FC = () => {
               </Suspense>
             )}
           </div>
+        </div>
+      )}
+
+      {segmentContextMenu && (
+        <div
+          ref={segmentContextMenuRef}
+          className="fixed z-[300] bg-slate-900 border border-slate-700 rounded-lg shadow-xl text-xs font-bold text-slate-200"
+          style={{ top: segmentContextMenu.y, left: segmentContextMenu.x }}
+          role="menu"
+        >
+          {filter !== 'all' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGoToSegment(segmentContextMenu.segmentId);
+                setSegmentContextMenu(null);
+              }}
+              className="px-3 py-2 hover:bg-slate-800 rounded-lg w-full text-left"
+            >
+              Go to this segment
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteSegment(segmentContextMenu.segmentId);
+              setSegmentContextMenu(null);
+            }}
+            className="px-3 py-2 hover:bg-red-500/20 text-red-400 rounded-lg w-full text-left flex items-center gap-2"
+          >
+            <span className="text-[12px]">{ICONS.Delete}</span>
+            Delete segment
+          </button>
         </div>
       )}
 

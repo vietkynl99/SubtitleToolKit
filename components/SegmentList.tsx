@@ -13,15 +13,19 @@ interface SegmentListProps {
   onSegmentClick?: (id: number) => void;
   onShowOptimizeHistory?: (id: number) => void;
   onEditingTranslationChange?: (id: number | null) => void;
+  onOpenContextMenu?: (id: number, x: number, y: number) => void;
+  focusSegmentId?: number | null;
+  onFocusDone?: (id: number) => void;
   currentPage: number;
   searchQuery: string;
   searchCaseSensitive: boolean;
   searchWholeWord: boolean;
   searchRegexMode: boolean;
   activeSegmentId?: number | null;
+  pageSize: number;
+  filter: string;
 }
 
-const PAGE_SIZE = 30;
 const UPDATE_DEBOUNCE_MS = 300;
 
 const SegmentList: React.FC<SegmentListProps> = ({
@@ -35,16 +39,22 @@ const SegmentList: React.FC<SegmentListProps> = ({
   onSegmentClick,
   onShowOptimizeHistory,
   onEditingTranslationChange,
+  onOpenContextMenu,
+  focusSegmentId,
+  onFocusDone,
   currentPage,
   searchQuery,
   searchCaseSensitive,
   searchWholeWord,
   searchRegexMode,
-  activeSegmentId
+  activeSegmentId,
+  pageSize,
+  filter
 }) => {
   const [editingTranslationId, setEditingTranslationId] = React.useState<number | null>(null);
   const [editingTime, setEditingTime] = React.useState<{ id: number; field: 'startTime' | 'endTime' } | null>(null);
   const [localText, setLocalText] = React.useState<Record<number, string>>({});
+  const [highlightedId, setHighlightedId] = React.useState<number | null>(null);
   const translationTextareaRefs = React.useRef<Record<number, HTMLTextAreaElement | null>>({});
   const segmentRowRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
   const pendingUpdateRef = React.useRef<Map<number, number>>(new Map());
@@ -71,7 +81,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
     }
   };
 
-  const pagedSegments = segments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pagedSegments = segments.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const visibleSegments = React.useMemo(() => {
     if (!editingTranslationId) return pagedSegments;
     if (pagedSegments.some(seg => seg.id === editingTranslationId)) return pagedSegments;
@@ -169,14 +179,31 @@ const SegmentList: React.FC<SegmentListProps> = ({
   }, [visibleSegments, editingTranslationId, searchQuery]);
 
   React.useEffect(() => {
-    if (!activeSegmentId) return;
-    const existsOnPage = visibleSegments.some(seg => seg.id === activeSegmentId);
+    const targetId = focusSegmentId ?? activeSegmentId;
+    if (!targetId) return;
+    const existsOnPage = visibleSegments.some(seg => seg.id === targetId);
     if (!existsOnPage) return;
-    const row = segmentRowRefs.current[activeSegmentId];
+    const row = segmentRowRefs.current[targetId];
     if (!row) return;
     row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     row.focus({ preventScroll: true });
-  }, [activeSegmentId, visibleSegments, currentPage]);
+    if (focusSegmentId) {
+      setHighlightedId(focusSegmentId);
+    }
+    if (focusSegmentId) {
+      onFocusDone?.(focusSegmentId);
+    }
+  }, [activeSegmentId, focusSegmentId, onFocusDone, visibleSegments, currentPage]);
+
+  React.useEffect(() => {
+    if (highlightedId == null) return;
+    const timer = window.setTimeout(() => setHighlightedId(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [highlightedId]);
+
+  React.useEffect(() => {
+    setHighlightedId(null);
+  }, [filter]);
 
   const scheduleUpdate = React.useCallback((id: number, text: string) => {
     const existing = pendingUpdateRef.current.get(id);
@@ -258,13 +285,18 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   }}
                   tabIndex={-1}
                   onClick={() => onSegmentClick?.(seg.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenContextMenu?.(seg.id, e.clientX, e.clientY);
+                  }}
                   className={`grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 items-start px-3 py-2 bg-slate-900 border rounded-xl transition-all outline-none select-none ${
                     isActiveByVideo
                       ? 'border-amber-400 ring-2 ring-amber-400/30 bg-amber-500/5'
                       : isSelected
                         ? 'border-blue-500 ring-1 ring-blue-500/20'
                         : 'border-slate-800 hover:border-slate-700'
-                  }`}
+                  } ${highlightedId === seg.id ? 'ring-2 ring-emerald-400/70 border-emerald-400/70 bg-emerald-500/10' : ''}`}
                 >
                   <div className="pt-2 flex justify-center">
                     <input
@@ -471,14 +503,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                       </span>
                       <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onDeleteSegment(seg.id); }}
-                      className="p-1 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-md transition-all"
-                      title="Delete segment"
-                    >
-                      {ICONS.Delete}
-                    </button>
                   </div>
                 </div>
               );
