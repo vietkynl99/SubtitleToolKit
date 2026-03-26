@@ -238,21 +238,21 @@ Do not omit items.
 
 Core rules:
 
-1. Before translating, check if any name matches a known character (including variants).
+1. Speaker & POV consistency
+Before translating, check if any name matches a known character (including variants).
+Do NOT add character names or subjects that are not explicitly in the original text.
+Do NOT change point of view or who is speaking.
+Keep pronouns and forms of address consistent for the same character throughout the batch.
 
 2. Preserve meaning
 Keep the core meaning accurate.
 Do not invent new story events.
 Rephrasing, tone adaptation, and adding short reactions are allowed as long as the core meaning remains unchanged.
 
-3. Speaker consistency
-Do not change who is speaking in the subtitle.
-Maintain consistent pronouns and forms of address for the same character throughout the batch.
-
-4. Subtitle readability
+3. Subtitle readability
 Use natural spoken Vietnamese suitable for storytelling subtitles.
 
-5. Length control + line breaking
+4. Length control + line breaking
 Keep subtitles concise (target <1.4×, max <2×).
 ${autoSplitLongLines
   ? `If the subtitle would exceed ${maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
@@ -261,28 +261,28 @@ Line breaking comes before shortening: first break into lines; if still too long
 Prefer the shorter expression when meaning is the same.
 Maximum 2 lines.
 
-6. Short line rule
+5. Short line rule
 Chinese ≤4 characters → Vietnamese 1–3 words.
 
-7. Dynamic narration
+6. Dynamic narration
 Prefer concise, expressive Vietnamese phrasing.
 Avoid overly formal written language.
 
-8. Names and proper nouns
+7. Names and proper nouns
 Keep all character names and proper nouns consistent.
 - The same Chinese name must always use the same Vietnamese form.
 - Do not create different spellings for similar names.
 - If a term looks like a name, treat it as a name rather than translating its meaning.
 
-9. Word choice
+8. Word choice
 Strongly prefer vivid, expressive, and entertaining Vietnamese phrasing over neutral or literal wording when meaning is preserved.
 Humor can replace neutral phrasing instead of adding extra words.
 
-10. Context usage
+9. Context usage
 Each subtitle must remain understandable independently.
 Neighbor context is only for resolving pronouns or references.
 
-11. Style priority
+10. Style priority
 When there is a conflict between neutral translation and narration style, follow the narration style as long as the core meaning is preserved.
 
 ${styleBlock}
@@ -317,21 +317,29 @@ ${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
       }
     });
 
-    const translatedBatch = JSON.parse(response.text?.trim() || "[]").map((item: any) => {
-      if (item && typeof item.text === 'string') {
+    const parsed = JSON.parse(response.text?.trim() || "[]");
+    if (!Array.isArray(parsed)) {
+      throw new Error("Invalid response format: Expected a JSON array.");
+    }
+
+    const allowedIds = new Set(batch.map(s => s.id));
+    const seenIds = new Set<number>();
+    const translatedBatch = parsed
+      .filter((item: any) => {
+        if (!item || typeof item.id !== 'number' || typeof item.text !== 'string') return false;
+        if (!allowedIds.has(item.id)) return false;
+        if (seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
+      })
+      .map((item: any) => {
         let normalized = normalizeAiText(item.text);
         if (autoSplitLongLines) {
           normalized = splitToTwoLinesIfLong(normalized, maxSingleLineWords);
         }
         const collapsed = collapseToSingleLineIfShort(normalized, maxSingleLineWords);
-        return { ...item, text: collapsed };
-      }
-      return item;
-    });
-
-    if (!Array.isArray(translatedBatch)) {
-      throw new Error("Invalid response format: Expected a JSON array.");
-    }
+        return { id: item.id, text: collapsed };
+      });
 
     return {
       translatedTexts: translatedBatch,
