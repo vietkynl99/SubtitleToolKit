@@ -1287,8 +1287,6 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
-    const autoCopyTargets = needingTranslation.filter(s => isNumericOnlyText(s.originalText || ''));
-    const remainingTargets = needingTranslation.filter(s => !isNumericOnlyText(s.originalText || ''));
     setStatus('processing');
     stopRequestedRef.current = false;
     setIsStoppingTranslate(false);
@@ -1296,26 +1294,6 @@ const App: React.FC = () => {
     setTranslationState({ status: 'running', processed: 0, total: totalToTranslateInSession });
     setProgress(0);
     let completedInSession = 0;
-
-    if (autoCopyTargets.length > 0) {
-      setSegments(prev => prev.map(s => {
-        if (autoCopyTargets.some(t => t.id === s.id)) {
-          return { ...s, translatedText: (s.originalText || '').trim(), isProcessing: false };
-        }
-        return s;
-      }));
-      completedInSession += autoCopyTargets.length;
-      setTranslationState(prev => ({ ...prev, processed: completedInSession }));
-      setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
-    }
-
-    if (remainingTargets.length === 0) {
-      setTranslationState(prev => ({ ...prev, status: 'completed' }));
-      setIsStoppingTranslate(false);
-      setStatus('success');
-      showToast('success', selectedMode ? "Selected segments translated." : "All segments translated.");
-      return;
-    }
 
     if (!settings.apiKey?.trim()) {
       showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
@@ -1329,7 +1307,7 @@ const App: React.FC = () => {
     }
     try {
       const batchSize = settings.translationBatchSize || 100;
-      let queue = [...remainingTargets];
+      let queue = [...needingTranslation];
       while (queue.length > 0) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
@@ -1339,13 +1317,34 @@ const App: React.FC = () => {
           return;
         }
         const currentBatch = queue.slice(0, batchSize);
+        const autoCopyBatch = currentBatch.filter(s => isNumericOnlyText(s.originalText || ''));
+        const translateBatchTargets = currentBatch.filter(s => !isNumericOnlyText(s.originalText || ''));
         const firstIdx = segments.findIndex(s => s.id === currentBatch[0].id);
         const lastIdx = segments.findIndex(s => s.id === currentBatch[currentBatch.length - 1].id);
         const contextBefore = segments.slice(Math.max(0, firstIdx - 2), firstIdx).map(s => s.originalText || "");
         const contextAfter = segments.slice(lastIdx + 1, Math.min(segments.length, lastIdx + 3)).map(s => s.originalText || "");
-        setSegments(prev => prev.map(s => currentBatch.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
+        if (autoCopyBatch.length > 0) {
+          const autoCopyIds = new Set(autoCopyBatch.map(s => s.id));
+          setSegments(prev => prev.map(s => {
+            if (autoCopyIds.has(s.id)) {
+              return { ...s, translatedText: (s.originalText || '').trim(), isProcessing: false };
+            }
+            return s;
+          }));
+          completedInSession += autoCopyBatch.length;
+          setTranslationState(prev => ({ ...prev, processed: completedInSession }));
+          setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
+        }
+
+        if (translateBatchTargets.length === 0) {
+          const autoCopyIds = new Set(autoCopyBatch.map(s => s.id));
+          queue = queue.filter(s => !autoCopyIds.has(s.id));
+          continue;
+        }
+
+        setSegments(prev => prev.map(s => translateBatchTargets.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
         const { translatedTexts, tokens } = await translateBatch(
-          currentBatch,
+          translateBatchTargets,
           contextBefore,
           contextAfter,
           translationPreset,
@@ -1361,7 +1360,7 @@ const App: React.FC = () => {
           }
         }
 
-        const usableCount = currentBatch.filter(s => translationMap.has(s.id)).length;
+        const usableCount = translateBatchTargets.filter(s => translationMap.has(s.id)).length;
         if (usableCount === 0) {
           throw new Error("AI returned no results for this batch. Translation cannot continue.");
         }
@@ -1370,7 +1369,7 @@ const App: React.FC = () => {
           if (translationMap.has(s.id)) {
             return { ...s, translatedText: translationMap.get(s.id), isProcessing: false };
           }
-          if (currentBatch.some(cb => cb.id === s.id)) return { ...s, isProcessing: false };
+          if (translateBatchTargets.some(cb => cb.id === s.id)) return { ...s, isProcessing: false };
           return s;
         }));
         completedInSession += usableCount;
@@ -1378,9 +1377,11 @@ const App: React.FC = () => {
         setTranslationState(prev => ({ ...prev, processed: completedInSession }));
         setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
 
-        // Drop only translated items; missing segments stay at the front for the next batch
-        const translatedIds = new Set(Array.from(translationMap.keys()));
-        queue = queue.filter(s => !translatedIds.has(s.id));
+        const processedIds = new Set([
+          ...autoCopyBatch.map(s => s.id),
+          ...Array.from(translationMap.keys())
+        ]);
+        queue = queue.filter(s => !processedIds.has(s.id));
       }
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       setIsStoppingTranslate(false);

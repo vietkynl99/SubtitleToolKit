@@ -253,7 +253,7 @@ Rephrasing, tone adaptation, and adding short reactions are allowed as long as t
 Use natural spoken Vietnamese suitable for storytelling subtitles.
 
 4. Length control + line breaking
-Keep subtitles concise (target <1.4×, max <2×).
+Keep subtitles very concise (target <1.2×, max <1.5×).
 ${autoSplitLongLines
   ? `If the subtitle would exceed ${maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
 Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.`
