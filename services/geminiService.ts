@@ -130,18 +130,32 @@ Guidelines:
 - Subtitles should feel entertaining and vivid
 `;
   }
-  return `
-High-intensity comedic narration.
+return `
+Chaotic comedic narrator mode (MAX LEVEL).
 
-Guidelines:
-- Strongly prefer vivid, punchy Vietnamese expressions
-- Sarcasm, teasing tone, and playful exaggeration allowed
-- Subtitles may sound like an energetic storyteller narrating events
-- Avoid flat or overly literal translation
-- Entertainment value is important while preserving original meaning
+Core Style:
+- Rewrite lines with a strong humorous and expressive narration style
+- Sound like a sarcastic, over-the-top Vietnamese storyteller by default
 
-The emotional tone may be amplified
-for entertainment as long as the original meaning stays correct.
+Humor Behavior:
+- Actively inject humor into lines as a default behavior
+- Use exaggeration, teasing, and playful mockery naturally
+- Add narrator attitude and personality into phrasing
+
+- Express humor by rewriting the sentence, not by adding extra words
+- Replace the original phrasing with a shorter, punchy and expressive version
+- Prefer simplifying and compressing the sentence while keeping strong tone and attitude
+- Do not keep the original sentence structure if it results in longer output
+- Reduce or remove less important details to keep the line concise and impactful
+- Break complex ideas into simpler, punchier phrasing
+
+Reactions:
+- Naturally include short reactions where it fits (e.g. "ủa gì vậy", "ảo thật", "wtf")
+- Integrate reactions into the sentence instead of appending them as extra clauses
+
+Narration Feel:
+- Lines should feel like a fast, entertaining recap, not a full or literal translation
+- Avoid plain, flat, or overly complete phrasing
 `;
 }
 
@@ -210,11 +224,13 @@ Do not omit items.
 Core rules:
 
 1. Preserve meaning
-Keep the original meaning accurate.
-Do not invent new story information.
+Keep the core meaning accurate.
+Do not invent new story events.
+Rephrasing, tone adaptation, and adding short reactions are allowed as long as the core meaning remains unchanged.
 
 2. Speaker consistency
 Do not change who is speaking in the subtitle.
+Maintain consistent pronouns and forms of address for the same character throughout the batch.
 
 3. Subtitle readability
 Use natural spoken Vietnamese suitable for storytelling subtitles.
@@ -242,11 +258,15 @@ Keep all character names and proper nouns consistent.
 - If a term looks like a name, treat it as a name rather than translating its meaning.
 
 8. Word choice
-If multiple Vietnamese expressions are possible, prefer the more vivid and entertaining wording.
+Strongly prefer vivid, expressive, and entertaining Vietnamese phrasing over neutral or literal wording when meaning is preserved.
+Humor can replace neutral phrasing instead of adding extra words.
 
 9. Context usage
 Each subtitle must remain understandable independently.
 Neighbor context is only for resolving pronouns or references.
+
+10. Style priority
+When there is a conflict between neutral translation and narration style, follow the narration style as long as the core meaning is preserved.
 
 ${styleBlock}
 
