@@ -227,6 +227,25 @@ const App: React.FC = () => {
     return normalized.split(' ').length;
   }, []);
 
+  const isNumericOnlyLine = useCallback((line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    if (!/\d/.test(trimmed)) return false;
+    if (/\p{L}/u.test(trimmed)) return false;
+    return /^[0-9\s.,:;!?()\-\[\]{}'"~+/*=<>|\\]+$/.test(trimmed);
+  }, []);
+
+  const isNumericOnlyText = useCallback((text: string) => {
+    if (!text) return false;
+    const lines = text
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean);
+    if (lines.length === 0) return false;
+    return lines.every(isNumericOnlyLine);
+  }, [isNumericOnlyLine]);
+
   const hasLongLine = useCallback((text: string, maxWords: number) => {
     if (!text) return false;
     const normalized = text.replace(/\s*\n\s*/g, '\n').replace(/[ \t]+/g, ' ').trim();
@@ -1400,11 +1419,6 @@ const App: React.FC = () => {
   };
 
   const handleTranslate = async () => {
-    if (!settings.apiKey?.trim()) {
-      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
-      setActiveTab('settings');
-      return;
-    }
     if (segments.length === 0) return;
     const selectedMode = aiScope.mode === 'selected';
     const needingTranslation = aiScope.untranslated;
@@ -1413,11 +1427,8 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
-    if (!translationPreset) {
-      showInlineStatus('warning', "Please configure Translation Style first.");
-      setActiveTab('translation-style');
-      return;
-    }
+    const autoCopyTargets = needingTranslation.filter(s => isNumericOnlyText(s.originalText || ''));
+    const remainingTargets = needingTranslation.filter(s => !isNumericOnlyText(s.originalText || ''));
     setStatus('processing');
     stopRequestedRef.current = false;
     setIsStoppingTranslate(false);
@@ -1425,9 +1436,40 @@ const App: React.FC = () => {
     setTranslationState({ status: 'running', processed: 0, total: totalToTranslateInSession });
     setProgress(0);
     let completedInSession = 0;
+
+    if (autoCopyTargets.length > 0) {
+      setSegments(prev => prev.map(s => {
+        if (autoCopyTargets.some(t => t.id === s.id)) {
+          return { ...s, translatedText: (s.originalText || '').trim(), isProcessing: false };
+        }
+        return s;
+      }));
+      completedInSession += autoCopyTargets.length;
+      setTranslationState(prev => ({ ...prev, processed: completedInSession }));
+      setProgress(Math.floor((completedInSession / totalToTranslateInSession) * 100));
+    }
+
+    if (remainingTargets.length === 0) {
+      setTranslationState(prev => ({ ...prev, status: 'completed' }));
+      setIsStoppingTranslate(false);
+      setStatus('success');
+      showToast('success', selectedMode ? "Selected segments translated." : "All segments translated.");
+      return;
+    }
+
+    if (!settings.apiKey?.trim()) {
+      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
+      setActiveTab('settings');
+      return;
+    }
+    if (!translationPreset) {
+      showInlineStatus('warning', "Please configure Translation Style first.");
+      setActiveTab('translation-style');
+      return;
+    }
     try {
       const batchSize = settings.translationBatchSize || 100;
-      let queue = [...needingTranslation];
+      let queue = [...remainingTargets];
       while (queue.length > 0) {
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
@@ -1527,6 +1569,10 @@ const App: React.FC = () => {
     const aiTargetSegments: SubtitleSegment[] = [];
     const optimizeTargets = aiScope.translated;
     for (const seg of optimizeTargets) {
+      if (isNumericOnlyText(seg.translatedText || '')) {
+        safeCount++;
+        continue;
+      }
       const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold, settings.maxSingleLineWords);
       const severity = meta.enrichedSegments[0].severity;
       const hasLanguageIssue = hasLangIssue(seg);
