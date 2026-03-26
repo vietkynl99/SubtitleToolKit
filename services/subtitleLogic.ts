@@ -7,6 +7,20 @@ export interface SplitResult {
 }
 
 const isChinese = (text: string): boolean => /[\u4e00-\u9fff]/.test(text);
+const isNumericLine = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (!/\d/.test(trimmed)) return false;
+  if (/\p{L}/u.test(trimmed)) return false;
+  // Allow digits with common punctuation/spaces.
+  return /^[0-9\s.,:;!?()\-\[\]{}'"~+/*=<>|\\]+$/.test(trimmed);
+};
+const isLikelyVietnamese = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (!/\p{L}/u.test(trimmed)) return false;
+  return /[ăâêôơưđáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(trimmed);
+};
 
 /**
  * Parses a filename to extract base name and the current edited count.
@@ -48,6 +62,10 @@ export function generateExportFileName(baseName: string, currentCount: number, e
 export function parseSRT(content: string): SubtitleSegment[] {
   const segments: SubtitleSegment[] = [];
   const blocks = content.trim().split(/\n\s*\n/);
+  const allLines = blocks.flatMap(block => block.split('\n').map(l => l.trim()).filter(l => l !== ''));
+  const chineseLineCount = allLines.filter(isChinese).length;
+  const latinLineCount = allLines.filter(line => /[A-Za-z]/.test(line)).length;
+  const chineseDominant = chineseLineCount > latinLineCount;
 
   blocks.forEach((block) => {
     const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '');
@@ -64,7 +82,16 @@ export function parseSRT(content: string): SubtitleSegment[] {
         const vnLines: string[] = [];
 
         contentLines.forEach(line => {
-          if (isChinese(line)) {
+          if (chineseDominant) {
+            if (isChinese(line) || !isLikelyVietnamese(line)) {
+              cnLines.push(line);
+            } else {
+              vnLines.push(line);
+            }
+            return;
+          }
+
+          if (isChinese(line) || isNumericLine(line)) {
             cnLines.push(line);
           } else {
             vnLines.push(line);
