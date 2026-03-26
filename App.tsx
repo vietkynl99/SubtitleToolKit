@@ -18,7 +18,7 @@ import {
   calculateCPS
 } from './services/subtitleLogic';
 import React, { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
-import { Search, CopyCheck, CopyX, Eye, EyeOff } from 'lucide-react';
+import { Search, CopyCheck, CopyX, Eye, EyeOff, Copy } from 'lucide-react';
 import { 
   Status, 
   SubtitleSegment, 
@@ -453,6 +453,10 @@ const App: React.FC = () => {
 
   const processedSegments = useMemo(() => globalAnalysis?.enrichedSegments || [], [globalAnalysis]);
   const allStats = useMemo(() => globalAnalysis?.stats, [globalAnalysis]);
+  const processedSegmentMap = useMemo(
+    () => new Map(processedSegments.map(seg => [seg.id, seg])),
+    [processedSegments]
+  );
 
   const hasTimelineIssue = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap')), []);
@@ -665,6 +669,14 @@ const App: React.FC = () => {
     optimizeState.total,
     progressDisplay
   ]);
+
+  const copyScope = useMemo(() => {
+    const isSelected = selectedIds.size > 0;
+    return {
+      isSelected,
+      count: isSelected ? selectedIds.size : editorSegments.length
+    };
+  }, [selectedIds.size, editorSegments.length]);
 
   const isAiRunning = aiRunningMode !== null;
   const aiButtonDisabled = aiRunningMode === 'translate'
@@ -1009,10 +1021,50 @@ const App: React.FC = () => {
     return h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
   }, [processedSegments]);
   
-  const copyToClipboard = (text: string) => {
+  const displayFileName = fileName.toLowerCase().endsWith('.srt')
+    ? fileName.slice(0, -4)
+    : fileName;
+
+  const copyToClipboard = (text: string, successMessage: string) => {
     navigator.clipboard.writeText(text);
-    showToast('success', "File name copied to clipboard");
+    showToast('success', successMessage);
   };
+
+  const buildAiReviewPayload = useCallback((list: SubtitleSegment[]) => {
+    const data = list.map(seg => {
+      const enriched = processedSegmentMap.get(seg.id) || seg;
+      const baseText = (seg.translatedText || seg.originalText || '').trim();
+      const cps = Number.isFinite(enriched.cps)
+        ? Number(enriched.cps.toFixed(2))
+        : Number(calculateCPS(seg, baseText).toFixed(2));
+      return {
+        id: seg.id,
+        start: seg.startTime,
+        end: seg.endTime,
+        original: seg.originalText || '',
+        translation: seg.translatedText || '',
+        cps
+      };
+    });
+    return JSON.stringify(data, null, 2);
+  }, [
+    processedSegmentMap
+  ]);
+
+  const handleCopySegmentsForAi = useCallback(() => {
+    const isSelected = selectedIds.size > 0;
+    const list = isSelected
+      ? segments.filter(s => selectedIds.has(s.id))
+      : editorSegments;
+
+    if (list.length === 0) {
+      showToast('warning', 'No segments to copy.');
+      return;
+    }
+
+    const text = buildAiReviewPayload(list);
+    copyToClipboard(text, `Copied ${list.length} segment(s).`);
+  }, [selectedIds, segments, editorSegments, buildAiReviewPayload, copyToClipboard, showToast]);
 
   const handleToggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -1039,10 +1091,6 @@ const App: React.FC = () => {
       setSelectedIds(new Set(editorSegments.map(s => s.id)));
     }
   };
-
-  const displayFileName = fileName.toLowerCase().endsWith('.srt')
-    ? fileName.slice(0, -4)
-    : fileName;
 
   const handleDNAAnalyze = async (input: string) => {
     if (!settings.apiKey?.trim()) {
@@ -2128,7 +2176,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(displayFileName)}>{displayFileName}</h2>
+              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(displayFileName, "File name copied to clipboard")}>{displayFileName}</h2>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
                 <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
@@ -2460,6 +2508,18 @@ const App: React.FC = () => {
                       {aiButtonLabel}
                     </span>
                   </button>
+
+                  {copyScope.isSelected && (
+                    <button
+                      type="button"
+                      onClick={handleCopySegmentsForAi}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700"
+                      title={`Copy selected (${copyScope.count})`}
+                      aria-label="Copy selected segments"
+                    >
+                      <span className="shrink-0"><Copy size={14} /></span>
+                    </button>
+                  )}
 
                   {!settings.autoSplitLongLines && autoSplitScope.longLineCount > 0 && (
                     <button
