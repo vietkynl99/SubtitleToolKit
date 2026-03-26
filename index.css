@@ -70,3 +70,12 @@ svg *,
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+.page-number-input {
+  color-scheme: dark;
+}
+
+.page-number-input::-webkit-inner-spin-button,
+.page-number-input::-webkit-outer-spin-button {
+  filter: invert(1) brightness(0.75);
+}

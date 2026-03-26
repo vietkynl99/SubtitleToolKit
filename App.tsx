@@ -44,7 +44,7 @@ const INITIAL_USAGE: ApiUsage = {
   translate: { requests: 0, tokens: 0, segments: 0 },
   optimize: { requests: 0, tokens: 0 }
 };
-const EDITOR_PAGE_SIZE = 30;
+const EDITOR_PAGE_SIZE = 25;
 const SegmentList = lazy(() => import('./components/SegmentList'));
 const AnalyzerPanel = lazy(() => import('./components/AnalyzerPanel'));
 const FileToolsPage = lazy(() => import('./components/FileToolsPage'));
@@ -142,6 +142,8 @@ const App: React.FC = () => {
   const [videoPanelHeight, setVideoPanelHeight] = useState<number>(220);
   const [isResizingVideoPanel, setIsResizingVideoPanel] = useState<boolean>(false);
   const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0);
+  const [isPageEditing, setIsPageEditing] = useState<boolean>(false);
+  const [pageInputValue, setPageInputValue] = useState<string>('1');
   const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
   const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
@@ -2342,9 +2344,56 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
-                    Page {currentPage} / {totalEditorPages}
-                  </span>
+                  {isPageEditing ? (
+                    <label className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
+                      Page
+                      <input
+                        type="number"
+                        min={1}
+                        max={totalEditorPages}
+                        value={pageInputValue}
+                        onChange={(e) => setPageInputValue(e.target.value)}
+                        onBlur={() => {
+                          const next = Math.min(
+                            totalEditorPages,
+                            Math.max(1, Number(pageInputValue) || 1)
+                          );
+                          setCurrentPage(next);
+                          setPageInputValue(String(next));
+                          setIsPageEditing(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const next = Math.min(
+                              totalEditorPages,
+                              Math.max(1, Number(pageInputValue) || 1)
+                            );
+                            setCurrentPage(next);
+                            setPageInputValue(String(next));
+                            setIsPageEditing(false);
+                          } else if (e.key === 'Escape') {
+                            setPageInputValue(String(currentPage));
+                            setIsPageEditing(false);
+                          }
+                        }}
+                        className="page-number-input w-14 bg-slate-950 border border-slate-700 text-slate-200 px-2 py-0.5 rounded text-[10px] font-bold text-center"
+                        autoFocus
+                      />
+                      / {totalEditorPages}
+                    </label>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPageInputValue(String(currentPage));
+                        setIsPageEditing(true);
+                      }}
+                      className="text-[10px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap hover:text-slate-300 transition"
+                      title="Go to page"
+                    >
+                      Page {currentPage} / {totalEditorPages}
+                    </button>
+                  )}
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
