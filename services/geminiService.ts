@@ -162,6 +162,22 @@ Narration Feel:
 `;
 }
 
+function getCharacterRules(preset: TranslationPreset | null): string {
+  if (!preset?.character_names || preset.character_names.length === 0) return "";
+  return `
+Character name normalization:
+Canonical characters (Chinese -> Vietnamese):
+${preset.character_names.map(c => `- ${c.cn} → ${c.vn}`).join('\n')}
+
+Important rules:
+- Names in the source may be inconsistent (similar characters, pronunciation, or spelling).
+- If a name is identical, visually similar, or phonetically similar to a known character, treat it as the SAME person.
+- ALWAYS use the provided Vietnamese name.
+- NEVER create alternative name variants.
+- Do NOT create new characters unless clearly different.
+`;
+}
+
 /**
  * Translates a single batch of segments with surrounding context. 
  * Tolerant to partial AI responses for improved reliability.
@@ -201,21 +217,7 @@ Neutral Vietnamese subtitle narration.
   const storyContext = preset?.reference?.title_or_summary
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
-
-  const characterRules = (preset?.character_names && preset.character_names.length > 0)
-    ? `
-Character name normalization:
-Canonical characters (Chinese -> Vietnamese):
-${preset.character_names.map(c => `- ${c.cn} → ${c.vn}`).join('\n')}
-
-Important rules:
-- Names in the source may be inconsistent (similar characters, pronunciation, or spelling).
-- If a name is identical, visually similar, or phonetically similar to a known character, treat it as the SAME person.
-- ALWAYS use the provided Vietnamese name.
-- NEVER create alternative name variants.
-- Do NOT create new characters unless clearly different.
-`
-    : "";
+  const characterRules = getCharacterRules(preset);
 
   // -------- NEIGHBOR CONTEXT --------
   const neighborContext =
@@ -451,6 +453,7 @@ Neutral Vietnamese subtitle narration.
   const storyContext = preset?.reference?.title_or_summary
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
+  const characterRules = getCharacterRules(preset);
 
   const payload = segments.map((s) => {
     const duration = Math.max(timeToSeconds(s.endTime) - timeToSeconds(s.startTime), 0.1);
@@ -471,12 +474,14 @@ Optimize Vietnamese subtitles for readability and CPS.
 
 ${styleBlock}
 ${storyContext}
+${characterRules}
 
 Rules:
 - Each segment is independent.
 - Do NOT merge or split segments.
 - Preserve core meaning when possible.
 - Prefer concise Vietnamese.
+- Apply character name normalization rules strictly; never invent or vary character names.
 - Remove filler words if needed, but do not lose meaning.
 - Output must be Vietnamese only (Latin script). Do not include Chinese characters or any non-Latin letters.
 - If any Chinese characters appear in the input, translate them into Vietnamese words.
@@ -538,3 +543,4 @@ ${JSON.stringify(payload)}
     throw error;
   }
 }
+
