@@ -144,6 +144,7 @@ const App: React.FC = () => {
   const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0);
   const [isPageEditing, setIsPageEditing] = useState<boolean>(false);
   const [pageInputValue, setPageInputValue] = useState<string>('1');
+  const settingsRef = useRef(settings);
   const [searchCaseSensitive, setSearchCaseSensitive] = useState<boolean>(false);
   const [searchWholeWord, setSearchWholeWord] = useState<boolean>(false);
   const [searchRegexMode, setSearchRegexMode] = useState<boolean>(false);
@@ -385,6 +386,10 @@ const App: React.FC = () => {
     } else {
       localStorage.removeItem('subtitle_api_key');
     }
+  }, [settings]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
   }, [settings]);
 
   useEffect(() => {
@@ -980,7 +985,7 @@ const App: React.FC = () => {
   };
 
   const handleDNAAnalyze = async (input: string) => {
-    if (!settings.apiKey?.trim()) {
+    if (!settingsRef.current.apiKey?.trim()) {
       showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
@@ -1308,9 +1313,10 @@ const App: React.FC = () => {
       return;
     }
     try {
-      const batchSize = settings.translationBatchSize || 100;
       let queue = [...needingTranslation];
       while (queue.length > 0) {
+        const currentSettings = settingsRef.current;
+        const batchSize = currentSettings.translationBatchSize || 100;
         if (stopRequestedRef.current) {
           setTranslationState(prev => ({ ...prev, status: 'stopped' }));
           setIsStoppingTranslate(false);
@@ -1350,10 +1356,10 @@ const App: React.FC = () => {
           contextBefore,
           contextAfter,
           translationPreset,
-          settings.aiModel,
-          settings.apiKey,
-          settings.maxSingleLineWords,
-          settings.autoSplitLongLines
+          currentSettings.aiModel,
+          currentSettings.apiKey,
+          currentSettings.maxSingleLineWords,
+          currentSettings.autoSplitLongLines
         );
         const translationMap = new Map<number, string>();
         for (const item of translatedTexts) {
@@ -1406,7 +1412,7 @@ const App: React.FC = () => {
   };
 
   const handleAiOptimize = async () => {
-    if (!settings.apiKey?.trim()) {
+    if (!settingsRef.current.apiKey?.trim()) {
       showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
       return;
@@ -1432,11 +1438,12 @@ const App: React.FC = () => {
     const aiTargetSegments: SubtitleSegment[] = [];
     const optimizeTargets = aiScope.translated;
     for (const seg of optimizeTargets) {
+      const currentSettings = settingsRef.current;
       if (isNumericOnlyText(seg.translatedText || '')) {
         safeCount++;
         continue;
       }
-      const meta = analyzeSegments([seg], 'translatedText', settings.cpsThreshold, settings.maxSingleLineWords);
+      const meta = analyzeSegments([seg], 'translatedText', currentSettings.cpsThreshold, currentSettings.maxSingleLineWords);
       const severity = meta.enrichedSegments[0].severity;
       const hasLanguageIssue = hasLangIssue(seg);
 
@@ -1460,7 +1467,8 @@ const App: React.FC = () => {
           const currentBatch = aiTargetSegments.slice(i, i + batchSize);
           const batchIdx = Math.floor(i / batchSize) + 1;
 
-          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, translationPreset, settings.aiModel, settings.apiKey);
+          const currentSettings = settingsRef.current;
+          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, translationPreset, currentSettings.aiModel, currentSettings.apiKey);
           requestCount++;
           
           fixed.forEach(f => {
