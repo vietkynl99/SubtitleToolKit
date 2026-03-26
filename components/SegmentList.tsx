@@ -185,7 +185,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
     if (!existsOnPage) return;
     const row = segmentRowRefs.current[targetId];
     if (!row) return;
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.scrollIntoView({ block: 'center', behavior: 'auto' });
     row.focus({ preventScroll: true });
     if (focusSegmentId) {
       setHighlightedId(focusSegmentId);
@@ -257,13 +257,15 @@ const SegmentList: React.FC<SegmentListProps> = ({
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950/50 h-full">
       <div ref={listContainerRef} className="flex-1 overflow-y-auto overflow-x-auto p-2 no-scrollbar">
         <div className="min-w-[840px] sm:min-w-[920px]">
-          <div className="grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(340px,1.4fr)_92px] gap-2 px-3 py-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="grid grid-cols-[28px_54px_130px_minmax(220px,0.9fr)_minmax(420px,1.6fr)] gap-2 px-3 py-2 mb-2 bg-slate-900 border border-slate-800 rounded-xl text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <div className="text-center">Sel</div>
             <div>#</div>
             <div>Time</div>
             <div>CN (Original)</div>
-            <div>VN (Translation)</div>
-            <div>CPS</div>
+            <div className="flex items-center justify-between">
+              <span>VN (Translation)</span>
+              <span>CPS</span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -421,19 +423,6 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                     : <span className="text-slate-700 italic">No translation yet...</span>}
                                 </div>
                               </div>
-                              {optimizeCount > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onShowOptimizeHistory?.(seg.id);
-                                  }}
-                                  className="shrink-0 self-start mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
-                                  title="View optimization history"
-                                >
-                                  optimized
-                                </button>
-                              )}
                             </div>
                           </button>
                         );
@@ -477,26 +466,26 @@ const SegmentList: React.FC<SegmentListProps> = ({
                                 onClick={(e) => e.stopPropagation()}
                               />
                             </div>
-                            {optimizeCount > 0 && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onShowOptimizeHistory?.(seg.id);
-                                }}
-                                className="shrink-0 self-start mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition ml-auto"
-                                title="View optimization history"
-                              >
-                                optimized
-                              </button>
-                            )}
                           </div>
                         </>
                       );
                     })()}
                   </div>
 
-                  <div className="pt-1 flex items-center justify-between gap-2">
+                  <div className="pt-1 flex items-center justify-end gap-2">
+                    {optimizeCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onShowOptimizeHistory?.(seg.id);
+                        }}
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-normal bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 hover:bg-emerald-500/25 transition"
+                        title="View optimization history"
+                      >
+                        optimized
+                      </button>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <span className={`text-[10px] font-bold font-mono ${colors.text}`}>
                         {seg.cps.toFixed(1)}

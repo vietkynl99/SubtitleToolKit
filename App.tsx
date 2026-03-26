@@ -1972,8 +1972,17 @@ const App: React.FC = () => {
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-[22px] sm:rounded-[28px] shadow-2xl p-5 sm:p-6 animate-in zoom-in duration-300">
-            <h3 className="text-2xl font-bold mb-4">Download</h3>
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-xl rounded-[22px] sm:rounded-[28px] shadow-2xl p-5 sm:p-6 animate-in zoom-in duration-300 relative">
+            <button
+              type="button"
+              onClick={() => setShowExportModal(false)}
+              className="absolute top-3 right-3 p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
+              aria-label="Close export"
+              title="Close"
+            >
+              <span className="text-lg">{ICONS.Close}</span>
+            </button>
+            <h3 className="text-2xl font-bold mb-4">Export</h3>
             <div className="space-y-3">
               <div className="flex flex-col gap-3">
                 <button
@@ -2013,9 +2022,6 @@ const App: React.FC = () => {
                   <span className="text-[10px] text-slate-500">Original Chinese version.</span>
                 </button>
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-slate-800 flex justify-end">
-              <button onClick={() => setShowExportModal(false)} className="px-4 py-2 text-slate-400 font-bold hover:text-slate-200">Close</button>
             </div>
           </div>
         </div>
