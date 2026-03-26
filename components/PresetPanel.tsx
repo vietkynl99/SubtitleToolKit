@@ -45,9 +45,9 @@ const PresetPanel: React.FC<PresetPanelProps> = ({ preset, onAnalyze, onExport, 
               </div>
             </div>
             <div>
-              <div className="text-[9px] text-slate-600 font-bold uppercase mb-0.5">Term Replacements</div>
+              <div className="text-[9px] text-slate-600 font-bold uppercase mb-0.5">Character Names</div>
               <div className="text-[11px] text-slate-300 font-bold truncate">
-                {preset.term_replacements.length > 0 ? `${preset.term_replacements.length} rules` : '---'}
+                {preset.character_names && preset.character_names.length > 0 ? `${preset.character_names.length} names` : '---'}
               </div>
             </div>
           </div>

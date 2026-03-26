@@ -346,20 +346,15 @@ export function parseSktProject(content: string): { segments: SubtitleSegment[],
     ? {
         reference: json.preset.reference || { title_or_summary: "" },
         genres: Array.isArray(json.preset.genres) ? json.preset.genres : [],
-        term_replacements: Array.isArray(json.preset.term_replacements)
-          ? json.preset.term_replacements
-              .filter((t: any) => t && typeof t.find === 'string' && typeof t.replace_with === 'string')
+        character_names: Array.isArray((json as any).preset?.character_names)
+          ? (json as any).preset.character_names
+              .filter((t: any) => t && typeof t.cn === 'string' && typeof t.vn === 'string')
               .map((t: any, i: number) => ({
                 id: typeof t.id === 'number' && Number.isFinite(t.id) ? t.id : i + 1,
-                find: t.find,
-                replace_with: t.replace_with
+                cn: t.cn,
+                vn: t.vn
               }))
           : [],
-        term_replace_options: {
-          case_sensitive: !!json.preset.term_replace_options?.case_sensitive,
-          whole_word: !!json.preset.term_replace_options?.whole_word,
-          regex: !!json.preset.term_replace_options?.regex
-        },
         humor_level: typeof json.preset.humor_level === 'number' ? json.preset.humor_level : 0
       }
     : null;

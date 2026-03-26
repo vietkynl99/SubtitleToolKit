@@ -99,24 +99,10 @@ const App: React.FC = () => {
     preset: TranslationPreset | null;
     longLineCount: number;
   } | null>(null);
-  const [showTermReplaceModal, setShowTermReplaceModal] = useState<boolean>(false);
   const [optimizeHistorySegmentId, setOptimizeHistorySegmentId] = useState<number | null>(null);
   const [optimizeHistoryIndex, setOptimizeHistoryIndex] = useState<number>(0);
   const [editingTranslationId, setEditingTranslationId] = useState<number | null>(null);
   const frozenFilteredRef = useRef<SubtitleSegment[] | null>(null);
-  const [termReplacePreview, setTermReplacePreview] = useState<{
-    total: number;
-    items: Array<{
-      segmentId: number;
-      field: 'original' | 'translated';
-      find: string;
-      replace_with: string;
-      count: number;
-      before: string;
-      after: string;
-    }>;
-  }>({ total: 0, items: [] });
-  const [termReplacePage, setTermReplacePage] = useState<number>(1);
   const [segmentToDelete, setSegmentToDelete] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{message: string, visible: boolean, type: 'info' | 'success' | 'warning' | 'error'}>({
@@ -746,62 +732,6 @@ const App: React.FC = () => {
       .map(seg => seg.text);
   }, [captionTimeline, videoCurrentTime, videoPreviewUrl]);
 
-  const termRules = useMemo(() => {
-    if (!translationPreset?.term_replacements?.length) return [];
-    return translationPreset.term_replacements
-      .filter(t => (t.find || '').trim() !== '')
-      .map(t => ({ ...t, find: t.find.trim() }));
-  }, [translationPreset]);
-
-  const termReplaceOptions = useMemo(() => {
-    return translationPreset?.term_replace_options || {
-      case_sensitive: false,
-      whole_word: false,
-      regex: false
-    };
-  }, [translationPreset]);
-
-  const buildTermRegex = useCallback((find: string) => {
-    const q = find.trim();
-    if (!q) return null;
-    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const basePattern = termReplaceOptions.regex ? q : escapeRegExp(q);
-    const wrappedPattern = termReplaceOptions.whole_word
-      ? `(?<![\\p{L}\\p{N}\\p{M}_])(?:${basePattern})(?![\\p{L}\\p{N}\\p{M}_])`
-      : basePattern;
-    const flags = `${termReplaceOptions.case_sensitive ? '' : 'i'}u`;
-    try {
-      return { source: wrappedPattern, flags };
-    } catch {
-      return null;
-    }
-  }, [termReplaceOptions]);
-
-  const termReplaceCount = useMemo(() => {
-    if (termRules.length === 0 || segments.length === 0) return 0;
-    let total = 0;
-    for (const seg of segments) {
-      const fields: Array<string | null> = [seg.originalText, seg.translatedText];
-      for (const text of fields) {
-        if (!text) continue;
-        for (const rule of termRules) {
-          const built = buildTermRegex(rule.find);
-          if (!built) continue;
-          const regex = new RegExp(built.source, `${built.flags}g`);
-          let m: RegExpExecArray | null;
-          while ((m = regex.exec(text)) !== null) {
-            if (!m[0].length) {
-              regex.lastIndex += 1;
-              continue;
-            }
-            total += 1;
-          }
-        }
-      }
-    }
-    return total;
-  }, [segments, termRules, buildTermRegex]);
-
   const activeCaptionSegmentId = useMemo(() => {
     if (!videoPreviewUrl) return null;
     const t = videoCurrentTime;
@@ -889,70 +819,6 @@ const App: React.FC = () => {
       showInlineStatus('info', 'No matches to replace.');
     }
   }, [compileSearch, searchQuery, segments, replaceQuery, commitSegmentsChange]);
-
-  const buildTermReplacePreview = useCallback(() => {
-    const previewItems: Array<{
-      segmentId: number;
-      field: 'original' | 'translated';
-      find: string;
-      replace_with: string;
-      count: number;
-      before: string;
-      after: string;
-    }> = [];
-    if (termRules.length === 0) return { total: 0, items: previewItems };
-    let total = 0;
-    for (const seg of segments) {
-      const fields: Array<{ key: 'original' | 'translated'; value: string | null }> = [
-        { key: 'original', value: seg.originalText },
-        { key: 'translated', value: seg.translatedText }
-      ];
-      for (const field of fields) {
-        if (!field.value) continue;
-        for (const rule of termRules) {
-          const built = buildTermRegex(rule.find);
-          if (!built) continue;
-          const regex = new RegExp(built.source, `${built.flags}g`);
-          let count = 0;
-          const after = field.value.replace(regex, () => {
-            count += 1;
-            return rule.replace_with;
-          });
-          if (count > 0) {
-            total += count;
-            previewItems.push({
-              segmentId: seg.id,
-              field: field.key,
-              find: rule.find,
-              replace_with: rule.replace_with,
-              count,
-              before: field.value,
-              after
-            });
-          }
-        }
-      }
-    }
-    return { total, items: previewItems };
-  }, [segments, termRules, buildTermRegex]);
-
-  const applyTermReplacements = useCallback(() => {
-    if (termRules.length === 0) return;
-    const updated = segments.map(seg => {
-      let originalText = seg.originalText;
-      let translatedText = seg.translatedText;
-      for (const rule of termRules) {
-        const built = buildTermRegex(rule.find);
-        if (!built) continue;
-        const regex = new RegExp(built.source, `${built.flags}g`);
-        if (originalText) originalText = originalText.replace(regex, rule.replace_with);
-        if (translatedText) translatedText = translatedText.replace(regex, rule.replace_with);
-      }
-      if (originalText === seg.originalText && translatedText === seg.translatedText) return seg;
-      return { ...seg, originalText, translatedText };
-    });
-    commitSegmentsChange(updated);
-  }, [segments, termRules, buildTermRegex, commitSegmentsChange]);
 
   const totalEditorPages = useMemo(
     () => Math.max(1, Math.ceil(editorSegments.length / EDITOR_PAGE_SIZE)),
@@ -1181,25 +1047,19 @@ const App: React.FC = () => {
                           typeof json.humor_level === 'number';
 
           if (isValid) {
-            const termReplacements = Array.isArray(json.term_replacements)
-              ? json.term_replacements
-                  .filter((t: any) => t && typeof t.find === 'string' && typeof t.replace_with === 'string')
+            const characterNames = Array.isArray(json.character_names)
+              ? json.character_names
+                  .filter((t: any) => t && typeof t.cn === 'string' && typeof t.vn === 'string')
                   .map((t: any, i: number) => ({
                     id: typeof t.id === 'number' && Number.isFinite(t.id) ? t.id : i + 1,
-                    find: t.find,
-                    replace_with: t.replace_with
+                    cn: t.cn,
+                    vn: t.vn
                   }))
               : [];
-            const termReplaceOptions = {
-              case_sensitive: !!json.term_replace_options?.case_sensitive,
-              whole_word: !!json.term_replace_options?.whole_word,
-              regex: !!json.term_replace_options?.regex
-            };
             const cleaned: TranslationPreset = {
               reference: { title_or_summary: json.reference.title_or_summary },
               genres: json.genres,
-              term_replacements: termReplacements,
-              term_replace_options: termReplaceOptions,
+              character_names: characterNames,
               humor_level: json.humor_level
             };
             setTranslationPreset(cleaned);
@@ -1830,56 +1690,6 @@ const App: React.FC = () => {
     });
   };
 
-  const handleOpenTermReplace = () => {
-    const preview = buildTermReplacePreview();
-    setTermReplacePreview(preview);
-    if (preview.total > 0) {
-      setTermReplacePage(1);
-      setShowTermReplaceModal(true);
-    }
-  };
-
-  const handleConfirmTermReplace = () => {
-    if (termReplacePreview.total === 0) {
-      setShowTermReplaceModal(false);
-      return;
-    }
-    applyTermReplacements();
-    setShowTermReplaceModal(false);
-    showToast('success', `Auto replaced ${termReplacePreview.total} match(es).`);
-  };
-
-  const renderTermReplacePreview = (text: string, find: string, replaceWith: string) => {
-    const built = buildTermRegex(find);
-    if (!built) return text;
-    const regex = new RegExp(built.source, `${built.flags}g`);
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(text)) !== null) {
-      const matchText = match[0];
-      if (!matchText) {
-        regex.lastIndex += 1;
-        continue;
-      }
-      const start = match.index;
-      if (start > lastIndex) {
-        parts.push(text.slice(lastIndex, start));
-      }
-      parts.push(
-        <span key={`${start}-${matchText}`} className="inline-flex items-center gap-1 mx-0.5">
-          <span className="px-1 rounded bg-rose-500/15 text-rose-300 line-through">{matchText}</span>
-          <span className="px-1 rounded bg-emerald-500/15 text-emerald-300">{replaceWith}</span>
-        </span>
-      );
-      lastIndex = start + matchText.length;
-    }
-    if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
-    }
-    return parts.length > 0 ? parts : text;
-  };
-
   const toastTone = {
     info: {
       container: 'bg-slate-900 border-slate-700 text-blue-300',
@@ -2024,77 +1834,6 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-
-      {showTermReplaceModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg sm:max-w-3xl rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 animate-in zoom-in duration-200">
-            <h3 className="text-xl font-bold mb-2">Confirm Auto Replace</h3>
-            <p className="text-slate-400 text-sm mb-4">
-              {termReplacePreview.total} replacement(s) will be applied across original and translated fields.
-            </p>
-            <div className="max-h-[280px] sm:max-h-[360px] overflow-y-auto border border-slate-800 rounded-2xl p-3 space-y-3 bg-slate-950/40">
-              {termReplacePreview.items.length === 0 ? (
-                <div className="text-slate-500 text-sm">No matches found.</div>
-              ) : (
-                (() => {
-                  const segmentIds = Array.from(new Set(termReplacePreview.items.map(i => i.segmentId)));
-                  const totalPages = Math.max(1, Math.ceil(segmentIds.length / 10));
-                  const safePage = Math.min(termReplacePage, totalPages);
-                  const start = (safePage - 1) * 10;
-                  const pageSegmentIds = new Set(segmentIds.slice(start, start + 10));
-                  const pageItems = termReplacePreview.items.filter(i => pageSegmentIds.has(i.segmentId));
-                  return pageItems.map((item, idx) => (
-                    <div key={`${item.segmentId}-${item.field}-${item.find}-${idx}`} className="p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                        <span>Segment #{item.segmentId} · {item.field}</span>
-                      </div>
-                    <div className="text-[12px] text-slate-300 mb-2">
-                      <span className="font-bold text-slate-200">{item.find}</span> → <span className="font-bold text-cyan-300">{item.replace_with}</span>
-                    </div>
-                    <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2 text-[11px] text-slate-300 whitespace-pre-wrap">
-                      {renderTermReplacePreview(item.before, item.find, item.replace_with)}
-                    </div>
-                  </div>
-                ));
-              })()
-            )}
-            </div>
-            {termReplacePreview.items.length > 0 && (() => {
-              const segmentIds = Array.from(new Set(termReplacePreview.items.map(i => i.segmentId)));
-              const totalPages = Math.max(1, Math.ceil(segmentIds.length / 10));
-              const safePage = Math.min(termReplacePage, totalPages);
-              return (
-                <div className="flex items-center justify-between mt-4 text-[11px] text-slate-400">
-                  <span>
-                    Page {safePage} / {totalPages} · {segmentIds.length} segments
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setTermReplacePage(prev => Math.max(1, prev - 1))}
-                      disabled={safePage <= 1}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Prev
-                    </button>
-                    <button
-                      onClick={() => setTermReplacePage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={safePage >= totalPages}
-                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowTermReplaceModal(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">Cancel</button>
-              <button onClick={handleConfirmTermReplace} className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold transition-colors">Apply</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {optimizeHistorySegmentId !== null && optimizeHistorySegment && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[210] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-7 animate-in zoom-in duration-200">
@@ -2581,19 +2320,6 @@ const App: React.FC = () => {
                           ? `Auto Split Selected (${selectedIds.size})`
                           : 'Auto Split All'}
                       </span>
-                    </button>
-                  )}
-
-                  {termReplaceCount > 0 && (
-                    <button
-                      onClick={handleOpenTermReplace}
-                      disabled={status === 'processing'}
-                      title={`${termReplaceCount} replacement(s) will be applied`}
-                      aria-label="Auto replace by term rules"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold transition-colors bg-slate-800/80 border-slate-700 text-slate-200 hover:bg-slate-700"
-                    >
-                      <span className="shrink-0">{ICONS.Replace}</span>
-                      <span>Auto Replace</span>
                     </button>
                   )}
 

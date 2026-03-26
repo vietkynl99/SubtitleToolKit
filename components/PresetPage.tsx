@@ -29,7 +29,7 @@ const TagChip: React.FC<{ label: string; onRemove: () => void }> = ({ label, onR
   </span>
 );
 
-const getNextTermId = (list: { id: number }[]): number => {
+const getNextCharacterId = (list: { id: number }[]): number => {
   if (list.length === 0) return 1;
   const maxId = Math.max(...list.map(t => t.id));
   return maxId + 1;
@@ -93,38 +93,30 @@ const PresetPage: React.FC<PresetPageProps> = ({
     onUpdatePreset({ ...preset, humor_level: val });
   };
 
-  const handleAddTerm = () => {
+  const handleAddCharacter = () => {
     if (!preset || isLoading) return;
-    const nextId = getNextTermId(preset.term_replacements);
+    const list = preset.character_names || [];
+    const nextId = getNextCharacterId(list);
     onUpdatePreset({
       ...preset,
-      term_replacements: [...preset.term_replacements, { id: nextId, find: "", replace_with: "" }]
+      character_names: [...list, { id: nextId, cn: "", vn: "" }]
     });
   };
 
-  const handleUpdateTerm = (index: number, field: "find" | "replace_with", value: string) => {
+  const handleUpdateCharacter = (index: number, field: "cn" | "vn", value: string) => {
     if (!preset || isLoading) return;
-    const next = [...preset.term_replacements];
+    const list = preset.character_names || [];
+    const next = [...list];
     next[index] = { ...next[index], [field]: value };
-    onUpdatePreset({ ...preset, term_replacements: next });
+    onUpdatePreset({ ...preset, character_names: next });
   };
 
-  const handleRemoveTerm = (index: number) => {
+  const handleRemoveCharacter = (index: number) => {
     if (!preset || isLoading) return;
-    const next = [...preset.term_replacements];
+    const list = preset.character_names || [];
+    const next = [...list];
     next.splice(index, 1);
-    onUpdatePreset({ ...preset, term_replacements: next });
-  };
-
-  const handleTermOptionChange = (key: "case_sensitive" | "whole_word" | "regex") => {
-    if (!preset || isLoading) return;
-    onUpdatePreset({
-      ...preset,
-      term_replace_options: {
-        ...preset.term_replace_options,
-        [key]: !preset.term_replace_options[key]
-      }
-    });
+    onUpdatePreset({ ...preset, character_names: next });
   };
 
   const handleAnalyzeClick = () => {
@@ -265,75 +257,38 @@ const PresetPage: React.FC<PresetPageProps> = ({
                   <div className="p-3.5 bg-slate-900/60 border border-slate-800 rounded-2xl space-y-2">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2 text-[9px] text-slate-500 font-bold uppercase tracking-[0.08em] opacity-70">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Term Replacement
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleTermOptionChange("case_sensitive")}
-                          className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-colors ${
-                            preset.term_replace_options.case_sensitive ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                          title="Case sensitive"
-                          aria-label="Case sensitive"
-                        >
-                          Aa
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTermOptionChange("whole_word")}
-                          className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-colors ${
-                            preset.term_replace_options.whole_word ? 'text-blue-300 bg-blue-500/20 underline' : 'text-slate-400 hover:text-slate-200 underline'
-                          }`}
-                          title="Match whole word"
-                          aria-label="Match whole word"
-                        >
-                          ab
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTermOptionChange("regex")}
-                          className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-colors ${
-                            preset.term_replace_options.regex ? 'text-blue-300 bg-blue-500/20' : 'text-slate-400 hover:text-slate-200'
-                          }`}
-                          title="Regex search"
-                          aria-label="Regex search"
-                        >
-                          .*
-                        </button>
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Character Name Normalization
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="grid grid-cols-12 gap-y-2 gap-x-2 text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-                        <div className="col-span-5">Find</div>
-                        <div className="col-span-5">Replace With</div>
+                        <div className="col-span-5">Chinese Name</div>
+                        <div className="col-span-5">Vietnamese Name (Canonical)</div>
                         <div className="col-span-2"></div>
                       </div>
-                      {preset.term_replacements.length === 0 ? (
-                        <div className="text-[10px] text-slate-600 italic">No replacements added.</div>
-                      ) : (
+                      {(preset.character_names || []).length > 0 && (
                         <div className="space-y-2">
-                          {preset.term_replacements.map((t, idx) => (
+                          {(preset.character_names || []).map((t, idx) => (
                             <div key={t.id} className="grid grid-cols-12 gap-y-2 gap-x-2">
                               <input
                                 type="text"
-                                placeholder="Find..."
-                                value={t.find}
-                                onChange={(e) => handleUpdateTerm(idx, "find", e.target.value)}
+                                placeholder="Chinese name..."
+                                value={t.cn}
+                                onChange={(e) => handleUpdateCharacter(idx, "cn", e.target.value)}
                                 disabled={isLoading}
                                 className="col-span-5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 outline-none focus:border-blue-500/50 transition-colors"
                               />
                               <input
                                 type="text"
-                                placeholder="Replace with..."
-                                value={t.replace_with}
-                                onChange={(e) => handleUpdateTerm(idx, "replace_with", e.target.value)}
+                                placeholder="Vietnamese name..."
+                                value={t.vn}
+                                onChange={(e) => handleUpdateCharacter(idx, "vn", e.target.value)}
                                 disabled={isLoading}
                                 className="col-span-5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 outline-none focus:border-blue-500/50 transition-colors"
                               />
                               <button
                                 type="button"
-                                onClick={() => handleRemoveTerm(idx)}
+                                onClick={() => handleRemoveCharacter(idx)}
                                 disabled={isLoading}
                                 className="col-span-2 w-full bg-slate-800 hover:bg-rose-500/20 text-rose-400 rounded-xl flex items-center justify-center transition-colors"
                                 aria-label="Remove row"
@@ -347,7 +302,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
                       )}
                       <button
                         type="button"
-                        onClick={handleAddTerm}
+                        onClick={handleAddCharacter}
                         disabled={isLoading}
                         className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-full text-[14px] font-bold transition-colors"
                         aria-label="Add row"

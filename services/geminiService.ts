@@ -199,6 +199,21 @@ Neutral Vietnamese subtitle narration.
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
 
+  const characterRules = (preset?.character_names && preset.character_names.length > 0)
+    ? `
+Character name normalization:
+Canonical characters (Chinese -> Vietnamese):
+${preset.character_names.map(c => `- ${c.cn} → ${c.vn}`).join('\n')}
+
+Important rules:
+- Names in the source may be inconsistent (similar characters, pronunciation, or spelling).
+- If a name is identical, visually similar, or phonetically similar to a known character, treat it as the SAME person.
+- ALWAYS use the provided Vietnamese name.
+- NEVER create alternative name variants.
+- Do NOT create new characters unless clearly different.
+`
+    : "";
+
   // -------- NEIGHBOR CONTEXT --------
   const neighborContext =
     contextBefore.length || contextAfter.length
@@ -223,19 +238,21 @@ Do not omit items.
 
 Core rules:
 
-1. Preserve meaning
+1. Before translating, check if any name matches a known character (including variants).
+
+2. Preserve meaning
 Keep the core meaning accurate.
 Do not invent new story events.
 Rephrasing, tone adaptation, and adding short reactions are allowed as long as the core meaning remains unchanged.
 
-2. Speaker consistency
+3. Speaker consistency
 Do not change who is speaking in the subtitle.
 Maintain consistent pronouns and forms of address for the same character throughout the batch.
 
-3. Subtitle readability
+4. Subtitle readability
 Use natural spoken Vietnamese suitable for storytelling subtitles.
 
-4. Length control + line breaking
+5. Length control + line breaking
 Keep subtitles concise (target <1.4×, max <2×).
 ${autoSplitLongLines
   ? `If the subtitle would exceed ${maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
@@ -244,33 +261,35 @@ Line breaking comes before shortening: first break into lines; if still too long
 Prefer the shorter expression when meaning is the same.
 Maximum 2 lines.
 
-5. Short line rule
+6. Short line rule
 Chinese ≤4 characters → Vietnamese 1–3 words.
 
-6. Dynamic narration
+7. Dynamic narration
 Prefer concise, expressive Vietnamese phrasing.
 Avoid overly formal written language.
 
-7. Names and proper nouns
+8. Names and proper nouns
 Keep all character names and proper nouns consistent.
 - The same Chinese name must always use the same Vietnamese form.
 - Do not create different spellings for similar names.
 - If a term looks like a name, treat it as a name rather than translating its meaning.
 
-8. Word choice
+9. Word choice
 Strongly prefer vivid, expressive, and entertaining Vietnamese phrasing over neutral or literal wording when meaning is preserved.
 Humor can replace neutral phrasing instead of adding extra words.
 
-9. Context usage
+10. Context usage
 Each subtitle must remain understandable independently.
 Neighbor context is only for resolving pronouns or references.
 
-10. Style priority
+11. Style priority
 When there is a conflict between neutral translation and narration style, follow the narration style as long as the core meaning is preserved.
 
 ${styleBlock}
 
 ${storyContext}
+
+${characterRules}
 
 ${neighborContext}
 
@@ -386,12 +405,7 @@ Genres: ${taxonomy.genres.join(', ')}`,
       title_or_summary: titleOrSummary
     },
     genres: result.genres || [],
-    term_replacements: [],
-    term_replace_options: {
-      case_sensitive: false,
-      whole_word: false,
-      regex: false
-    },
+    character_names: [],
     humor_level: result.humor_level || 0
   };
 
