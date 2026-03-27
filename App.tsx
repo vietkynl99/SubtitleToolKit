@@ -317,16 +317,24 @@ const App: React.FC = () => {
 
   const cloneSegments = useCallback((list: SubtitleSegment[]) => list.map(seg => ({ ...seg })), []);
 
+  const pushUndoSnapshot = useCallback((snapshot: SubtitleSegment[]) => {
+    undoStackRef.current.push(cloneSegments(snapshot));
+    if (undoStackRef.current.length > 100) undoStackRef.current.shift();
+  }, [cloneSegments]);
+
+  const replaceSegments = useCallback((next: SubtitleSegment[]) => {
+    setSegments(cloneSegments(next));
+  }, [cloneSegments]);
+
   const commitSegmentsChange = useCallback((updater: SubtitleSegment[] | ((prev: SubtitleSegment[]) => SubtitleSegment[])) => {
     setSegments(prev => {
-      undoStackRef.current.push(cloneSegments(prev));
-      if (undoStackRef.current.length > 100) undoStackRef.current.shift();
+      pushUndoSnapshot(prev);
       const next = typeof updater === 'function'
         ? (updater as (prev: SubtitleSegment[]) => SubtitleSegment[])(prev)
         : updater;
       return cloneSegments(next);
     });
-  }, [cloneSegments]);
+  }, [cloneSegments, pushUndoSnapshot]);
 
   const handleUndoSegments = useCallback(() => {
     const last = undoStackRef.current.pop();
@@ -1512,6 +1520,7 @@ const App: React.FC = () => {
       const batchSize = 20;
       let processedForOptimize = 0;
       setOptimizeState({ processed: 0, total: aiTargetSegments.length });
+      pushUndoSnapshot(segments);
 
       try {
         for (let i = 0; i < aiTargetSegments.length; i += batchSize) {
@@ -1562,6 +1571,7 @@ const App: React.FC = () => {
           processedForOptimize = Math.min(aiTargetSegments.length, i + currentBatch.length);
           setOptimizeState({ processed: processedForOptimize, total: aiTargetSegments.length });
           setProgress(progressPercent);
+          replaceSegments(currentSegments);
         }
       } catch (err: any) {
         hadOptimizeErrors = true;
@@ -1577,7 +1587,6 @@ const App: React.FC = () => {
     }
 
     const wasStopped = optimizeStopRequestedRef.current;
-    commitSegmentsChange(currentSegments);
     if (!wasStopped) setProgress(100);
     if (hadOptimizeErrors && requestCount === 0) {
       setStatus('error');
