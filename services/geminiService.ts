@@ -283,11 +283,15 @@ Keep all character names and proper nouns consistent.
 Strongly prefer vivid, expressive, and entertaining Vietnamese phrasing over neutral or literal wording when meaning is preserved.
 Humor can replace neutral phrasing instead of adding extra words.
 
-9. Context usage
+9. Emphasis without quotes
+Do not use single quotes, double quotes, or brackets for emphasis.
+If emphasis is needed, express it by word choice, not punctuation.
+
+10. Context usage
 Each subtitle must remain understandable independently.
 Neighbor context is only for resolving pronouns or references.
 
-10. Style priority
+11. Style priority
 When there is a conflict between neutral translation and narration style, follow the narration style as long as the core meaning is preserved.
 
 ${styleBlock}
