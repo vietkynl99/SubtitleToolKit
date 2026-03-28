@@ -218,6 +218,7 @@ Neutral Vietnamese subtitle narration.
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
   const characterRules = getCharacterRules(preset);
+  const hasCharacterRules = Boolean(characterRules && characterRules.trim().length);
 
   // -------- NEIGHBOR CONTEXT --------
   const neighborContext =
@@ -275,8 +276,9 @@ Avoid overly formal written language.
 
 7. Names and proper nouns
 Keep all character names and proper nouns consistent.
-- The same Chinese name must always use the same Vietnamese form.
+${hasCharacterRules ? `- The same Chinese name must always use the same Vietnamese form.
 - Do not create different spellings for similar names.
+` : ""}
 - If a term looks like a name, treat it as a name rather than translating its meaning.
 
 8. Word choice
@@ -298,7 +300,7 @@ ${styleBlock}
 
 ${storyContext}
 
-${characterRules}
+${hasCharacterRules ? characterRules : ""}
 
 ${neighborContext}
 
@@ -458,6 +460,7 @@ Neutral Vietnamese subtitle narration.
     ? `Story context: ${preset.reference.title_or_summary}`
     : "";
   const characterRules = getCharacterRules(preset);
+  const hasCharacterRules = Boolean(characterRules && characterRules.trim().length);
 
   const payload = segments.map((s) => {
     const duration = Math.max(timeToSeconds(s.endTime) - timeToSeconds(s.startTime), 0.1);
@@ -478,14 +481,15 @@ Optimize Vietnamese subtitles for readability and CPS.
 
 ${styleBlock}
 ${storyContext}
-${characterRules}
+${hasCharacterRules ? characterRules : ""}
 
 Rules:
 - Each segment is independent.
 - Do NOT merge or split segments.
 - Preserve core meaning when possible.
 - Prefer concise Vietnamese.
-- Apply character name normalization rules strictly; never invent or vary character names.
+${hasCharacterRules ? `- Apply character name normalization rules strictly; never invent or vary character names.
+` : ""}- Remove filler words if needed, but do not lose meaning.
 - Remove filler words if needed, but do not lose meaning.
 - Output must be Vietnamese only (Latin script). Do not include Chinese characters or any non-Latin letters.
 - If any Chinese characters appear in the input, translate them into Vietnamese words.
