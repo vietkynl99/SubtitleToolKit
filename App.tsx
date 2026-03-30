@@ -176,6 +176,16 @@ const App: React.FC = () => {
     return segments.find(seg => seg.id === optimizeHistorySegmentId) || null;
   }, [segments, optimizeHistorySegmentId]);
 
+  const hasTranslatedSegments = useMemo(
+    () => segments.some(seg => (seg.translatedText || '').trim() !== ''),
+    [segments]
+  );
+
+  const hasOriginalSegments = useMemo(
+    () => segments.some(seg => (seg.originalText || '').trim() !== ''),
+    [segments]
+  );
+
   const handleShowOptimizeHistory = useCallback((id: number) => {
     setOptimizeHistorySegmentId(id);
     const seg = segments.find(s => s.id === id);
@@ -2059,21 +2069,24 @@ const App: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-tran')}
-                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between"
+                  disabled={!hasTranslatedSegments}
+                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/10"
                 >
                   <span className="block font-bold text-emerald-400">Export Translated (.srt)</span>
                   <span className="text-[10px] text-slate-500">Translated Vietnamese version.</span>
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-tran-flat')}
-                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between"
+                  disabled={!hasTranslatedSegments}
+                  className="w-full min-h-[74px] p-3.5 bg-emerald-600/10 border border-emerald-500/20 rounded-xl text-left hover:bg-emerald-600/20 transition-all group flex flex-col justify-between disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600/10"
                 >
                   <span className="block font-bold text-emerald-400">Export Translated (No Line Breaks) (.srt)</span>
                   <span className="text-[10px] text-slate-500">All line break characters removed.</span>
                 </button>
                 <button
                   onClick={() => handleDownloadChoice('srt-orig')}
-                  className="w-full min-h-[74px] p-3.5 bg-slate-800 border border-slate-700 rounded-xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between"
+                  disabled={!hasOriginalSegments}
+                  className="w-full min-h-[74px] p-3.5 bg-slate-800 border border-slate-700 rounded-xl text-left hover:bg-slate-700 transition-all group flex flex-col justify-between disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-800"
                 >
                   <span className="block font-bold text-slate-400">Export Original (.srt)</span>
                   <span className="text-[10px] text-slate-500">Original Chinese version.</span>
