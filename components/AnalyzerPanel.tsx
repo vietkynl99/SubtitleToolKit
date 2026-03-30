@@ -66,6 +66,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   const hasIssueAlerts =
     data.timelineOverlapLines > 0 ||
     data.invalidTimingLines > 0 ||
+    data.foreignWordLines > 0 ||
     data.tooLongLines > 0 ||
     data.singleLineLongLines > 0 ||
     langIssueTotal > 0 ||
@@ -114,6 +115,24 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <div>
                   <p className="text-xs font-bold text-rose-400">{data.invalidTimingLines} invalid timing</p>
                   <p className="text-[10px] text-rose-400/60 leading-normal">Start time is greater than end time.</p>
+                </div>
+              </button>
+            )}
+            {data.foreignWordLines > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'foreign-word' ? 'all' : 'foreign-word')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'foreign-word'
+                    ? 'bg-amber-500/20 border border-amber-400/50 shadow-lg shadow-amber-500/10'
+                    : 'bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15'
+                }`}
+                title="Click to show segments that contain non-Vietnamese words"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-amber-400">{data.foreignWordLines} foreign word issue(s)</p>
+                  <p className="text-[10px] text-amber-400/60 leading-normal">Detected words that do not match Vietnamese syllable patterns.</p>
                 </div>
               </button>
             )}

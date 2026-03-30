@@ -63,6 +63,7 @@ export interface AnalysisResult {
   tooFastLines: number;
   timelineOverlapLines: number;
   invalidTimingLines: number;
+  foreignWordLines: number;
   originalLangIssueLines: number;
   translatedLangIssueLines: number;
   translationQuoteIssueLines: number;

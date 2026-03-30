@@ -223,6 +223,7 @@ function containsNonLatinLetters(text: string): boolean {
 
 const ISSUE_ORIGINAL_LANG = 'Original contains non-Chinese characters';
 const ISSUE_TRANSLATION_LANG = 'Translation contains non-Vietnamese characters';
+const ISSUE_TRANSLATION_FOREIGN_WORD = 'Translation contains non-Vietnamese word(s)';
 const ISSUE_SINGLE_LINE_LONG = 'Line has too many words';
 const ISSUE_TRANSLATION_QUOTES = 'Translation contains quotes (\\" or \')';
 const ISSUE_INVALID_TIMING = 'Start time is after end time';
@@ -248,6 +249,91 @@ function getLanguageIssues(
     return [ISSUE_TRANSLATION_LANG];
   }
   return [];
+}
+
+const VN_VOWEL_RE = /[aeiouy]/;
+const VN_INITIALS = [
+  'ngh', 'ng', 'nh', 'ch', 'gh', 'gi', 'kh', 'ph', 'th', 'tr',
+  'b', 'c', 'd', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'x',
+  ''
+];
+const VN_FINALS = ['ch', 'ng', 'nh', 'c', 'm', 'n', 'p', 't', ''];
+
+function normalizeWordBase(word: string): string {
+  return word
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z]/g, '');
+}
+
+function hasDiacritics(raw: string): boolean {
+  return /\p{M}/u.test(raw.normalize('NFD'));
+}
+
+function isLikelyVietnameseWord(raw: string): boolean {
+  if (/^[A-Z]{2,6}$/.test(raw)) return true;
+  if (raw.includes('-')) {
+    const parts = raw.split('-').filter(p => p.length > 0);
+    if (parts.length > 0 && parts.every(p => /^[A-Za-z]+$/.test(p) && (p.length === 1 || isLikelyVietnameseWord(p)))) {
+      return true;
+    }
+  }
+  const base = normalizeWordBase(raw);
+  if (!base) return true;
+  if (base.length <= 1) return true;
+  if (/^(ha){2,}$/i.test(base)) return true;
+  if (/[^a-z]/.test(base)) return false;
+
+  let initial = '';
+  for (const i of VN_INITIALS) {
+    if (i && base.startsWith(i)) {
+      initial = i;
+      break;
+    }
+  }
+  if (!initial && !VN_INITIALS.includes('')) return false;
+  const withoutInitial = base.slice(initial.length);
+  if (!withoutInitial) {
+    if (initial === 'gi' && base.length === 2) return true;
+    return false;
+  }
+
+  let final = '';
+  for (const f of VN_FINALS) {
+    if (f && withoutInitial.endsWith(f)) {
+      final = f;
+      break;
+    }
+  }
+  const core = withoutInitial.slice(0, withoutInitial.length - final.length);
+  if (!core) {
+    if (initial === 'gi') return true;
+    return false;
+  }
+  if (!VN_VOWEL_RE.test(core)) return false;
+  if (/[^aeiouy]/.test(core)) return false;
+
+  return true;
+}
+
+function getForeignWords(text: string): string[] {
+  const rawWords = text
+    .split(/\s+/)
+    .map(word => word.replace(/^[^A-Za-zÀ-ỹđĐ]+|[^A-Za-zÀ-ỹđĐ]+$/g, ''))
+    .filter(word => word.length > 0);
+
+  const foreign = new Set<string>();
+  for (const word of rawWords) {
+    if (!/\p{L}/u.test(word)) continue;
+    if (/\d/.test(word)) continue;
+    if (!hasDiacritics(word)) continue;
+    if (!isLikelyVietnameseWord(word)) {
+      foreign.add(word);
+    }
+  }
+  return Array.from(foreign);
 }
 
 function containsTranslationQuotes(text: string): boolean {
@@ -467,6 +553,12 @@ export function getSegmentMetadata(
     if (langIssues.length > 0) {
       issueList.push(...langIssues);
     }
+    if (textKey === 'translatedText') {
+      const foreignWords = getForeignWords(langSource);
+      if (foreignWords.length > 0) {
+        issueList.push(`${ISSUE_TRANSLATION_FOREIGN_WORD}: ${foreignWords.join(', ')}`);
+      }
+    }
   }
   if (textKey === 'translatedText' && langSource && containsTranslationQuotes(langSource)) {
     issueList.push(ISSUE_TRANSLATION_QUOTES);
@@ -486,6 +578,7 @@ export function analyzeSegments(
   let tooFastLines = 0;
   let timelineOverlapLines = 0;
   let invalidTimingLines = 0;
+  let foreignWordLines = 0;
   let originalLangIssueLines = 0;
   let translatedLangIssueLines = 0;
   let translationQuoteIssueLines = 0;
@@ -527,6 +620,9 @@ export function analyzeSegments(
     if (meta.issueList.some(i => i.toLowerCase().includes(ISSUE_SINGLE_LINE_LONG.toLowerCase()))) singleLineLongLines++;
     if (meta.severity === 'critical') tooFastLines++;
     if (mergedIssueList.includes(ISSUE_INVALID_TIMING)) invalidTimingLines++;
+    if (mergedIssueList.some(i => i.toLowerCase().includes(ISSUE_TRANSLATION_FOREIGN_WORD.toLowerCase()))) {
+      foreignWordLines++;
+    }
     if (mergedIssueList.includes(ISSUE_ORIGINAL_LANG)) originalLangIssueLines++;
     if (mergedIssueList.includes(ISSUE_TRANSLATION_LANG)) translatedLangIssueLines++;
     if (mergedIssueList.includes(ISSUE_TRANSLATION_QUOTES)) translationQuoteIssueLines++;
@@ -562,6 +658,7 @@ export function analyzeSegments(
         tooFastLines: 0,
         timelineOverlapLines: 0,
         invalidTimingLines: 0,
+        foreignWordLines: 0,
         originalLangIssueLines: 0,
         translatedLangIssueLines: 0,
         translationQuoteIssueLines: 0,
@@ -614,6 +711,7 @@ export function analyzeSegments(
       tooFastLines,
       timelineOverlapLines,
       invalidTimingLines,
+      foreignWordLines,
       originalLangIssueLines,
       translatedLangIssueLines,
       translationQuoteIssueLines,

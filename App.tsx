@@ -521,6 +521,8 @@ const App: React.FC = () => {
     segment.issueList.some(issue => issue.toLowerCase().includes('timeline overlap')), []);
   const hasInvalidTimingIssue = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('start time is after end time')), []);
+  const hasForeignWordIssue = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('non-vietnamese word')), []);
   const hasOriginLangIssue = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters')), []);
   const hasTranslatedLangIssue = useCallback((segment: SubtitleSegment) =>
@@ -537,6 +539,7 @@ const App: React.FC = () => {
   const issueFilterAvailability = useMemo(() => {
     let timeline = 0;
     let invalidTiming = 0;
+    let foreignWord = 0;
     let lang = 0;
     let tooLong = 0;
     let singleLineLong = 0;
@@ -547,6 +550,7 @@ const App: React.FC = () => {
     for (const seg of processedSegments) {
       if (hasTimelineIssue(seg)) timeline++;
       if (hasInvalidTimingIssue(seg)) invalidTiming++;
+      if (hasForeignWordIssue(seg)) foreignWord++;
       if (hasLangIssue(seg)) lang++;
       if (hasTranslationQuoteIssue(seg)) translationQuotes++;
       if (isTooLong(seg)) tooLong++;
@@ -558,6 +562,7 @@ const App: React.FC = () => {
     return {
       timeline,
       invalidTiming,
+      foreignWord,
       lang,
       tooLong,
       singleLineLong,
@@ -566,12 +571,13 @@ const App: React.FC = () => {
       untranslated,
       optimized
     };
-  }, [processedSegments, hasTimelineIssue, hasInvalidTimingIssue, hasLangIssue, hasTranslationQuoteIssue, isTooLong, isSingleLineLong]);
+  }, [processedSegments, hasTimelineIssue, hasInvalidTimingIssue, hasForeignWordIssue, hasLangIssue, hasTranslationQuoteIssue, isTooLong, isSingleLineLong]);
 
   useEffect(() => {
     if (typeof filter !== 'string') return;
     if (filter === 'timeline' && issueFilterAvailability.timeline === 0) setFilter('all');
     if (filter === 'invalid-timing' && issueFilterAvailability.invalidTiming === 0) setFilter('all');
+    if (filter === 'foreign-word' && issueFilterAvailability.foreignWord === 0) setFilter('all');
     if (filter === 'lang' && issueFilterAvailability.lang === 0) setFilter('all');
     if (filter === 'translation-quotes' && issueFilterAvailability.translationQuotes === 0) setFilter('all');
     if (filter === 'too-long' && issueFilterAvailability.tooLong === 0) setFilter('all');
@@ -589,6 +595,9 @@ const App: React.FC = () => {
     }
     if (filter === 'invalid-timing') {
       return processedSegments.filter(hasInvalidTimingIssue);
+    }
+    if (filter === 'foreign-word') {
+      return processedSegments.filter(hasForeignWordIssue);
     }
     if (filter === 'lang') {
       return processedSegments.filter(hasLangIssue);
@@ -618,7 +627,7 @@ const App: React.FC = () => {
       return processedSegments.filter(s => s.cps >= filter.min && s.cps < filter.max);
     }
     return processedSegments;
-  }, [processedSegments, filter, hasLangIssue, hasTimelineIssue, hasInvalidTimingIssue, isSingleLineLong, isTooLong]);
+  }, [processedSegments, filter, hasLangIssue, hasTimelineIssue, hasInvalidTimingIssue, hasForeignWordIssue, isSingleLineLong, isTooLong]);
 
   useEffect(() => {
     if (editingTranslationId == null) {
@@ -2400,6 +2409,7 @@ const App: React.FC = () => {
                     <option value="critical">Critical</option>
                     {issueFilterAvailability.timeline > 0 && <option value="timeline">Timeline Issues</option>}
                     {issueFilterAvailability.invalidTiming > 0 && <option value="invalid-timing">Invalid Timing</option>}
+                    {issueFilterAvailability.foreignWord > 0 && <option value="foreign-word">Non-Vietnamese Word</option>}
                     {issueFilterAvailability.lang > 0 && <option value="lang">Language Issues</option>}
                     {issueFilterAvailability.translationQuotes > 0 && <option value="translation-quotes">Translation Quotes</option>}
                     {issueFilterAvailability.tooLong > 0 && <option value="too-long">Too Long (3+ lines)</option>}
