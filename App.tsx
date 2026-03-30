@@ -1587,10 +1587,11 @@ const App: React.FC = () => {
         continue;
       }
       const meta = analyzeSegments([seg], 'translatedText', currentSettings.cpsThreshold, currentSettings.maxSingleLineWords);
-      const severity = meta.enrichedSegments[0].severity;
-      const hasLanguageIssue = hasLangIssue(seg);
+      const metaSeg = meta.enrichedSegments[0];
+      const severity = metaSeg.severity;
+      const hasIssues = (metaSeg.issueList?.length || 0) > 0;
 
-      if (severity === 'safe' && !hasLanguageIssue) {
+      if (severity === 'safe' && !hasIssues) {
         safeCount++;
       } else {
         aiTargetSegments.push(seg);
