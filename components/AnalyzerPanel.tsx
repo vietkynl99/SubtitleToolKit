@@ -65,6 +65,7 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
   const langIssueTotal = data.originalLangIssueLines + data.translatedLangIssueLines;
   const hasIssueAlerts =
     data.timelineOverlapLines > 0 ||
+    data.invalidTimingLines > 0 ||
     data.tooLongLines > 0 ||
     data.singleLineLongLines > 0 ||
     langIssueTotal > 0 ||
@@ -95,6 +96,24 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <div>
                   <p className="text-xs font-bold text-rose-400">{data.timelineOverlapLines} timeline overlap issues</p>
                   <p className="text-[10px] text-rose-400/60 leading-normal">Detected pairs where previous end time is greater than next start time.</p>
+                </div>
+              </button>
+            )}
+            {data.invalidTimingLines > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'invalid-timing' ? 'all' : 'invalid-timing')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'invalid-timing'
+                    ? 'bg-rose-500/20 border border-rose-400/50 shadow-lg shadow-rose-500/10'
+                    : 'bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/15'
+                }`}
+                title="Click to show segments with start time after end time"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-rose-400">{data.invalidTimingLines} invalid timing</p>
+                  <p className="text-[10px] text-rose-400/60 leading-normal">Start time is greater than end time.</p>
                 </div>
               </button>
             )}

@@ -274,6 +274,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
               const isSelected = selectedIds.has(seg.id);
               const isActiveByVideo = activeSegmentId === seg.id;
               const hasTimelineIssue = seg.issueList.some(issue => issue.toLowerCase().includes('timeline overlap'));
+              const hasInvalidTimingIssue = seg.issueList.some(issue => issue.toLowerCase().includes('start time is after end time'));
               const hasOriginLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('original contains non-chinese characters'));
               const hasTranslatedLangIssue = seg.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters'));
               const optimizeCount = seg.optimizeHistory?.length || 0;
@@ -317,7 +318,7 @@ const SegmentList: React.FC<SegmentListProps> = ({
                   </div>
 
                   <div className={`pt-1 text-[11px] font-bold font-mono leading-tight rounded-md px-1.5 py-1 ${
-                    hasTimelineIssue
+                    hasTimelineIssue || hasInvalidTimingIssue
                       ? 'text-rose-300 bg-rose-500/10 border border-rose-500/30'
                       : 'text-slate-500'
                   }`}>

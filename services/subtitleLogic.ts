@@ -225,6 +225,7 @@ const ISSUE_ORIGINAL_LANG = 'Original contains non-Chinese characters';
 const ISSUE_TRANSLATION_LANG = 'Translation contains non-Vietnamese characters';
 const ISSUE_SINGLE_LINE_LONG = 'Line has too many words';
 const ISSUE_TRANSLATION_QUOTES = 'Translation contains quotes (\\" or \')';
+const ISSUE_INVALID_TIMING = 'Start time is after end time';
 
 function countWords(text: string): number {
   return text
@@ -430,6 +431,8 @@ export function getSegmentMetadata(
   const cps = calculateCPS(segment, text);
   const issueList: string[] = [];
   let severity: Severity = 'safe';
+  const startSec = timeToSeconds(segment.startTime);
+  const endSec = timeToSeconds(segment.endTime);
 
   if (cps > cpsThreshold.warningMax) {
     severity = 'critical';
@@ -444,6 +447,9 @@ export function getSegmentMetadata(
   const lines = text.split('\n').filter(line => line.trim().length > 0);
   if (lines.length > 2) {
     issueList.push('Subtitle has more than 2 lines');
+  }
+  if (startSec > endSec) {
+    issueList.push(ISSUE_INVALID_TIMING);
   }
   if (maxSingleLineWords > 0) {
     const lineWordCounts = lines.map(line => countWords(line));
@@ -479,6 +485,7 @@ export function analyzeSegments(
   let singleLineLongLines = 0;
   let tooFastLines = 0;
   let timelineOverlapLines = 0;
+  let invalidTimingLines = 0;
   let originalLangIssueLines = 0;
   let translatedLangIssueLines = 0;
   let translationQuoteIssueLines = 0;
@@ -519,6 +526,7 @@ export function analyzeSegments(
     if (meta.issueList.some(i => i.toLowerCase().includes('subtitle has more than 2 lines'.toLowerCase()))) tooLongLines++;
     if (meta.issueList.some(i => i.toLowerCase().includes(ISSUE_SINGLE_LINE_LONG.toLowerCase()))) singleLineLongLines++;
     if (meta.severity === 'critical') tooFastLines++;
+    if (mergedIssueList.includes(ISSUE_INVALID_TIMING)) invalidTimingLines++;
     if (mergedIssueList.includes(ISSUE_ORIGINAL_LANG)) originalLangIssueLines++;
     if (mergedIssueList.includes(ISSUE_TRANSLATION_LANG)) translatedLangIssueLines++;
     if (mergedIssueList.includes(ISSUE_TRANSLATION_QUOTES)) translationQuoteIssueLines++;
@@ -553,6 +561,7 @@ export function analyzeSegments(
         singleLineLongLines: 0,
         tooFastLines: 0,
         timelineOverlapLines: 0,
+        invalidTimingLines: 0,
         originalLangIssueLines: 0,
         translatedLangIssueLines: 0,
         translationQuoteIssueLines: 0,
@@ -604,6 +613,7 @@ export function analyzeSegments(
       singleLineLongLines,
       tooFastLines,
       timelineOverlapLines,
+      invalidTimingLines,
       originalLangIssueLines,
       translatedLangIssueLines,
       translationQuoteIssueLines,
