@@ -224,6 +224,7 @@ function containsNonLatinLetters(text: string): boolean {
 const ISSUE_ORIGINAL_LANG = 'Original contains non-Chinese characters';
 const ISSUE_TRANSLATION_LANG = 'Translation contains non-Vietnamese characters';
 const ISSUE_SINGLE_LINE_LONG = 'Line has too many words';
+const ISSUE_TRANSLATION_QUOTES = 'Translation contains quotes (\\" or \')';
 
 function countWords(text: string): number {
   return text
@@ -246,6 +247,10 @@ function getLanguageIssues(
     return [ISSUE_TRANSLATION_LANG];
   }
   return [];
+}
+
+function containsTranslationQuotes(text: string): boolean {
+  return text.includes("'") || text.includes('"');
 }
 
 /**
@@ -457,6 +462,9 @@ export function getSegmentMetadata(
       issueList.push(...langIssues);
     }
   }
+  if (textKey === 'translatedText' && langSource && containsTranslationQuotes(langSource)) {
+    issueList.push(ISSUE_TRANSLATION_QUOTES);
+  }
 
   return { severity, cps, issueList };
 }
@@ -473,6 +481,7 @@ export function analyzeSegments(
   let timelineOverlapLines = 0;
   let originalLangIssueLines = 0;
   let translatedLangIssueLines = 0;
+  let translationQuoteIssueLines = 0;
   let totalCPS = 0;
   let minCPS = Infinity;
   let maxCPS = -Infinity;
@@ -512,6 +521,7 @@ export function analyzeSegments(
     if (meta.severity === 'critical') tooFastLines++;
     if (mergedIssueList.includes(ISSUE_ORIGINAL_LANG)) originalLangIssueLines++;
     if (mergedIssueList.includes(ISSUE_TRANSLATION_LANG)) translatedLangIssueLines++;
+    if (mergedIssueList.includes(ISSUE_TRANSLATION_QUOTES)) translationQuoteIssueLines++;
 
     groups[meta.severity]++;
 
@@ -545,6 +555,7 @@ export function analyzeSegments(
         timelineOverlapLines: 0,
         originalLangIssueLines: 0,
         translatedLangIssueLines: 0,
+        translationQuoteIssueLines: 0,
         avgCPS: 0,
         minCPS: 0,
         maxCPS: 0,
@@ -587,14 +598,15 @@ export function analyzeSegments(
   }
 
   return {
-      stats: {
-        totalLines,
-        tooLongLines,
-        singleLineLongLines,
-        tooFastLines,
-        timelineOverlapLines,
-        originalLangIssueLines,
-        translatedLangIssueLines,
+    stats: {
+      totalLines,
+      tooLongLines,
+      singleLineLongLines,
+      tooFastLines,
+      timelineOverlapLines,
+      originalLangIssueLines,
+      translatedLangIssueLines,
+      translationQuoteIssueLines,
       avgCPS: totalCPS / totalLines,
       minCPS,
       maxCPS,

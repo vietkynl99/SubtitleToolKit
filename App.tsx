@@ -93,6 +93,7 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showAutoSplitModal, setShowAutoSplitModal] = useState<boolean>(false);
+  const [showRemoveQuotesModal, setShowRemoveQuotesModal] = useState<boolean>(false);
   const [autoSplitChoice, setAutoSplitChoice] = useState<boolean>(DEFAULT_SETTINGS.autoSplitLongLines);
   const [pendingImport, setPendingImport] = useState<{
     segments: SubtitleSegment[];
@@ -514,6 +515,8 @@ const App: React.FC = () => {
     segment.issueList.some(issue => issue.toLowerCase().includes('translation contains non-vietnamese characters')), []);
   const hasLangIssue = useCallback((segment: SubtitleSegment) =>
     hasOriginLangIssue(segment) || hasTranslatedLangIssue(segment), [hasOriginLangIssue, hasTranslatedLangIssue]);
+  const hasTranslationQuoteIssue = useCallback((segment: SubtitleSegment) =>
+    segment.issueList.some(issue => issue.toLowerCase().includes('translation contains quotes')), []);
   const isTooLong = useCallback((segment: SubtitleSegment) =>
     segment.issueList.some(issue => issue.toLowerCase().includes('subtitle has more than 2 lines')), []);
   const isSingleLineLong = useCallback((segment: SubtitleSegment) =>
@@ -524,12 +527,14 @@ const App: React.FC = () => {
     let lang = 0;
     let tooLong = 0;
     let singleLineLong = 0;
+    let translationQuotes = 0;
     let translated = 0;
     let untranslated = 0;
     let optimized = 0;
     for (const seg of processedSegments) {
       if (hasTimelineIssue(seg)) timeline++;
       if (hasLangIssue(seg)) lang++;
+      if (hasTranslationQuoteIssue(seg)) translationQuotes++;
       if (isTooLong(seg)) tooLong++;
       if (isSingleLineLong(seg)) singleLineLong++;
       if ((seg.translatedText || '').trim()) translated++;
@@ -541,16 +546,18 @@ const App: React.FC = () => {
       lang,
       tooLong,
       singleLineLong,
+      translationQuotes,
       translated,
       untranslated,
       optimized
     };
-  }, [processedSegments, hasTimelineIssue, hasLangIssue, isTooLong, isSingleLineLong]);
+  }, [processedSegments, hasTimelineIssue, hasLangIssue, hasTranslationQuoteIssue, isTooLong, isSingleLineLong]);
 
   useEffect(() => {
     if (typeof filter !== 'string') return;
     if (filter === 'timeline' && issueFilterAvailability.timeline === 0) setFilter('all');
     if (filter === 'lang' && issueFilterAvailability.lang === 0) setFilter('all');
+    if (filter === 'translation-quotes' && issueFilterAvailability.translationQuotes === 0) setFilter('all');
     if (filter === 'too-long' && issueFilterAvailability.tooLong === 0) setFilter('all');
     if (filter === 'single-line-long' && issueFilterAvailability.singleLineLong === 0) setFilter('all');
     if (filter === 'translated' && issueFilterAvailability.translated === 0) setFilter('all');
@@ -566,6 +573,9 @@ const App: React.FC = () => {
     }
     if (filter === 'lang') {
       return processedSegments.filter(hasLangIssue);
+    }
+    if (filter === 'translation-quotes') {
+      return processedSegments.filter(hasTranslationQuoteIssue);
     }
     if (filter === 'translated') {
       return processedSegments.filter(s => (s.translatedText || '').trim() !== '');
@@ -604,6 +614,49 @@ const App: React.FC = () => {
   const filteredSegments = editingTranslationId == null
     ? filteredSegmentsRaw
     : (frozenFilteredRef.current || filteredSegmentsRaw);
+
+  const translationQuoteTargets = useMemo(
+    () => processedSegments.filter(hasTranslationQuoteIssue),
+    [processedSegments, hasTranslationQuoteIssue]
+  );
+  const translationQuoteCount = translationQuoteTargets.length;
+
+  const appendOptimizeHistory = useCallback((history: string[] | undefined, prevText: string, nextText: string) => {
+    let nextHistory = history ? [...history] : [];
+    if (nextText.trim()) {
+      if (nextHistory.length === 0) {
+        if (prevText.trim()) nextHistory.push(prevText);
+        nextHistory.push(nextText);
+      } else {
+        const last = nextHistory[nextHistory.length - 1];
+        if (last !== nextText) nextHistory.push(nextText);
+      }
+    }
+    return nextHistory;
+  }, []);
+
+  const handleRemoveTranslationQuotesRequest = useCallback(() => {
+    setShowRemoveQuotesModal(true);
+  }, []);
+
+  const handleRemoveTranslationQuotesConfirm = useCallback(() => {
+    if (translationQuoteCount === 0) {
+      setShowRemoveQuotesModal(false);
+      showToast('info', 'No translation quotes to remove.');
+      return;
+    }
+    const targetIds = new Set(translationQuoteTargets.map(seg => seg.id));
+    commitSegmentsChange(prev => prev.map(seg => {
+      if (!targetIds.has(seg.id)) return seg;
+      const current = seg.translatedText || '';
+      const cleaned = current.replace(/['"]/g, '');
+      if (cleaned === current) return seg;
+      const nextHistory = appendOptimizeHistory(seg.optimizeHistory, current, cleaned);
+      return { ...seg, translatedText: cleaned, optimizeHistory: nextHistory };
+    }));
+    showToast('success', `Removed quotes from ${translationQuoteCount} segment(s).`);
+    setShowRemoveQuotesModal(false);
+  }, [translationQuoteTargets, translationQuoteCount, commitSegmentsChange, showToast]);
 
   const compileSearch = useCallback((rawQuery: string) => {
     const q = rawQuery.trim();
@@ -1540,17 +1593,7 @@ const App: React.FC = () => {
               const prev = currentSegments[idx];
               const prevText = prev.translatedText || '';
               const nextText = f.translatedText || '';
-              let nextHistory = prev.optimizeHistory ? [...prev.optimizeHistory] : [];
-
-              if (nextText) {
-                if (nextHistory.length === 0) {
-                  if (prevText) nextHistory.push(prevText);
-                  nextHistory.push(nextText);
-                } else {
-                  const last = nextHistory[nextHistory.length - 1];
-                  if (last !== nextText) nextHistory.push(nextText);
-                }
-              }
+              const nextHistory = appendOptimizeHistory(prev.optimizeHistory, prevText, nextText);
 
               currentSegments[idx] = {
                 ...prev,
@@ -1718,17 +1761,7 @@ const App: React.FC = () => {
       const nextText = text;
       if (prevText === nextText) return s;
 
-      let nextHistory = s.optimizeHistory ? [...s.optimizeHistory] : [];
-      if (nextText.trim()) {
-        if (nextHistory.length === 0) {
-          if (prevText.trim()) nextHistory.push(prevText);
-          nextHistory.push(nextText);
-        } else {
-          const last = nextHistory[nextHistory.length - 1];
-          if (last !== nextText) nextHistory.push(nextText);
-        }
-      }
-
+      const nextHistory = appendOptimizeHistory(s.optimizeHistory, prevText, nextText);
       return { ...s, translatedText: nextText, optimizeHistory: nextHistory };
     }));
   };
@@ -1840,6 +1873,21 @@ const App: React.FC = () => {
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowClearModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
               <button onClick={() => performClear()} className="flex-1 py-3 bg-rose-600 rounded-xl">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRemoveQuotesModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8">
+            <h3 className="text-xl font-bold mb-3">Remove quotes from translations?</h3>
+            <p className="text-slate-400 text-sm">
+              This will remove all ' and " characters in {translationQuoteCount} segment(s).
+            </p>
+            <div className="flex gap-3 mt-8">
+              <button onClick={() => setShowRemoveQuotesModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl">Cancel</button>
+              <button onClick={handleRemoveTranslationQuotesConfirm} className="flex-1 py-3 bg-blue-600 rounded-xl">Confirm</button>
             </div>
           </div>
         </div>
@@ -2330,6 +2378,7 @@ const App: React.FC = () => {
                     <option value="critical">Critical</option>
                     {issueFilterAvailability.timeline > 0 && <option value="timeline">Timeline Issues</option>}
                     {issueFilterAvailability.lang > 0 && <option value="lang">Language Issues</option>}
+                    {issueFilterAvailability.translationQuotes > 0 && <option value="translation-quotes">Translation Quotes</option>}
                     {issueFilterAvailability.tooLong > 0 && <option value="too-long">Too Long (3+ lines)</option>}
                     {issueFilterAvailability.singleLineLong > 0 && <option value="single-line-long">Single Line Too Long</option>}
                     {issueFilterAvailability.translated > 0 && <option value="translated">Translated</option>}
@@ -2373,6 +2422,16 @@ const App: React.FC = () => {
                       {aiButtonLabel}
                     </span>
                   </button>
+                  {filter === 'translation-quotes' && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveTranslationQuotesRequest}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-700/70 border border-blue-500/40 text-blue-100 hover:bg-blue-600/70 transition-colors"
+                      title="Remove quotes from all translation lines in filter"
+                    >
+                      Remove Quotes
+                    </button>
+                  )}
 
                   {copyScope.isSelected && (
                     <button

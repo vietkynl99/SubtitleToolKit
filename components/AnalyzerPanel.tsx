@@ -67,7 +67,8 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
     data.timelineOverlapLines > 0 ||
     data.tooLongLines > 0 ||
     data.singleLineLongLines > 0 ||
-    langIssueTotal > 0;
+    langIssueTotal > 0 ||
+    data.translationQuoteIssueLines > 0;
 
   // Requirement: Translation Progress (v2.2.0)
   const translatedCount = segments.filter(s => s.translatedText && s.translatedText.trim() !== '').length;
@@ -148,6 +149,24 @@ const AnalyzerPanel: React.FC<AnalyzerPanelProps> = ({
                 <div>
                   <p className="text-xs font-bold text-amber-400">{langIssueTotal} language issues</p>
                   <p className="text-[10px] text-amber-400/60 leading-normal">Origin must be Chinese, translation must be Vietnamese.</p>
+                </div>
+              </button>
+            )}
+            {data.translationQuoteIssueLines > 0 && (
+              <button
+                type="button"
+                onClick={() => onFilterTrigger(activeFilter === 'translation-quotes' ? 'all' : 'translation-quotes')}
+                className={`w-full text-left flex items-start gap-3 p-3 rounded-lg transition-all ${
+                  activeFilter === 'translation-quotes'
+                    ? 'bg-blue-500/20 border border-blue-400/50 shadow-lg shadow-blue-500/10'
+                    : 'bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/15'
+                }`}
+                title="Click to show only translation quotes issues"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 shrink-0"></div>
+                <div>
+                  <p className="text-xs font-bold text-blue-400">{data.translationQuoteIssueLines} translation quotes</p>
+                  <p className="text-[10px] text-blue-400/60 leading-normal">Translation text contains ' or " characters.</p>
                 </div>
               </button>
             )}

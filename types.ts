@@ -64,6 +64,7 @@ export interface AnalysisResult {
   timelineOverlapLines: number;
   originalLangIssueLines: number;
   translatedLangIssueLines: number;
+  translationQuoteIssueLines: number;
   avgCPS: number;
   minCPS: number;
   maxCPS: number;
