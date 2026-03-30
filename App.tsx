@@ -752,6 +752,21 @@ const App: React.FC = () => {
     return { mode, scopeSegments, longLineCount };
   }, [segments, selectedIds, filteredSegments, countLongLineSegments, settings.maxSingleLineWords]);
 
+  const showAutoSplitButton = useMemo(() => {
+    if (typeof filter !== 'string') return false;
+    if (filter === 'too-long' || filter === 'single-line-long') {
+      return filteredSegments.length > 0;
+    }
+    return false;
+  }, [filter, filteredSegments.length]);
+
+  const autoSplitButtonCount = useMemo(() => {
+    if (typeof filter === 'string' && (filter === 'too-long' || filter === 'single-line-long')) {
+      return filteredSegments.length;
+    }
+    return 0;
+  }, [filter, filteredSegments.length]);
+
   const aiActionTargets = aiScope.action === 'translate'
     ? aiScope.untranslated
     : aiScope.action === 'optimize'
@@ -2479,13 +2494,13 @@ const App: React.FC = () => {
                     </button>
                   )}
 
-                  {!settings.autoSplitLongLines && autoSplitScope.longLineCount > 0 && (
+                  {showAutoSplitButton && (
                     <button
                       onClick={handleAutoSplitLongLines}
                       disabled={status === 'processing' || isAiRunning}
-                      title={`Auto split ${autoSplitScope.longLineCount} long line(s)`}
+                      title={`Auto split ${autoSplitButtonCount} segment(s)`}
                       aria-label="Auto split long lines"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold transition-colors bg-amber-500/20 border-amber-400/40 text-amber-100 hover:bg-amber-500/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] sm:text-[11px] font-bold transition-colors bg-blue-700/70 border-blue-500/40 text-blue-100 hover:bg-blue-600/70 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <span className="shrink-0">{ICONS.Split}</span>
                       <span className="whitespace-nowrap">

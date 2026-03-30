@@ -83,6 +83,16 @@ export function splitToTwoLinesIfLong(text: string, maxWords: number): string {
   };
 
   let lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 2) {
+    const line1Words = countWords(lines[0]);
+    const line2Words = countWords(lines[1]);
+    const totalWords = line1Words + line2Words;
+    if (totalWords <= maxWords * 2 && (line1Words > maxWords || line2Words > maxWords)) {
+      const merged = `${lines[0]} ${lines[1]}`.replace(/\s+/g, ' ').trim();
+      const rebalanced = splitLine(merged);
+      if (rebalanced.length === 2) return rebalanced.join('\n');
+    }
+  }
   if (lines.length > 2) {
     lines = [lines.join(' ')];
   }
