@@ -18,6 +18,7 @@ import {
   FileText,
   Scissors,
   Repeat,
+  Wrench,
   Bell,
   X
 } from 'lucide-react';
@@ -42,6 +43,7 @@ export const ICONS = {
   File: <FileText size={18} />,
   Split: <Scissors size={18} />,
   Replace: <Repeat size={16} />,
+  Tools: <Wrench size={18} />,
   Notification: <Bell size={14} />,
   Close: <X size={14} />
 };

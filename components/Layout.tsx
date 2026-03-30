@@ -15,8 +15,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
   // Requirement 2: Mandatory Flat Menu Order v1.7.0
   const menuItems = [
     { id: 'upload', label: 'Upload', icon: ICONS.Upload },
+    { id: 'file-tools', label: 'File Tools', icon: ICONS.Tools },
     { id: 'translation-style', label: 'Translation Style', icon: ICONS.Fix, requiresProject: true }, // Independent Menu
-    { id: 'file-tools', label: 'File Tools', icon: ICONS.Split, requiresProject: true }, // Now just File Tools (Split)
     { id: 'editor', label: 'Editor', icon: ICONS.File, requiresProject: true },
     { id: 'settings', label: 'Settings', icon: ICONS.Settings },
   ];
