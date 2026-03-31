@@ -16,6 +16,7 @@ interface FileToolsPageProps {
 }
 
 interface MergeFileEntry {
+  id: string;
   name: string;
   segments: SubtitleSegment[];
   duration: number;
@@ -27,10 +28,11 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
   const [mergeFiles, setMergeFiles] = useState<MergeFileEntry[]>([]);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergeLoading, setMergeLoading] = useState(false);
-  const [mergeOffset, setMergeOffset] = useState(true);
-  const [mergeMode, setMergeMode] = useState<'auto' | 'original' | 'translated'>('auto');
-  const [mergeName, setMergeName] = useState('merged.srt');
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const mergeInputRef = useRef<HTMLInputElement | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragImageRef = useRef<HTMLImageElement | null>(null);
+  const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
 
   const getSegmentsDuration = (segments: SubtitleSegment[]) => {
     if (segments.length === 0) return 0;
@@ -59,6 +61,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
           continue;
         }
         nextEntries.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           name: file.name,
           segments: parsed,
           duration: getSegmentsDuration(parsed)
@@ -95,35 +98,68 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
     setMergeFiles(prev => prev.filter((_, idx) => idx !== index));
   };
 
+  const moveMergeFileTo = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setMergeFiles(prev => {
+      if (from >= prev.length || to > prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      const rawTarget = from < to ? to - 1 : to;
+      const target = Math.max(0, Math.min(rawTarget, next.length));
+      next.splice(target, 0, item);
+      return next;
+    });
+  };
+
+  const clearDragGhost = () => {
+    if (dragGhostRef.current) {
+      dragGhostRef.current.remove();
+      dragGhostRef.current = null;
+    }
+    dragOffsetRef.current = null;
+  };
+
+  const getTransparentDragImage = () => {
+    if (dragImageRef.current) return dragImageRef.current;
+    const img = new Image();
+    img.src =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==';
+    dragImageRef.current = img;
+    return img;
+  };
+
+  const updateDragGhostPosition = (clientX: number, clientY: number) => {
+    if (!dragGhostRef.current || !dragOffsetRef.current) return;
+    const x = clientX - dragOffsetRef.current.x;
+    const y = clientY - dragOffsetRef.current.y;
+    dragGhostRef.current.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
   const buildMergedSegments = () => {
     let offset = 0;
     let nextId = 1;
     const merged: SubtitleSegment[] = [];
 
     mergeFiles.forEach(entry => {
-      const fileOffset = mergeOffset ? offset : 0;
+      const fileOffset = offset;
       entry.segments.forEach(seg => {
         const start = secondsToTime(timeToSeconds(seg.startTime) + fileOffset);
         const end = secondsToTime(timeToSeconds(seg.endTime) + fileOffset);
-        const outputText = mergeMode === 'auto'
-          ? (seg.translatedText || seg.originalText || '')
-          : mergeMode === 'translated'
-            ? (seg.translatedText || '')
-            : (seg.originalText || '');
+        const outputText = seg.originalText || seg.translatedText || '';
         merged.push({
           ...seg,
           id: nextId++,
           startTime: start,
           endTime: end,
-          originalText: seg.originalText,
-          translatedText: outputText,
+          originalText: outputText,
+          translatedText: null,
           errors: [],
           severity: 'safe',
           cps: 0,
           issueList: []
         });
       });
-      if (mergeOffset) offset += entry.duration;
+      offset += entry.duration;
     });
 
     return merged;
@@ -135,12 +171,12 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
       setMergeError('No segments to merge.');
       return;
     }
-    const content = generateSRT(merged, 'translated');
+    const content = generateSRT(merged, 'original');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = normalizeSrtName(mergeName);
+    a.download = 'merged.srt';
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -336,7 +372,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                       disabled={mergeLoading}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {mergeLoading ? 'Loading...' : 'Add SRT Files'}
+                      {mergeLoading ? 'Loading...' : 'Add Files'}
                     </button>
                     <button
                       type="button"
@@ -359,33 +395,85 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                     No files selected yet. Add multiple `.srt` files to merge.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div
+                    className="space-y-3"
+                    onDragOver={(e) => {
+                      if (dragIndex === null) return;
+                      e.preventDefault();
+                      updateDragGhostPosition(e.clientX, e.clientY);
+                    }}
+                  >
                     {mergeFiles.map((entry, idx) => (
-                      <div key={`${entry.name}-${idx}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
-                        <div className="space-y-1">
+                      <div
+                        key={entry.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragIndex(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(idx));
+                          const node = e.currentTarget as HTMLDivElement;
+                          const rect = node.getBoundingClientRect();
+                          const ghost = node.cloneNode(true) as HTMLDivElement;
+                          ghost.style.width = `${rect.width}px`;
+                          ghost.style.position = 'absolute';
+                          ghost.style.top = '0';
+                          ghost.style.left = '0';
+                          ghost.style.pointerEvents = 'none';
+                          ghost.style.opacity = '1';
+                          ghost.style.filter = 'none';
+                          ghost.style.backgroundColor = '#0f172a';
+                          ghost.style.borderColor = '#334155';
+                          ghost.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.35)';
+                          ghost.style.transform = 'scale(1)';
+                          ghost.style.zIndex = '9999';
+                          ghost.style.margin = '0';
+                          ghost.style.willChange = 'transform';
+                          document.body.appendChild(ghost);
+                          dragGhostRef.current = ghost;
+                          const offsetX = e.clientX - rect.left;
+                          const offsetY = e.clientY - rect.top;
+                          dragOffsetRef.current = { x: offsetX, y: offsetY };
+                          updateDragGhostPosition(e.clientX, e.clientY);
+                          e.dataTransfer.setDragImage(getTransparentDragImage(), 0, 0);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          updateDragGhostPosition(e.clientX, e.clientY);
+                          if (dragIndex === null) return;
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const midpoint = rect.top + rect.height / 2;
+                          const insertIndex = e.clientY < midpoint ? idx : idx + 1;
+                          const nextIndex = insertIndex > dragIndex ? insertIndex - 1 : insertIndex;
+                          if (nextIndex === dragIndex) return;
+                          moveMergeFileTo(dragIndex, insertIndex);
+                          setDragIndex(nextIndex);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragIndex !== null) {
+                            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                            const midpoint = rect.top + rect.height / 2;
+                            const insertIndex = e.clientY < midpoint ? idx : idx + 1;
+                            moveMergeFileTo(dragIndex, insertIndex);
+                          }
+                          setDragIndex(null);
+                          clearDragGhost();
+                        }}
+                        onDragEnd={() => {
+                          setDragIndex(null);
+                          clearDragGhost();
+                        }}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3 ${dragIndex === idx ? 'ring-2 ring-emerald-500/40 border-emerald-500/40 border-dashed bg-slate-800/20' : ''}`}
+                      >
+                        <div className={`space-y-1 ${dragIndex === idx ? 'opacity-0' : ''}`}>
                           <div className="text-sm font-bold text-slate-200 break-all">{entry.name}</div>
                           <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3">
                             <span>{entry.segments.length} segments</span>
                             <span>Duration {formatDurationHMS(entry.duration)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => moveMergeFile(idx, -1)}
-                            disabled={idx === 0}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Up
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveMergeFile(idx, 1)}
-                            disabled={idx === mergeFiles.length - 1}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Down
-                          </button>
+                        <div className={`flex items-center gap-2 ${dragIndex === idx ? 'opacity-0' : ''}`}>
                           <button
                             type="button"
                             onClick={() => removeMergeFile(idx)}
@@ -399,50 +487,6 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Offset Timing</div>
-                      <div className="text-xs text-slate-300 mt-1">Append files sequentially</div>
-                    </div>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={mergeOffset}
-                        onChange={(e) => setMergeOffset(e.target.checked)}
-                      />
-                      <span className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${mergeOffset ? 'bg-emerald-600' : 'bg-slate-700'}`}>
-                        <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${mergeOffset ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Content Mode</div>
-                    <select
-                      value={mergeMode}
-                      onChange={(e) => setMergeMode(e.target.value as 'auto' | 'original' | 'translated')}
-                      className="mt-2 w-full bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs font-bold"
-                    >
-                      <option value="auto">Prefer Translated (fallback Original)</option>
-                      <option value="translated">Translated Only</option>
-                      <option value="original">Original Only</option>
-                    </select>
-                  </div>
-
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Output Name</div>
-                    <input
-                      type="text"
-                      value={mergeName}
-                      onChange={(e) => setMergeName(e.target.value)}
-                      className="mt-2 w-full bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs font-bold"
-                      placeholder="merged.srt"
-                    />
-                  </div>
-                </div>
-
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
                     {mergeFiles.length} files • {totalMergeSegments} segments • {formatDurationHMS(totalMergeDuration)}
@@ -453,7 +497,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                     disabled={mergeFiles.length === 0}
                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Merge & Download
+                    Merge & Export
                   </button>
                 </div>
               </div>
