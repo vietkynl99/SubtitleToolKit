@@ -14,10 +14,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, progress, hasProject, onClearProject, onExportProject }) => {
   // Requirement 2: Mandatory Flat Menu Order v1.7.0
   const menuItems = [
-    { id: 'upload', label: 'Upload', icon: ICONS.Upload },
+    { id: 'editor', label: 'Editor', icon: ICONS.File },
     { id: 'file-tools', label: 'File Tools', icon: ICONS.Tools },
-    { id: 'translation-style', label: 'Translation Style', icon: ICONS.Fix, requiresProject: true }, // Independent Menu
-    { id: 'editor', label: 'Editor', icon: ICONS.File, requiresProject: true },
     { id: 'settings', label: 'Settings', icon: ICONS.Settings },
   ];
 
@@ -31,27 +29,20 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, prog
         </div>
         
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto no-scrollbar">
-          {menuItems.map((item) => {
-            const isDisabled = !!item.requiresProject && !hasProject;
-            return (
-              <button
-                key={item.id}
-                onClick={() => !isDisabled && setActiveTab(item.id)}
-                disabled={isDisabled}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
-                  activeTab === item.id 
-                  ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/5' 
-                  : isDisabled
-                  ? 'text-slate-600 cursor-not-allowed opacity-50'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                }`}
-                title={isDisabled ? 'Load a project first' : undefined}
-              >
-                <span className="shrink-0">{item.icon}</span>
-                <span className="hidden md:block font-medium truncate">{item.label}</span>
-              </button>
-            );
-          })}
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+                activeTab === item.id 
+                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/20 shadow-lg shadow-blue-500/5' 
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <span className="shrink-0">{item.icon}</span>
+              <span className="hidden md:block font-medium truncate">{item.label}</span>
+            </button>
+          ))}
         </nav>
 
         {/* Sidebar Footer Area */}
