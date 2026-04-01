@@ -2131,7 +2131,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {segments.length > 0 && fileName && (
+      {activeTab === 'editor' && segments.length > 0 && fileName && (
         <div className="relative bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-40 overflow-visible">
           <div className="flex items-center gap-3 overflow-hidden">
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
