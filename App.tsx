@@ -1759,14 +1759,27 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSplitConfirm = async (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => {
+  const handleSplitConfirm = async (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any,
+    source?: { fileName: string; segments: SubtitleSegment[] }
+  ) => {
     await new Promise(resolve => setTimeout(resolve, 600));
     let res: SplitResult[] = [];
-    if (mode === 'duration') res = splitByDuration(segments, value as number, fileName, includeMetadata);
-    else if (mode === 'count') res = splitByCount(segments, value as number, fileName, includeMetadata);
-    else if (mode === 'manual') res = splitByManual(segments, (value as string).split('\n').filter(x => x.trim()), fileName, includeMetadata);
-    else if (mode === 'range') res = splitByRange(segments, value.start, value.end, fileName, includeMetadata);
-    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast('success', `File has been split into ${res.length} parts.`); }
+    const sourceSegments = source?.segments ?? segments;
+    const sourceFileName = source?.fileName ?? fileName;
+    if (!sourceFileName || sourceSegments.length === 0) {
+      showToast('warning', "No split source file selected.");
+      return;
+    }
+    if (mode === 'duration') res = splitByDuration(sourceSegments, value as number, sourceFileName);
+    else if (mode === 'count') res = splitByCount(sourceSegments, value as number, sourceFileName);
+    else if (mode === 'manual') res = splitByManual(sourceSegments, (value as string).split('\n').filter(x => x.trim()), sourceFileName);
+    else if (mode === 'range') res = splitByRange(sourceSegments, value.start, value.end, sourceFileName);
+    if (res.length > 0) {
+      setGeneratedFiles(prev => [...prev, ...res]);
+      showToast('success', `File has been split into ${res.length} parts.`);
+    }
   };
 
   const handleDownloadGenerated = (file: SplitResult) => {
@@ -1791,7 +1804,10 @@ const App: React.FC = () => {
 
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
-    showInlineStatus('info', "Temporary split file removed.");
+  };
+
+  const handleClearGenerated = () => {
+    setGeneratedFiles([]);
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -2389,7 +2405,7 @@ const App: React.FC = () => {
 
       {activeTab === 'file-tools' && (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading file tools...</div>}>
-          <FileToolsPage fileName={fileName} totalSegments={segments.length} segments={segments} onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+          <FileToolsPage onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} onClearGenerated={handleClearGenerated} />
         </Suspense>
       )}
 

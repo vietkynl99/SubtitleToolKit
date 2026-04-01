@@ -5,14 +5,16 @@ import { SplitResult, parseSRT, generateSRT, timeToSeconds, secondsToTime, forma
 import { ICONS } from '../constants';
 
 interface FileToolsPageProps {
-  fileName: string;
-  totalSegments: number;
-  segments: SubtitleSegment[];
-  onSplitConfirm: (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => Promise<void>;
+  onSplitConfirm: (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any,
+    source?: { fileName: string; segments: SubtitleSegment[] }
+  ) => Promise<void>;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
   onLoadGenerated: (file: SplitResult) => void;
   onDeleteGenerated: (index: number) => void;
+  onClearGenerated: () => void;
 }
 
 interface MergeFileEntry {
@@ -28,8 +30,13 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
   const [mergeFiles, setMergeFiles] = useState<MergeFileEntry[]>([]);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergeLoading, setMergeLoading] = useState(false);
+  const [splitFileName, setSplitFileName] = useState('');
+  const [splitSegments, setSplitSegments] = useState<SubtitleSegment[]>([]);
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [splitLoading, setSplitLoading] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const mergeInputRef = useRef<HTMLInputElement | null>(null);
+  const splitInputRef = useRef<HTMLInputElement | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const dragImageRef = useRef<HTMLImageElement | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
@@ -80,6 +87,37 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
       setMergeLoading(false);
       if (mergeInputRef.current) mergeInputRef.current.value = '';
     }
+  };
+
+  const addSplitFile = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    setSplitLoading(true);
+    setSplitError(null);
+    try {
+      const text = await file.text();
+      const parsed = parseSRT(text);
+      setSplitFileName(file.name);
+      if (parsed.length === 0) {
+        setSplitSegments([]);
+        setSplitError('No valid SRT segments found in selected file.');
+        return;
+      }
+      setSplitSegments(parsed);
+    } catch (err) {
+      setSplitError('Failed to read SRT file. Please try again.');
+      setSplitSegments([]);
+      setSplitFileName(file.name);
+    } finally {
+      setSplitLoading(false);
+      if (splitInputRef.current) splitInputRef.current.value = '';
+    }
+  };
+
+  const clearSplitFile = () => {
+    setSplitFileName('');
+    setSplitSegments([]);
+    setSplitError(null);
   };
 
   const moveMergeFile = (index: number, direction: -1 | 1) => {
@@ -183,6 +221,18 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
 
   const totalMergeSegments = mergeFiles.reduce((total, entry) => total + entry.segments.length, 0);
   const totalMergeDuration = mergeFiles.reduce((total, entry) => total + entry.duration, 0);
+  const totalSplitDuration = splitSegments.length > 0 ? getSegmentsDuration(splitSegments) : 0;
+
+  const handleSplitConfirm = async (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any
+  ) => {
+    if (!splitFileName || splitSegments.length === 0) {
+      setSplitError('Please upload a valid SRT file to split.');
+      return;
+    }
+    await props.onSplitConfirm(mode, value, { fileName: splitFileName, segments: splitSegments });
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
@@ -207,13 +257,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
             </button>
           )}
           {activeTool === 'split' && (
-            <button 
-              onClick={() => setShowSplitConfig(true)}
-              disabled={!props.fileName}
-              className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-            >
-              {ICONS.Split} Configure Split
-            </button>
+            null
           )}
         </div>
       </div>
@@ -258,86 +302,145 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                 <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Split SRT Engine
                 </h3>
+                {props.generatedFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={props.onClearGenerated}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
 
-              {!props.fileName ? (
+              {!splitFileName || splitSegments.length === 0 ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-12 text-center space-y-5 sm:space-y-6 animate-in fade-in duration-500">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
                     {ICONS.Split}
                   </div>
                   <div className="max-w-md mx-auto">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No project loaded</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No split file selected</h3>
                     <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-                      Upload an SRT or SKT project before using Split.
+                      Upload an SRT file above to enable split options.
                     </p>
+                  </div>
+                  {splitError && (
+                    <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg">
+                      {splitError}
+                    </div>
+                  )}
+                  <input
+                    ref={splitInputRef}
+                    type="file"
+                    accept=".srt"
+                    className="hidden"
+                    onChange={(e) => addSplitFile(e.target.files)}
+                  />
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => splitInputRef.current?.click()}
+                      disabled={splitLoading}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {splitLoading ? 'Loading...' : 'Upload File'}
+                    </button>
+                    {splitFileName && (
+                      <button
+                        type="button"
+                        onClick={clearSplitFile}
+                        disabled={splitLoading}
+                        className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : props.generatedFiles.length === 0 ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-12 text-center space-y-5 sm:space-y-6 animate-in fade-in duration-500">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
-                    {ICONS.Split}
+                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 space-y-5 animate-in fade-in duration-500">
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Selected file</div>
+                    <div className="text-sm font-bold text-slate-200 break-all">{splitFileName}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3 mt-2">
+                      <span>{splitSegments.length} segments</span>
+                      <span>Duration {formatDurationHMS(totalSplitDuration)}</span>
+                    </div>
                   </div>
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No split files yet</h3>
-                    <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-                      Use the Split tool to divide the file into smaller parts by duration or line count.
-                    </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button 
+                      onClick={() => setShowSplitConfig(true)}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
+                    >
+                      Start splitting
+                    </button>
+                    <button 
+                      onClick={clearSplitFile}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-sm font-bold rounded-2xl transition-all"
+                    >
+                      Clear file
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setShowSplitConfig(true)}
-                    className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
-                  >
-                    Start splitting
-                  </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                  {props.generatedFiles.map((file, idx) => (
-                    <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="p-3 bg-blue-600/10 text-blue-400 rounded-xl">
-                            {ICONS.File}
-                          </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button 
-                              onClick={() => props.onDeleteGenerated(idx)}
-                              className="p-2 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors"
-                            >
-                              {ICONS.Delete}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-200 line-clamp-2 leading-tight">{file.fileName}</h4>
-                          <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                            <span>{file.segments.length} segments</span>
-                            {file.metadata?.duration && (
-                              <>
-                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span>{file.metadata.duration}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2 mt-8">
-                        <button 
-                          onClick={() => props.onLoadGenerated(file)}
-                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
-                        >
-                          Load into Editor
-                        </button>
-                        <button 
-                          onClick={() => props.onDownloadGenerated(file)}
-                          className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/10 flex items-center justify-center gap-2"
-                        >
-                          {ICONS.Export} Save
-                        </button>
-                      </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 space-y-6 animate-in fade-in duration-500">
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Source file</div>
+                    <div className="text-sm font-bold text-slate-200 break-all">{splitFileName}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3 mt-2">
+                      <span>{splitSegments.length} segments</span>
+                      <span>Duration {formatDurationHMS(totalSplitDuration)}</span>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {props.generatedFiles.map((file, idx) => (
+                      <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3 bg-blue-600/10 text-blue-400 rounded-xl">
+                              {ICONS.File}
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button 
+                                onClick={() => props.onDeleteGenerated(idx)}
+                                className="p-2 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors"
+                              >
+                                {ICONS.Delete}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-200 line-clamp-2 leading-tight">{file.fileName}</h4>
+                            <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                              <span>{file.segments.length} segments</span>
+                              {file.metadata?.duration && (
+                                <>
+                                  <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                  <span>{file.metadata.duration}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2 mt-8">
+                          <button 
+                            onClick={() => props.onLoadGenerated(file)}
+                            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
+                          >
+                            Load into Editor
+                          </button>
+                          <button 
+                            onClick={() => props.onDownloadGenerated(file)}
+                            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/10 flex items-center justify-center gap-2"
+                          >
+                            {ICONS.Export} Save
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </section>
@@ -509,9 +612,9 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
       {showSplitConfig && (
         <SplitModal 
           onClose={() => setShowSplitConfig(false)} 
-          onConfirm={props.onSplitConfirm} 
-          totalSegments={props.totalSegments} 
-          segments={props.segments}
+          onConfirm={handleSplitConfirm} 
+          totalSegments={splitSegments.length} 
+          segments={splitSegments}
         />
       )}
     </div>
