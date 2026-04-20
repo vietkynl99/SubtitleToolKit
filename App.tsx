@@ -140,6 +140,7 @@ const App: React.FC = () => {
   const [optimizeState, setOptimizeState] = useState<{ processed: number; total: number }>({ processed: 0, total: 0 });
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoPreviewName, setVideoPreviewName] = useState<string>('');
+  const [previewMediaType, setPreviewMediaType] = useState<'video' | 'audio' | null>(null);
   const [videoPanelHeight, setVideoPanelHeight] = useState<number>(220);
   const [isResizingVideoPanel, setIsResizingVideoPanel] = useState<boolean>(false);
   const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0);
@@ -166,7 +167,7 @@ const App: React.FC = () => {
   const toastHistoryRef = useRef<HTMLDivElement | null>(null);
   const inlineStatusTimerRef = useRef<number | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const videoElementRef = useRef<HTMLMediaElement | null>(null);
   const videoResizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const editorPaneRef = useRef<HTMLDivElement | null>(null);
   const undoStackRef = useRef<SubtitleSegment[][]>([]);
@@ -360,11 +361,14 @@ const App: React.FC = () => {
     if (!file) return;
 
     const url = URL.createObjectURL(file);
+    const lowerName = file.name.toLowerCase();
+    const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|opus|wma)$/i.test(lowerName);
     setVideoPreviewUrl(prev => {
       if (prev) URL.revokeObjectURL(prev);
       return url;
     });
     setVideoPreviewName(file.name);
+    setPreviewMediaType(isAudio ? 'audio' : 'video');
     setVideoCurrentTime(0);
     const paneHeight = editorPaneRef.current?.clientHeight ?? 440;
     const maxHeight = Math.max(180, Math.min(window.innerHeight * 0.7, 560));
@@ -380,6 +384,7 @@ const App: React.FC = () => {
       return null;
     });
     setVideoPreviewName('');
+    setPreviewMediaType(null);
     setVideoCurrentTime(0);
     setIsResizingVideoPanel(false);
     videoResizeRef.current = null;
@@ -1028,11 +1033,11 @@ const App: React.FC = () => {
       }
       if (isSpaceToggle && !isTypingTarget && videoPreviewUrl && videoElementRef.current) {
         event.preventDefault();
-        const video = videoElementRef.current;
-        if (video.paused) {
-          video.play().catch(() => {});
+        const media = videoElementRef.current;
+        if (media.paused) {
+          media.play().catch(() => {});
         } else {
-          video.pause();
+          media.pause();
         }
       }
       if (isEscape && showSearchBox) {
@@ -1127,6 +1132,11 @@ const App: React.FC = () => {
     videoElementRef.current.currentTime = startSec;
     setVideoCurrentTime(startSec);
   }, [segments, videoPreviewUrl]);
+
+  const syncPreviewTime = useCallback((media: HTMLMediaElement | null) => {
+    if (!media) return;
+    setVideoCurrentTime(media.currentTime);
+  }, []);
 
   const handleGoToSegment = useCallback((segmentId: number) => {
     clearAndCloseSearch();
@@ -2514,7 +2524,7 @@ const App: React.FC = () => {
                   <input
                     ref={videoInputRef}
                     type="file"
-                    accept="video/*"
+                    accept="video/*,audio/*"
                     className="hidden"
                     onChange={handleVideoFileChange}
                   />
@@ -2649,7 +2659,9 @@ const App: React.FC = () => {
                 <div className="shrink-0 border-t border-slate-800 bg-slate-950/80 p-2" style={{ height: `${videoPanelHeight}px` }}>
                   <div className="h-full rounded-xl border border-slate-800 overflow-hidden flex flex-col">
                     <div className="px-3 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between gap-3">
-                      <span className="text-[11px] font-bold text-slate-300 truncate">{videoPreviewName || 'Video Preview'}</span>
+                      <span className="text-[11px] font-bold text-slate-300 truncate">
+                        {videoPreviewName || (previewMediaType === 'audio' ? 'Audio Preview' : 'Video Preview')}
+                      </span>
                       <button
                         type="button"
                         onClick={handleClearVideoPreview}
@@ -2659,16 +2671,36 @@ const App: React.FC = () => {
                       </button>
                     </div>
                     <div className="relative flex-1 bg-black overflow-hidden">
-                      <video
-                        ref={videoElementRef}
-                        src={videoPreviewUrl}
-                        controls
-                        className="absolute inset-0 w-full h-full object-contain"
-                        style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}
-                        onTimeUpdate={(e) => setVideoCurrentTime(e.currentTarget.currentTime)}
-                        onSeeked={(e) => setVideoCurrentTime(e.currentTarget.currentTime)}
-                        onLoadedMetadata={() => setVideoCurrentTime(0)}
-                      />
+                      {previewMediaType === 'audio' ? (
+                        <div className="absolute inset-0 flex items-center justify-center px-4">
+                          <audio
+                            ref={(el) => {
+                              videoElementRef.current = el;
+                            }}
+                            src={videoPreviewUrl}
+                            controls
+                            className="w-full max-w-3xl"
+                            onTimeUpdate={(e) => syncPreviewTime(e.currentTarget)}
+                            onSeeking={(e) => syncPreviewTime(e.currentTarget)}
+                            onSeeked={(e) => syncPreviewTime(e.currentTarget)}
+                            onLoadedMetadata={() => setVideoCurrentTime(0)}
+                          />
+                        </div>
+                      ) : (
+                        <video
+                          ref={(el) => {
+                            videoElementRef.current = el;
+                          }}
+                          src={videoPreviewUrl}
+                          controls
+                          className="absolute inset-0 w-full h-full object-contain"
+                          style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}
+                          onTimeUpdate={(e) => syncPreviewTime(e.currentTarget)}
+                          onSeeking={(e) => syncPreviewTime(e.currentTarget)}
+                          onSeeked={(e) => syncPreviewTime(e.currentTarget)}
+                          onLoadedMetadata={() => setVideoCurrentTime(0)}
+                        />
+                      )}
                       {activeCaptionLines.length > 0 && (
                         <div className="absolute inset-x-0 bottom-12 px-4 pointer-events-none">
                           <div className="mx-auto max-w-4xl space-y-1 text-center">
