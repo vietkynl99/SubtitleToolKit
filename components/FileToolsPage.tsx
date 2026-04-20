@@ -5,17 +5,20 @@ import { SplitResult, parseSRT, generateSRT, timeToSeconds, secondsToTime, forma
 import { ICONS } from '../constants';
 
 interface FileToolsPageProps {
-  fileName: string;
-  totalSegments: number;
-  segments: SubtitleSegment[];
-  onSplitConfirm: (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => Promise<void>;
+  onSplitConfirm: (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any,
+    source?: { fileName: string; segments: SubtitleSegment[] }
+  ) => Promise<void>;
   generatedFiles: SplitResult[];
   onDownloadGenerated: (file: SplitResult) => void;
   onLoadGenerated: (file: SplitResult) => void;
   onDeleteGenerated: (index: number) => void;
+  onClearGenerated: () => void;
 }
 
 interface MergeFileEntry {
+  id: string;
   name: string;
   segments: SubtitleSegment[];
   duration: number;
@@ -27,10 +30,16 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
   const [mergeFiles, setMergeFiles] = useState<MergeFileEntry[]>([]);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [mergeLoading, setMergeLoading] = useState(false);
-  const [mergeOffset, setMergeOffset] = useState(true);
-  const [mergeMode, setMergeMode] = useState<'auto' | 'original' | 'translated'>('auto');
-  const [mergeName, setMergeName] = useState('merged.srt');
+  const [splitFileName, setSplitFileName] = useState('');
+  const [splitSegments, setSplitSegments] = useState<SubtitleSegment[]>([]);
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [splitLoading, setSplitLoading] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const mergeInputRef = useRef<HTMLInputElement | null>(null);
+  const splitInputRef = useRef<HTMLInputElement | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragImageRef = useRef<HTMLImageElement | null>(null);
+  const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
 
   const getSegmentsDuration = (segments: SubtitleSegment[]) => {
     if (segments.length === 0) return 0;
@@ -59,6 +68,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
           continue;
         }
         nextEntries.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           name: file.name,
           segments: parsed,
           duration: getSegmentsDuration(parsed)
@@ -79,6 +89,37 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
     }
   };
 
+  const addSplitFile = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    setSplitLoading(true);
+    setSplitError(null);
+    try {
+      const text = await file.text();
+      const parsed = parseSRT(text);
+      setSplitFileName(file.name);
+      if (parsed.length === 0) {
+        setSplitSegments([]);
+        setSplitError('No valid SRT segments found in selected file.');
+        return;
+      }
+      setSplitSegments(parsed);
+    } catch (err) {
+      setSplitError('Failed to read SRT file. Please try again.');
+      setSplitSegments([]);
+      setSplitFileName(file.name);
+    } finally {
+      setSplitLoading(false);
+      if (splitInputRef.current) splitInputRef.current.value = '';
+    }
+  };
+
+  const clearSplitFile = () => {
+    setSplitFileName('');
+    setSplitSegments([]);
+    setSplitError(null);
+  };
+
   const moveMergeFile = (index: number, direction: -1 | 1) => {
     setMergeFiles(prev => {
       const next = [...prev];
@@ -95,35 +136,68 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
     setMergeFiles(prev => prev.filter((_, idx) => idx !== index));
   };
 
+  const moveMergeFileTo = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0) return;
+    setMergeFiles(prev => {
+      if (from >= prev.length || to > prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      const rawTarget = from < to ? to - 1 : to;
+      const target = Math.max(0, Math.min(rawTarget, next.length));
+      next.splice(target, 0, item);
+      return next;
+    });
+  };
+
+  const clearDragGhost = () => {
+    if (dragGhostRef.current) {
+      dragGhostRef.current.remove();
+      dragGhostRef.current = null;
+    }
+    dragOffsetRef.current = null;
+  };
+
+  const getTransparentDragImage = () => {
+    if (dragImageRef.current) return dragImageRef.current;
+    const img = new Image();
+    img.src =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==';
+    dragImageRef.current = img;
+    return img;
+  };
+
+  const updateDragGhostPosition = (clientX: number, clientY: number) => {
+    if (!dragGhostRef.current || !dragOffsetRef.current) return;
+    const x = clientX - dragOffsetRef.current.x;
+    const y = clientY - dragOffsetRef.current.y;
+    dragGhostRef.current.style.transform = `translate(${x}px, ${y}px)`;
+  };
+
   const buildMergedSegments = () => {
     let offset = 0;
     let nextId = 1;
     const merged: SubtitleSegment[] = [];
 
     mergeFiles.forEach(entry => {
-      const fileOffset = mergeOffset ? offset : 0;
+      const fileOffset = offset;
       entry.segments.forEach(seg => {
         const start = secondsToTime(timeToSeconds(seg.startTime) + fileOffset);
         const end = secondsToTime(timeToSeconds(seg.endTime) + fileOffset);
-        const outputText = mergeMode === 'auto'
-          ? (seg.translatedText || seg.originalText || '')
-          : mergeMode === 'translated'
-            ? (seg.translatedText || '')
-            : (seg.originalText || '');
+        const outputText = seg.originalText || seg.translatedText || '';
         merged.push({
           ...seg,
           id: nextId++,
           startTime: start,
           endTime: end,
-          originalText: seg.originalText,
-          translatedText: outputText,
+          originalText: outputText,
+          translatedText: null,
           errors: [],
           severity: 'safe',
           cps: 0,
           issueList: []
         });
       });
-      if (mergeOffset) offset += entry.duration;
+      offset += entry.duration;
     });
 
     return merged;
@@ -135,18 +209,30 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
       setMergeError('No segments to merge.');
       return;
     }
-    const content = generateSRT(merged, 'translated');
+    const content = generateSRT(merged, 'original');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = normalizeSrtName(mergeName);
+    a.download = 'merged.srt';
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const totalMergeSegments = mergeFiles.reduce((total, entry) => total + entry.segments.length, 0);
   const totalMergeDuration = mergeFiles.reduce((total, entry) => total + entry.duration, 0);
+  const totalSplitDuration = splitSegments.length > 0 ? getSegmentsDuration(splitSegments) : 0;
+
+  const handleSplitConfirm = async (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any
+  ) => {
+    if (!splitFileName || splitSegments.length === 0) {
+      setSplitError('Please upload a valid SRT file to split.');
+      return;
+    }
+    await props.onSplitConfirm(mode, value, { fileName: splitFileName, segments: splitSegments });
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
@@ -171,13 +257,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
             </button>
           )}
           {activeTool === 'split' && (
-            <button 
-              onClick={() => setShowSplitConfig(true)}
-              disabled={!props.fileName}
-              className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-            >
-              {ICONS.Split} Configure Split
-            </button>
+            null
           )}
         </div>
       </div>
@@ -222,86 +302,145 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                 <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.08em] opacity-60 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Split SRT Engine
                 </h3>
+                {props.generatedFiles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={props.onClearGenerated}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
 
-              {!props.fileName ? (
+              {!splitFileName || splitSegments.length === 0 ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-12 text-center space-y-5 sm:space-y-6 animate-in fade-in duration-500">
                   <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
                     {ICONS.Split}
                   </div>
                   <div className="max-w-md mx-auto">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No project loaded</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No split file selected</h3>
                     <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-                      Upload an SRT or SKT project before using Split.
+                      Upload an SRT file above to enable split options.
                     </p>
+                  </div>
+                  {splitError && (
+                    <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-2 rounded-lg">
+                      {splitError}
+                    </div>
+                  )}
+                  <input
+                    ref={splitInputRef}
+                    type="file"
+                    accept=".srt"
+                    className="hidden"
+                    onChange={(e) => addSplitFile(e.target.files)}
+                  />
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => splitInputRef.current?.click()}
+                      disabled={splitLoading}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-2xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {splitLoading ? 'Loading...' : 'Upload File'}
+                    </button>
+                    {splitFileName && (
+                      <button
+                        type="button"
+                        onClick={clearSplitFile}
+                        disabled={splitLoading}
+                        className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : props.generatedFiles.length === 0 ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-12 text-center space-y-5 sm:space-y-6 animate-in fade-in duration-500">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto text-slate-600">
-                    {ICONS.Split}
+                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 space-y-5 animate-in fade-in duration-500">
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Selected file</div>
+                    <div className="text-sm font-bold text-slate-200 break-all">{splitFileName}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3 mt-2">
+                      <span>{splitSegments.length} segments</span>
+                      <span>Duration {formatDurationHMS(totalSplitDuration)}</span>
+                    </div>
                   </div>
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-300">No split files yet</h3>
-                    <p className="text-slate-500 text-sm mt-2 leading-relaxed">
-                      Use the Split tool to divide the file into smaller parts by duration or line count.
-                    </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button 
+                      onClick={() => setShowSplitConfig(true)}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
+                    >
+                      Start splitting
+                    </button>
+                    <button 
+                      onClick={clearSplitFile}
+                      className="px-6 sm:px-8 py-2.5 sm:py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-sm font-bold rounded-2xl transition-all"
+                    >
+                      Clear file
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setShowSplitConfig(true)}
-                    className="px-6 sm:px-8 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-2xl transition-all"
-                  >
-                    Start splitting
-                  </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-                  {props.generatedFiles.map((file, idx) => (
-                    <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="p-3 bg-blue-600/10 text-blue-400 rounded-xl">
-                            {ICONS.File}
-                          </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button 
-                              onClick={() => props.onDeleteGenerated(idx)}
-                              className="p-2 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors"
-                            >
-                              {ICONS.Delete}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-200 line-clamp-2 leading-tight">{file.fileName}</h4>
-                          <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                            <span>{file.segments.length} segments</span>
-                            {file.metadata?.duration && (
-                              <>
-                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span>{file.metadata.duration}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2 mt-8">
-                        <button 
-                          onClick={() => props.onLoadGenerated(file)}
-                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
-                        >
-                          Load into Editor
-                        </button>
-                        <button 
-                          onClick={() => props.onDownloadGenerated(file)}
-                          className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/10 flex items-center justify-center gap-2"
-                        >
-                          {ICONS.Export} Save
-                        </button>
-                      </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-6 sm:p-8 space-y-6 animate-in fade-in duration-500">
+                  <div className="bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2">Source file</div>
+                    <div className="text-sm font-bold text-slate-200 break-all">{splitFileName}</div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3 mt-2">
+                      <span>{splitSegments.length} segments</span>
+                      <span>Duration {formatDurationHMS(totalSplitDuration)}</span>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {props.generatedFiles.map((file, idx) => (
+                      <div key={idx} className="bg-slate-900 border border-slate-800 rounded-[24px] sm:rounded-[32px] p-5 sm:p-6 hover:border-blue-500/30 transition-all group flex flex-col justify-between">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3 bg-blue-600/10 text-blue-400 rounded-xl">
+                              {ICONS.File}
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button 
+                                onClick={() => props.onDeleteGenerated(idx)}
+                                className="p-2 hover:bg-rose-500/10 text-rose-500 rounded-lg transition-colors"
+                              >
+                                {ICONS.Delete}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-200 line-clamp-2 leading-tight">{file.fileName}</h4>
+                            <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                              <span>{file.segments.length} segments</span>
+                              {file.metadata?.duration && (
+                                <>
+                                  <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                  <span>{file.metadata.duration}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2 mt-8">
+                          <button 
+                            onClick={() => props.onLoadGenerated(file)}
+                            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
+                          >
+                            Load into Editor
+                          </button>
+                          <button 
+                            onClick={() => props.onDownloadGenerated(file)}
+                            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-blue-600/10 flex items-center justify-center gap-2"
+                          >
+                            {ICONS.Export} Save
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </section>
@@ -336,7 +475,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                       disabled={mergeLoading}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {mergeLoading ? 'Loading...' : 'Add SRT Files'}
+                      {mergeLoading ? 'Loading...' : 'Add Files'}
                     </button>
                     <button
                       type="button"
@@ -359,33 +498,85 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                     No files selected yet. Add multiple `.srt` files to merge.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div
+                    className="space-y-3"
+                    onDragOver={(e) => {
+                      if (dragIndex === null) return;
+                      e.preventDefault();
+                      updateDragGhostPosition(e.clientX, e.clientY);
+                    }}
+                  >
                     {mergeFiles.map((entry, idx) => (
-                      <div key={`${entry.name}-${idx}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3">
-                        <div className="space-y-1">
+                      <div
+                        key={entry.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragIndex(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', String(idx));
+                          const node = e.currentTarget as HTMLDivElement;
+                          const rect = node.getBoundingClientRect();
+                          const ghost = node.cloneNode(true) as HTMLDivElement;
+                          ghost.style.width = `${rect.width}px`;
+                          ghost.style.position = 'absolute';
+                          ghost.style.top = '0';
+                          ghost.style.left = '0';
+                          ghost.style.pointerEvents = 'none';
+                          ghost.style.opacity = '1';
+                          ghost.style.filter = 'none';
+                          ghost.style.backgroundColor = '#0f172a';
+                          ghost.style.borderColor = '#334155';
+                          ghost.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.35)';
+                          ghost.style.transform = 'scale(1)';
+                          ghost.style.zIndex = '9999';
+                          ghost.style.margin = '0';
+                          ghost.style.willChange = 'transform';
+                          document.body.appendChild(ghost);
+                          dragGhostRef.current = ghost;
+                          const offsetX = e.clientX - rect.left;
+                          const offsetY = e.clientY - rect.top;
+                          dragOffsetRef.current = { x: offsetX, y: offsetY };
+                          updateDragGhostPosition(e.clientX, e.clientY);
+                          e.dataTransfer.setDragImage(getTransparentDragImage(), 0, 0);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          updateDragGhostPosition(e.clientX, e.clientY);
+                          if (dragIndex === null) return;
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                          const midpoint = rect.top + rect.height / 2;
+                          const insertIndex = e.clientY < midpoint ? idx : idx + 1;
+                          const nextIndex = insertIndex > dragIndex ? insertIndex - 1 : insertIndex;
+                          if (nextIndex === dragIndex) return;
+                          moveMergeFileTo(dragIndex, insertIndex);
+                          setDragIndex(nextIndex);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragIndex !== null) {
+                            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                            const midpoint = rect.top + rect.height / 2;
+                            const insertIndex = e.clientY < midpoint ? idx : idx + 1;
+                            moveMergeFileTo(dragIndex, insertIndex);
+                          }
+                          setDragIndex(null);
+                          clearDragGhost();
+                        }}
+                        onDragEnd={() => {
+                          setDragIndex(null);
+                          clearDragGhost();
+                        }}
+                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-800/40 border border-slate-700/40 rounded-2xl px-4 py-3 ${dragIndex === idx ? 'ring-2 ring-emerald-500/40 border-emerald-500/40 border-dashed bg-slate-800/20' : ''}`}
+                      >
+                        <div className={`space-y-1 ${dragIndex === idx ? 'opacity-0' : ''}`}>
                           <div className="text-sm font-bold text-slate-200 break-all">{entry.name}</div>
                           <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex flex-wrap gap-3">
                             <span>{entry.segments.length} segments</span>
                             <span>Duration {formatDurationHMS(entry.duration)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => moveMergeFile(idx, -1)}
-                            disabled={idx === 0}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Up
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveMergeFile(idx, 1)}
-                            disabled={idx === mergeFiles.length - 1}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Down
-                          </button>
+                        <div className={`flex items-center gap-2 ${dragIndex === idx ? 'opacity-0' : ''}`}>
                           <button
                             type="button"
                             onClick={() => removeMergeFile(idx)}
@@ -399,50 +590,6 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Offset Timing</div>
-                      <div className="text-xs text-slate-300 mt-1">Append files sequentially</div>
-                    </div>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only"
-                        checked={mergeOffset}
-                        onChange={(e) => setMergeOffset(e.target.checked)}
-                      />
-                      <span className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${mergeOffset ? 'bg-emerald-600' : 'bg-slate-700'}`}>
-                        <span className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${mergeOffset ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Content Mode</div>
-                    <select
-                      value={mergeMode}
-                      onChange={(e) => setMergeMode(e.target.value as 'auto' | 'original' | 'translated')}
-                      className="mt-2 w-full bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs font-bold"
-                    >
-                      <option value="auto">Prefer Translated (fallback Original)</option>
-                      <option value="translated">Translated Only</option>
-                      <option value="original">Original Only</option>
-                    </select>
-                  </div>
-
-                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Output Name</div>
-                    <input
-                      type="text"
-                      value={mergeName}
-                      onChange={(e) => setMergeName(e.target.value)}
-                      className="mt-2 w-full bg-slate-900 border border-slate-700 text-slate-100 px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs font-bold"
-                      placeholder="merged.srt"
-                    />
-                  </div>
-                </div>
-
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
                     {mergeFiles.length} files • {totalMergeSegments} segments • {formatDurationHMS(totalMergeDuration)}
@@ -453,7 +600,7 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
                     disabled={mergeFiles.length === 0}
                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Merge & Download
+                    Merge & Export
                   </button>
                 </div>
               </div>
@@ -465,9 +612,9 @@ const FileToolsPage: React.FC<FileToolsPageProps> = (props) => {
       {showSplitConfig && (
         <SplitModal 
           onClose={() => setShowSplitConfig(false)} 
-          onConfirm={props.onSplitConfirm} 
-          totalSegments={props.totalSegments} 
-          segments={props.segments}
+          onConfirm={handleSplitConfirm} 
+          totalSegments={splitSegments.length} 
+          segments={splitSegments}
         />
       )}
     </div>

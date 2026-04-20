@@ -52,7 +52,7 @@ const PresetPage = lazy(() => import('./components/PresetPage'));
 
 const App: React.FC = () => {
   // State
-  const [activeTab, setActiveTab] = useState<string>('upload');
+  const [activeTab, setActiveTab] = useState<string>('editor');
   const [status, setStatus] = useState<Status>('idle');
   const [progress, setProgress] = useState<number>(0);
   const [segments, setSegments] = useState<SubtitleSegment[]>([]);
@@ -92,6 +92,7 @@ const App: React.FC = () => {
   const [showReplaceModal, setShowReplaceModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [showTranslationStylePopup, setShowTranslationStylePopup] = useState<boolean>(false);
   const [showAutoSplitModal, setShowAutoSplitModal] = useState<boolean>(false);
   const [showRemoveQuotesModal, setShowRemoveQuotesModal] = useState<boolean>(false);
   const [autoSplitChoice, setAutoSplitChoice] = useState<boolean>(DEFAULT_SETTINGS.autoSplitLongLines);
@@ -1403,7 +1404,7 @@ const App: React.FC = () => {
     setFilter('all');
     setCurrentPage(1);
     setShowClearModal(false);
-    setActiveTab('upload');
+    setActiveTab('editor');
     setSelectedIds(new Set());
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!skipFeedback) showToast('success', "Project has been cleared.");
@@ -1462,14 +1463,6 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
-    setStatus('processing');
-    stopRequestedRef.current = false;
-    setIsStoppingTranslate(false);
-    const totalToTranslateInSession = needingTranslation.length;
-    setTranslationState({ status: 'running', processed: 0, total: totalToTranslateInSession });
-    setProgress(0);
-    let completedInSession = 0;
-
     if (!settings.apiKey?.trim()) {
       showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
       setActiveTab('settings');
@@ -1477,9 +1470,16 @@ const App: React.FC = () => {
     }
     if (!translationPreset) {
       showInlineStatus('warning', "Please configure Translation Style first.");
-      setActiveTab('translation-style');
+      setShowTranslationStylePopup(true);
       return;
     }
+    setStatus('processing');
+    stopRequestedRef.current = false;
+    setIsStoppingTranslate(false);
+    const totalToTranslateInSession = needingTranslation.length;
+    setTranslationState({ status: 'running', processed: 0, total: totalToTranslateInSession });
+    setProgress(0);
+    let completedInSession = 0;
     try {
       let queue = [...needingTranslation];
       while (queue.length > 0) {
@@ -1769,14 +1769,27 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSplitConfirm = async (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => {
+  const handleSplitConfirm = async (
+    mode: 'duration' | 'count' | 'manual' | 'range',
+    value: any,
+    source?: { fileName: string; segments: SubtitleSegment[] }
+  ) => {
     await new Promise(resolve => setTimeout(resolve, 600));
     let res: SplitResult[] = [];
-    if (mode === 'duration') res = splitByDuration(segments, value as number, fileName, includeMetadata);
-    else if (mode === 'count') res = splitByCount(segments, value as number, fileName, includeMetadata);
-    else if (mode === 'manual') res = splitByManual(segments, (value as string).split('\n').filter(x => x.trim()), fileName, includeMetadata);
-    else if (mode === 'range') res = splitByRange(segments, value.start, value.end, fileName, includeMetadata);
-    if (res.length > 0) { setGeneratedFiles(prev => [...prev, ...res]); showToast('success', `File has been split into ${res.length} parts.`); }
+    const sourceSegments = source?.segments ?? segments;
+    const sourceFileName = source?.fileName ?? fileName;
+    if (!sourceFileName || sourceSegments.length === 0) {
+      showToast('warning', "No split source file selected.");
+      return;
+    }
+    if (mode === 'duration') res = splitByDuration(sourceSegments, value as number, sourceFileName);
+    else if (mode === 'count') res = splitByCount(sourceSegments, value as number, sourceFileName);
+    else if (mode === 'manual') res = splitByManual(sourceSegments, (value as string).split('\n').filter(x => x.trim()), sourceFileName);
+    else if (mode === 'range') res = splitByRange(sourceSegments, value.start, value.end, sourceFileName);
+    if (res.length > 0) {
+      setGeneratedFiles(prev => [...prev, ...res]);
+      showToast('success', `File has been split into ${res.length} parts.`);
+    }
   };
 
   const handleDownloadGenerated = (file: SplitResult) => {
@@ -1801,7 +1814,10 @@ const App: React.FC = () => {
 
   const handleDeleteGenerated = (index: number) => {
     setGeneratedFiles(prev => prev.filter((_, i) => i !== index));
-    showInlineStatus('info', "Temporary split file removed.");
+  };
+
+  const handleClearGenerated = () => {
+    setGeneratedFiles([]);
   };
 
   const updateSegmentText = (id: number, text: string) => {
@@ -2141,12 +2157,72 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {segments.length > 0 && fileName && (
+      {showTranslationStylePopup && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[220] flex items-center justify-center p-4">
+          <div className="relative w-full max-w-6xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-[22px] sm:rounded-[28px] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg">{ICONS.Fix}</div>
+                <div>
+                  <div className="text-sm sm:text-base font-bold text-slate-100">Translation Style</div>
+                  <div className="text-[11px] text-slate-500">Configure DNA presets for consistent tone and names.</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className={`flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all cursor-pointer shadow-md shadow-blue-600/20 ${isPresetLoading ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                  {ICONS.Upload} Import Preset
+                  {!isPresetLoading && <input type="file" accept=".json,.sktproject" className="hidden" onChange={handleImportPreset} />}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowTranslationStylePopup(false)}
+                  className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
+                  aria-label="Close translation style"
+                  title="Close"
+                >
+                  <span className="text-lg">{ICONS.Close}</span>
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[90vh] overflow-y-auto">
+              <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm p-10">Loading translation style tools...</div>}>
+                <PresetPage
+                  preset={translationPreset}
+                  isLoading={isPresetLoading}
+                  onAnalyze={handleDNAAnalyze}
+                  onImport={handleImportPreset}
+                  onUpdatePreset={setTranslationPreset}
+                  fileName={fileName}
+                  displayFileName={displayFileName}
+                  totalSegments={segments.length}
+                  totalDuration={totalDurationStr}
+                  draftSummary={presetDraftSummary}
+                  onDraftSummaryChange={setPresetDraftSummary}
+                />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'editor' && segments.length > 0 && fileName && (
         <div className="relative bg-slate-900 border-b border-slate-800 px-3 sm:px-5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 shrink-0 z-40 overflow-visible">
-          <div className="flex items-center gap-3 overflow-hidden">
+          <div
+            className="flex items-center gap-3 overflow-hidden cursor-pointer"
+            onClick={() => setShowTranslationStylePopup(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setShowTranslationStylePopup(true);
+              }
+            }}
+            title="Open Translation Style"
+          >
             <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
             <div className="overflow-hidden">
-              <h2 className="text-sm font-bold text-slate-100 truncate cursor-pointer" onClick={() => copyToClipboard(displayFileName, "File name copied to clipboard")}>{displayFileName}</h2>
+              <h2 className="text-sm font-bold text-slate-100 truncate">{displayFileName}</h2>
               <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                 <span>{processedSegments.length} SEGMENTS</span>
                 <span className="hidden sm:inline w-1 h-1 rounded-full bg-slate-700"></span>
@@ -2356,7 +2432,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'upload' && (
+      {activeTab === 'editor' && segments.length === 0 && (
         <div className="relative flex-1 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/50" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
           <div className="w-full max-w-2xl text-center">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-1 tracking-tight">Subtitle Toolkit</h1>
@@ -2381,25 +2457,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'translation-style' && (
-        <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading translation style tools...</div>}>
-          <PresetPage
-            preset={translationPreset}
-            isLoading={isPresetLoading}
-            onAnalyze={handleDNAAnalyze}
-            onImport={handleImportPreset}
-            onUpdatePreset={setTranslationPreset}
-            fileName={fileName}
-            totalSegments={segments.length}
-            draftSummary={presetDraftSummary}
-            onDraftSummaryChange={setPresetDraftSummary}
-          />
-        </Suspense>
-      )}
-
       {activeTab === 'file-tools' && (
         <Suspense fallback={<div className="flex-1 flex items-center justify-center text-slate-400 text-sm">Loading file tools...</div>}>
-          <FileToolsPage fileName={fileName} totalSegments={segments.length} segments={segments} onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} />
+          <FileToolsPage onSplitConfirm={handleSplitConfirm} generatedFiles={generatedFiles} onDownloadGenerated={handleDownloadGenerated} onLoadGenerated={handleLoadGenerated} onDeleteGenerated={handleDeleteGenerated} onClearGenerated={handleClearGenerated} />
         </Suspense>
       )}
 

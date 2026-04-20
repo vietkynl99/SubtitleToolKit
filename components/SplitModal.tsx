@@ -5,7 +5,7 @@ import { timeToSeconds } from '../services/subtitleLogic';
 
 interface SplitModalProps {
   onClose: () => void;
-  onConfirm: (mode: 'duration' | 'count' | 'manual' | 'range', value: any, includeMetadata: boolean) => Promise<void>;
+  onConfirm: (mode: 'duration' | 'count' | 'manual' | 'range', value: any) => Promise<void>;
   totalSegments: number;
   segments: SubtitleSegment[];
 }
@@ -15,7 +15,6 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
   const [duration, setDuration] = useState<number>(10);
   const [count, setCount] = useState<number>(200);
   const [manual, setManual] = useState<string>('');
-  const [includeMetadata, setIncludeMetadata] = useState<boolean>(true);
   
   // v1.3.0 processing state
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
@@ -88,16 +87,16 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
   const handleConfirm = async () => {
     setStatus('processing');
     try {
-      if (mode === 'range') {
-        if (!rangeValidation.valid) throw new Error('Invalid range');
-        let s = rangeStart;
-        let e = rangeEnd;
-        if (rangeType === 'startToN') s = 1;
-        if (rangeType === 'nToEnd') e = totalSegments;
-        await onConfirm('range', { start: s, end: e }, includeMetadata);
-      } else {
-        await onConfirm(mode, mode === 'duration' ? duration : mode === 'count' ? count : manual, includeMetadata);
-      }
+        if (mode === 'range') {
+          if (!rangeValidation.valid) throw new Error('Invalid range');
+          let s = rangeStart;
+          let e = rangeEnd;
+          if (rangeType === 'startToN') s = 1;
+          if (rangeType === 'nToEnd') e = totalSegments;
+          await onConfirm('range', { start: s, end: e });
+        } else {
+        await onConfirm(mode, mode === 'duration' ? duration : mode === 'count' ? count : manual);
+        }
       setStatus('success');
       // Success delay for feedback
       setTimeout(onClose, 800);
@@ -275,20 +274,6 @@ const SplitModal: React.FC<SplitModalProps> = ({ onClose, onConfirm, totalSegmen
               )}
             </div>
 
-            {/* v1.4.0 Metadata Option */}
-            <div className={`p-4 rounded-2xl bg-slate-800/50 border border-slate-700/50 flex items-center justify-between transition-opacity ${isLocked ? 'opacity-50 pointer-events-none' : ''}`}>
-              <div className="flex items-center gap-3">
-                <input 
-                  type="checkbox" 
-                  id="includeMetadata"
-                  checked={includeMetadata}
-                  onChange={(e) => setIncludeMetadata(e.target.checked)}
-                  className="w-4 h-4 bg-slate-900 border-slate-700 rounded text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
-                />
-                <label htmlFor="includeMetadata" className="text-xs font-medium text-slate-300 cursor-pointer">Include split metadata header</label>
-              </div>
-              <span className="text-[10px] text-slate-500 italic">Recommended</span>
-            </div>
           </div>
         </div>
 
