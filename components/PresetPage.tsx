@@ -145,7 +145,7 @@ const PresetPage: React.FC<PresetPageProps> = ({
   return (
     <div className="flex-1 p-4 sm:p-7 overflow-y-auto bg-slate-950 no-scrollbar pb-16">
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_2fr] gap-4 sm:gap-5 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 sm:gap-5 items-stretch">
           <div className="bg-slate-900 border border-slate-800 rounded-[18px] sm:rounded-[22px] p-4 sm:p-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-600/10 text-blue-400 rounded-lg shrink-0">{ICONS.File}</div>
