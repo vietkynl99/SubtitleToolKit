@@ -28,14 +28,20 @@ import {
   SplitMetadata,
   TranslationPreset,
   ApiUsage,
-  AiModel
+  AiModel,
+  AiProvider
 } from './types';
 import { 
-  translateBatch,
-  aiFixSegments,
-  analyzeTranslationStyle,
-  splitToTwoLinesIfLong
+  translateBatch as translateBatchGemini,
+  aiFixSegments as aiFixSegmentsGemini,
+  analyzeTranslationStyle as analyzeTranslationStyleGemini
 } from './services/geminiService';
+import { 
+  translateBatch as translateBatchOpenRouter,
+  aiFixSegments as aiFixSegmentsOpenRouter,
+  analyzeTranslationStyle as analyzeTranslationStyleOpenRouter
+} from './services/openRouterService';
+import { splitToTwoLinesIfLong } from './services/aiServiceUtils';
 import Layout from './components/Layout';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
 
@@ -61,17 +67,23 @@ const App: React.FC = () => {
     try {
       const savedSettings = localStorage.getItem('subtitle_settings');
       const savedApiKey = localStorage.getItem('subtitle_api_key');
+      const savedOpenRouterApiKey = localStorage.getItem('subtitle_openrouter_api_key');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         const merged: AppSettings = {
           ...DEFAULT_SETTINGS,
           ...parsed,
-          apiKey: savedApiKey ?? parsed.apiKey ?? ''
+          apiKey: savedApiKey ?? parsed.apiKey ?? '',
+          openRouterApiKey: savedOpenRouterApiKey ?? parsed.openRouterApiKey ?? ''
         };
         return merged;
       }
-      if (savedApiKey) {
-        const fromKey: AppSettings = { ...DEFAULT_SETTINGS, apiKey: savedApiKey };
+      if (savedApiKey || savedOpenRouterApiKey) {
+        const fromKey: AppSettings = { 
+          ...DEFAULT_SETTINGS, 
+          apiKey: savedApiKey ?? '',
+          openRouterApiKey: savedOpenRouterApiKey ?? ''
+        };
         return fromKey;
       }
     } catch {
@@ -130,6 +142,7 @@ const App: React.FC = () => {
     customText?: string;
   }>({ status: 'idle', processed: 0, total: 0 });
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  const [showOpenRouterApiKey, setShowOpenRouterApiKey] = useState<boolean>(false);
   const [showQualityDashboard, setShowQualityDashboard] = useState<boolean>(true);
   const [showSearchBox, setShowSearchBox] = useState<boolean>(false);
   const [showReplaceBox, setShowReplaceBox] = useState<boolean>(false);
@@ -418,6 +431,11 @@ const App: React.FC = () => {
       localStorage.setItem('subtitle_api_key', settings.apiKey);
     } else {
       localStorage.removeItem('subtitle_api_key');
+    }
+    if (typeof settings.openRouterApiKey === 'string' && settings.openRouterApiKey.trim()) {
+      localStorage.setItem('subtitle_openrouter_api_key', settings.openRouterApiKey);
+    } else {
+      localStorage.removeItem('subtitle_openrouter_api_key');
     }
   }, [settings]);
 
@@ -1154,15 +1172,25 @@ const App: React.FC = () => {
   };
 
   const handleDNAAnalyze = async (input: string) => {
-    if (!settingsRef.current.apiKey?.trim()) {
-      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
+    const currentSettings = settingsRef.current;
+    const isGemini = currentSettings.aiProvider === 'gemini';
+    const hasApiKey = isGemini 
+      ? currentSettings.apiKey?.trim() 
+      : currentSettings.openRouterApiKey?.trim();
+    
+    if (!hasApiKey) {
+      showInlineStatus('warning', isGemini 
+        ? "Please enter your Gemini API Key in Settings." 
+        : "Please enter your OpenRouter API Key in Settings.");
       setActiveTab('settings');
       return;
     }
     if (!input.trim()) return;
     setIsPresetLoading(true);
     try {
-      const { preset, tokens } = await analyzeTranslationStyle(input, settings.aiModel, settings.apiKey);
+      const { preset, tokens } = isGemini
+        ? await analyzeTranslationStyleGemini(input, currentSettings.aiModel, currentSettings.apiKey)
+        : await analyzeTranslationStyleOpenRouter(input, currentSettings.openRouterModel, currentSettings.openRouterApiKey);
       
       setTranslationPreset(preset);
       if (preset?.reference?.title_or_summary) {
@@ -1463,8 +1491,16 @@ const App: React.FC = () => {
       setTranslationState(prev => ({ ...prev, status: 'completed' }));
       return;
     }
-    if (!settings.apiKey?.trim()) {
-      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
+    const currentSettings = settingsRef.current;
+    const isGemini = currentSettings.aiProvider === 'gemini';
+    const hasApiKey = isGemini 
+      ? currentSettings.apiKey?.trim() 
+      : currentSettings.openRouterApiKey?.trim();
+    
+    if (!hasApiKey) {
+      showInlineStatus('warning', isGemini 
+        ? "Please enter your Gemini API Key in Settings." 
+        : "Please enter your OpenRouter API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -1519,16 +1555,29 @@ const App: React.FC = () => {
         }
 
         setSegments(prev => prev.map(s => translateBatchTargets.some(cb => cb.id === s.id) ? { ...s, isProcessing: true } : s));
-        const { translatedTexts, tokens } = await translateBatch(
-          translateBatchTargets,
-          contextBefore,
-          contextAfter,
-          translationPreset,
-          currentSettings.aiModel,
-          currentSettings.apiKey,
-          currentSettings.maxSingleLineWords,
-          currentSettings.autoSplitLongLines
-        );
+        
+        const isGemini = currentSettings.aiProvider === 'gemini';
+        const { translatedTexts, tokens } = isGemini
+          ? await translateBatchGemini(
+              translateBatchTargets,
+              contextBefore,
+              contextAfter,
+              translationPreset,
+              currentSettings.aiModel,
+              currentSettings.apiKey,
+              currentSettings.maxSingleLineWords,
+              currentSettings.autoSplitLongLines
+            )
+          : await translateBatchOpenRouter(
+              translateBatchTargets,
+              contextBefore,
+              contextAfter,
+              translationPreset,
+              currentSettings.openRouterModel,
+              currentSettings.openRouterApiKey,
+              currentSettings.maxSingleLineWords,
+              currentSettings.autoSplitLongLines
+            );
         const translationMap = new Map<number, string>();
         for (const item of translatedTexts) {
           if (item && typeof item.id === 'number' && typeof item.text === 'string' && item.text.trim().length > 0) {
@@ -1580,8 +1629,16 @@ const App: React.FC = () => {
   };
 
   const handleAiOptimize = async () => {
-    if (!settingsRef.current.apiKey?.trim()) {
-      showInlineStatus('warning', "Please enter your Gemini API Key in Settings.");
+    const currentSettings = settingsRef.current;
+    const isGemini = currentSettings.aiProvider === 'gemini';
+    const hasApiKey = isGemini 
+      ? currentSettings.apiKey?.trim() 
+      : currentSettings.openRouterApiKey?.trim();
+    
+    if (!hasApiKey) {
+      showInlineStatus('warning', isGemini 
+        ? "Please enter your Gemini API Key in Settings." 
+        : "Please enter your OpenRouter API Key in Settings.");
       setActiveTab('settings');
       return;
     }
@@ -1638,7 +1695,10 @@ const App: React.FC = () => {
           const batchIdx = Math.floor(i / batchSize) + 1;
 
           const currentSettings = settingsRef.current;
-          const { segments: fixed, tokens } = await aiFixSegments(currentBatch, translationPreset, currentSettings.aiModel, currentSettings.apiKey);
+          const isGemini = currentSettings.aiProvider === 'gemini';
+          const { segments: fixed, tokens } = isGemini
+            ? await aiFixSegmentsGemini(currentBatch, translationPreset, currentSettings.aiModel, currentSettings.apiKey)
+            : await aiFixSegmentsOpenRouter(currentBatch, translationPreset, currentSettings.openRouterModel, currentSettings.openRouterApiKey);
           requestCount++;
           
           fixed.forEach(f => {
@@ -2842,54 +2902,136 @@ const App: React.FC = () => {
               </div>
 
               <div className="space-y-5">
+                {/* Provider Selection */}
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Model
+                  <label htmlFor="ai-provider-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    AI Provider
                   </label>
                   <select 
-                    id="ai-model-select"
-                    value={settings.aiModel}
-                    onChange={(e) => setSettings(prev => ({ ...prev, aiModel: e.target.value as AiModel }))}
+                    id="ai-provider-select"
+                    value={settings.aiProvider}
+                    onChange={(e) => setSettings(prev => ({ ...prev, aiProvider: e.target.value as AiProvider }))}
                     className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer font-bold text-sm"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2rem' }}
                   >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Efficient)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Balanced)</option>
-                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Latest Fast)</option>
-                    <option value="gemini-3-pro-preview">Gemini 3 Pro Preview (Highest Quality)</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openrouter">OpenRouter (Multi-model)</option>
                   </select>
-                </div>
-
-                <div className="flex flex-col gap-2 relative">
-                  <label htmlFor="ai-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Gemini API Key
-                  </label>
-                  <input
-                    id="ai-api-key-input"
-                    type="text"
-                    placeholder="Enter your Gemini API Key"
-                    value={settings.apiKey || ''}
-                    onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
-                    className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
-                    autoComplete="off"
-                    name="gemini_api_key"
-                    inputMode="text"
-                    spellCheck={false}
-                    style={showApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(prev => !prev)}
-                    className="absolute right-3 top-9 p-1 text-slate-400 hover:text-slate-200 transition-colors"
-                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
-                    title={showApiKey ? 'Hide API key' : 'Show API key'}
-                  >
-                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
                   <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                    This key is stored locally in your browser (localStorage) and is only sent directly to Google APIs when making requests.
+                    {settings.aiProvider === 'gemini' 
+                      ? 'Use Google Gemini API directly with your Gemini API key.'
+                      : 'Use OpenRouter to access multiple AI models (GPT, Claude, Gemini, etc.)'}
                   </p>
                 </div>
+
+                {/* Gemini Settings */}
+                {settings.aiProvider === 'gemini' && (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="ai-model-select" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Model
+                      </label>
+                      <select 
+                        id="ai-model-select"
+                        value={settings.aiModel}
+                        onChange={(e) => setSettings(prev => ({ ...prev, aiModel: e.target.value as AiModel }))}
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer font-bold text-sm"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1.2rem' }}
+                      >
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Efficient)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (Balanced)</option>
+                        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Latest Fast)</option>
+                        <option value="gemini-3-pro-preview">Gemini 3 Pro Preview (Highest Quality)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-2 relative">
+                      <label htmlFor="ai-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Gemini API Key
+                      </label>
+                      <input
+                        id="ai-api-key-input"
+                        type="text"
+                        placeholder="Enter your Gemini API Key"
+                        value={settings.apiKey || ''}
+                        onChange={(e) => setSettings(prev => ({ ...prev, apiKey: e.target.value }))}
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
+                        autoComplete="off"
+                        name="gemini_api_key"
+                        inputMode="text"
+                        spellCheck={false}
+                        style={showApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(prev => !prev)}
+                        className="absolute right-3 top-9 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+                        aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                        title={showApiKey ? 'Hide API key' : 'Show API key'}
+                      >
+                        {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                        This key is stored locally in your browser (localStorage) and is only sent directly to Google APIs when making requests.
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* OpenRouter Settings */}
+                {settings.aiProvider === 'openrouter' && (
+                  <>
+                    <div className="flex flex-col gap-2 relative">
+                      <label htmlFor="openrouter-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        OpenRouter API Key
+                      </label>
+                      <input
+                        id="openrouter-api-key-input"
+                        type="text"
+                        placeholder="Enter your OpenRouter API Key (sk-or-...)"
+                        value={settings.openRouterApiKey || ''}
+                        onChange={(e) => setSettings(prev => ({ ...prev, openRouterApiKey: e.target.value }))}
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
+                        autoComplete="off"
+                        name="openrouter_api_key"
+                        inputMode="text"
+                        spellCheck={false}
+                        style={showOpenRouterApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOpenRouterApiKey(prev => !prev)}
+                        className="absolute right-3 top-9 p-1 text-slate-400 hover:text-slate-200 transition-colors"
+                        aria-label={showOpenRouterApiKey ? 'Hide API key' : 'Show API key'}
+                        title={showOpenRouterApiKey ? 'Hide API key' : 'Show API key'}
+                      >
+                        {showOpenRouterApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                        Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/keys</a>
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="openrouter-model-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Model ID
+                      </label>
+                      <input
+                        id="openrouter-model-input"
+                        type="text"
+                        placeholder="e.g., openrouter/auto, anthropic/claude-3.5-sonnet, openai/gpt-4o"
+                        value={settings.openRouterModel || ''}
+                        onChange={(e) => setSettings(prev => ({ ...prev, openRouterModel: e.target.value }))}
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                        Browse models at <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/models</a>. Use <code className="text-slate-400">openrouter/auto</code> for automatic selection.
+                      </p>
+                    </div>
+                  </>
+                )}
 
               </div>
             </section>

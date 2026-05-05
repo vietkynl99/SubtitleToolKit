@@ -60,6 +60,9 @@ export const DEFAULT_SETTINGS = {
   translationBatchSize: 100,
   maxSingleLineWords: 12,
   autoSplitLongLines: false,
+  aiProvider: 'gemini' as const,
   aiModel: 'gemini-2.5-flash' as const,
-  apiKey: ''
+  apiKey: '',
+  openRouterApiKey: '',
+  openRouterModel: 'openrouter/auto'
 };

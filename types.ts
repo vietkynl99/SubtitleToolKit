@@ -2,6 +2,8 @@ export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-su
 
 export type Severity = 'safe' | 'warning' | 'critical';
 
+export type AiProvider = 'gemini' | 'openrouter';
+
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
 
 export interface TranslationPreset {
@@ -92,8 +94,11 @@ export interface AppSettings {
     warningMax: number;
   };
   translationBatchSize: number;
+  aiProvider: AiProvider;
   aiModel: AiModel;
   apiKey: string;
+  openRouterApiKey: string;
+  openRouterModel: string;
   maxSingleLineWords: number;
   autoSplitLongLines: boolean;
 }
