@@ -50,12 +50,12 @@ const PresetPage: React.FC<PresetPageProps> = ({
   draftSummary,
   onDraftSummaryChange
 }) => {
-  const [titleInput, setTitleInput] = useState('');
+  const [titleInput, setTitleInput] = useState(draftSummary || displayFileName || '');
   const [genreInput, setGenreInput] = useState('');
   const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    if (draftSummary !== titleInput) {
+    if (draftSummary && draftSummary !== titleInput) {
       setTitleInput(draftSummary);
     }
   }, [draftSummary, titleInput]);
