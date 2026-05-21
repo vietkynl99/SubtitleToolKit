@@ -122,66 +122,29 @@ export function collapseToSingleLineIfShort(text: string, maxWords: number = 10)
  */
 export function getHumorRule(humorLevel: number): string {
   if (humorLevel <= 2) {
-    return `
-Neutral narration.
-Translate faithfully with clear Vietnamese subtitles.
-No sarcasm or exaggeration.
-`;
+    return `Neutral narration. Translate faithfully, no sarcasm or exaggeration.`;
   }
   if (humorLevel <= 4) {
-    return `
-Natural conversational narration.
-Subtitles should sound like natural spoken Vietnamese.
-Very mild humor allowed.
-`;
+    return `Natural conversational narration. Sound like natural spoken Vietnamese. Very mild humor allowed.`;
   }
   if (humorLevel <= 6) {
-    return `
-Playful narration style.
-
-Guidelines:
-- Prefer lively spoken Vietnamese
-- Slightly expressive wording allowed
-- Mild humor or playful tone may appear
-`;
+    return `Playful narration. Prefer lively spoken Vietnamese. Mild humor, expressive wording allowed.`;
   }
   if (humorLevel <= 8) {
-    return `
-Energetic recap-style narration.
-
-Guidelines:
-- Prefer expressive and dynamic Vietnamese phrasing
-- Light sarcasm or teasing tone allowed
-- Slight exaggeration allowed if meaning remains accurate
-- Subtitles should feel entertaining and vivid
-`;
+    return `Energetic recap-style narration. Expressive and dynamic phrasing, light sarcasm or exaggeration allowed. Make subtitles feel entertaining and vivid.`;
   }
   return `
 Chaotic comedic narrator mode (MAX LEVEL).
-
-Core Style:
-- Rewrite lines with a strong humorous and expressive narration style
-- Sound like a sarcastic, over-the-top Vietnamese storyteller by default
-
-Humor Behavior:
-- Actively inject humor into lines as a default behavior
-- Use exaggeration, teasing, and playful mockery naturally
-- Add narrator attitude and personality into phrasing
-
-- Express humor by rewriting the sentence, not by adding extra words
-- Replace the original phrasing with a shorter, punchy and expressive version
-- Prefer simplifying and compressing the sentence while keeping strong tone and attitude
-- Do not keep the original sentence structure if it results in longer output
-- Reduce or remove less important details to keep the line concise and impactful
-- Break complex ideas into simpler, punchier phrasing
-
-Reactions:
-- Naturally include short reactions where it fits (e.g. "ủa gì vậy", "ảo thật", "wtf")
-- Integrate reactions into the sentence instead of appending them as extra clauses
-
-Narration Feel:
-- Lines should feel like a fast, entertaining recap, not a full or literal translation
-- Avoid plain, flat, or overly complete phrasing
+- **PERSONA**: You are a "Witty Gen Z Sarcastic Storyteller". You use modern Vietnamese slang (e.g., "ảo thật đấy", "cạn lời", "bay màu") combined with exaggerated, poetic metaphors ("bay bổng") to make the story vivid.
+- **VOICE**: Sarcastic, over-the-top, and entertaining. Actively inject humor through teasing and mockery.
+- **CONSISTENCY**: You must maintain a steady voice across the entire story. Do not be serious in one batch and funny in another.
+- **PRONOUNS**: Stick to established relationships:
+  * Enemies/Villains: "Mày - Tao" or "Ngươi - Ta".
+  * Master/Disciple or Formal: "Ta - Ngươi" or "Tiền bối - Hậu bối".
+  * Romantic/Close: "Anh - Em" or "Chàng - Thiếp" if appropriate.
+  * Casual: "Tui - Ông/Bà" or "Cậu - Tớ".
+- **STRUCTURE**: Rewrite into shorter, punchier Vietnamese. Keep a strict 1-to-1 mapping. Do NOT merge IDs.
+- **STYLE**: Feel like a fast, high-energy recap. Use metaphors and colorful language to make it "bay bổng" but keep it grounded in the original meaning.
 `;
 }
 
@@ -249,76 +212,30 @@ Next: ${JSON.stringify(contextAfter)}
 Always respond with valid JSON matching the requested schema.`;
 
   const userPrompt = `
+OUTPUT MUST BE 100% VIETNAMESE. NO Chinese characters allowed in the output.
+
 Translate Chinese subtitles into natural Vietnamese.
-
-Output format:
-JSON array of objects: [{"id": number, "text": string}]
-
-IMPORTANT:
-Return one object per input line using the exact id.
-Do not reorder items.
-Do not omit items.
-
-Core rules:
-
-1. Speaker & POV consistency
-Before translating, check if any name matches a known character (including variants).
-Do NOT add character names or subjects that are not explicitly in the original text.
-Do NOT change point of view or who is speaking.
-Keep pronouns and forms of address consistent for the same character throughout the batch.
-
-2. Preserve meaning
-Keep the core meaning accurate.
-Do not invent new story events.
-Rephrasing, tone adaptation, and adding short reactions are allowed as long as the core meaning remains unchanged.
-
-3. Subtitle readability
-Use natural spoken Vietnamese suitable for storytelling subtitles.
-
-4. Length control + line breaking
-Keep subtitles very concise (target <1.2×, max <1.5×).
-${autoSplitLongLines
-  ? `If the subtitle would exceed ${maxSingleLineWords} words on one line, you MUST insert a line break using the newline character "\\n" and return 2 lines.
-Line breaking comes before shortening: first break into lines; if still too long, then shorten phrasing.`
-  : `Line breaks are optional. Do not force a line break based only on word count.`}
-Prefer the shorter expression when meaning is the same.
-Maximum 2 lines.
-
-5. Short line rule
-Chinese ≤4 characters → Vietnamese 1–3 words.
-
-6. Dynamic narration
-Prefer concise, expressive Vietnamese phrasing.
-Avoid overly formal written language.
-
-7. Names and proper nouns
-Keep all character names and proper nouns consistent.
-${hasCharacterRules ? `- The same Chinese name must always use the same Vietnamese form.
-- Do not create different spellings for similar names.
-` : ""}- If a term looks like a name, treat it as a name rather than translating its meaning.
-
-8. Word choice
-Strongly prefer vivid, expressive, and entertaining Vietnamese phrasing over neutral or literal wording when meaning is preserved.
-Humor can replace neutral phrasing instead of adding extra words.
-
-9. Emphasis without quotes
-Do not use single quotes, double quotes, or brackets for emphasis.
-If emphasis is needed, express it by word choice, not punctuation.
-
-10. Context usage
-Each subtitle must remain understandable independently.
-Neighbor context is only for resolving pronouns or references.
-
-11. Style priority
-When there is a conflict between neutral translation and narration style, follow the narration style as long as the core meaning is preserved.
+Output: JSON array [{"id": number, "text": string}] - one object per input, same order, no omissions.
+**STRICT RULE: 1-to-1 mapping required. Do NOT merge the content of multiple input IDs into a single output ID. Do NOT repeat the same text for different IDs.**
 
 ${styleBlock}
-
 ${storyContext}
-
 ${hasCharacterRules ? characterRules : ""}
-
 ${neighborContext}
+
+Rules:
+1. Preserve core meaning. Do not invent story events. Tone adaptation allowed.
+2. Length: keep all meaningful content - only remove filler/repeated words. Very short source (<=6 Chinese chars) -> keep output brief (2-5 Vietnamese words). Longer lines -> translate fully, do not compress.
+${autoSplitLongLines
+  ? `Use "\\n" ONLY when the subtitle exceeds ${maxSingleLineWords} words and needs a visual display break - NOT as a clause separator for short subtitles.`
+  : "Line breaks optional."}
+3. Punctuation: Chinese subtitles often lack punctuation. For a subtitle with multiple short clauses, separate them with a comma within the same line - do NOT use "\\n" as a clause separator. Only add punctuation that is grammatically necessary; do not add expressive punctuation not implied by the source.
+4. Names: Sino-Vietnamese (Hán-Việt) transcription (e.g. 张凤华 -> Trương Phượng Hoa). Do NOT use Pinyin ("Zhang", "Wang", "Li" are WRONG).${hasCharacterRules ? " Use character rules if provided." : " Ensure consistent Hán-Việt transcription for names across all segments."}
+5. Each subtitle is independent; neighbor context for reference only. **NEVER combine the meaning of adjacent subtitles into one.**
+6. Style priority: follow narration style above if meaning is preserved.
+7. **NO REPETITION: Do not use the exact same translation for different IDs unless the source text is identical.**
+
+REMINDER: Output text must be 100% Vietnamese. Any Chinese character in output is a critical error.
 
 Subtitle data:
 ${JSON.stringify(batch.map(s => ({ id: s.id, text: s.originalText })))}
@@ -383,33 +300,33 @@ Neutral Vietnamese subtitle narration.
 
   const systemPrompt = "You are a subtitle optimization assistant. Optimize Vietnamese subtitles for readability and CPS.";
   const userPrompt = `
-Optimize Vietnamese subtitles for readability and CPS.
+CRITICAL: OUTPUT MUST BE 100% VIETNAMESE. Any Chinese character in the output is a hard failure.
+
+Fix and optimize Vietnamese subtitles. Translate any remaining Chinese to Vietnamese.
+Output: JSON array [{"id": number, "fixedText": string}]
 
 ${styleBlock}
 ${storyContext}
 ${hasCharacterRules ? characterRules : ""}
 
+Input fields:
+- cn: The original Chinese source - translate FROM this; this defines the scope of this segment
+- vn: Previous Vietnamese draft - use only for established terminology/proper nouns; do NOT copy its content or sentence structure
+
 Rules:
-- Each segment is independent.
-- Do NOT merge or split segments.
-- Preserve core meaning when possible.
-- Prefer concise Vietnamese.
-${hasCharacterRules ? `- Apply character name normalization rules strictly; never invent or vary character names.
-` : ""}- Remove filler words if needed, but do not lose meaning.
-- Remove filler words if needed, but do not lose meaning.
-- Output must be Vietnamese only (Latin script). Do not include Chinese characters or any non-Latin letters.
-- If any Chinese characters appear in the input, translate them into Vietnamese words.
-- If the output still contains Chinese characters, it is invalid and must be rewritten.
+1. Translate ALL Chinese characters in vn using cn as reference.
+2. Names/proper nouns: Sino-Vietnamese (Hán-Việt) transcription (e.g. 张凤华 -> Trương Phượng Hoa, 问天宗 -> Vấn Thiên Tông). Do NOT use Pinyin ("Zhang", "Wang" are WRONG).${hasCharacterRules ? " Use character rules if provided." : ""}
+3. Organizations/titles: translate meaningfully using Hán-Việt.
+4. Each segment is independent. Do NOT merge or split segments.
+5. Translate from cn. Reference vn only for established proper nouns or terminology already translated in vn. Do NOT reproduce vn content that exceeds what cn says.
+6. Punctuation: add natural punctuation only where grammatically necessary. Do not add expressive punctuation not implied by the source.
+7. Output length based on cn length:
+   - cn <=4 chars: this is a fragment segment - output ONLY the direct translation of cn (a word, name, or phrase). Do NOT append vn content after it.
+   - cn 5-8 chars: aim for a concise output proportional to cn; include vn content only if it is clearly required to complete the meaning of cn
+   - cn >8 chars: translate fully; compress only if the FOCUS above instructs it
+   - Do NOT use vn length as a benchmark.
 
-Goal:
-- Reduce CPS compared to currentCps while preserving meaning and fluency.
-- If currentCps is already low, keep it similar and avoid over-shortening.
-
-Special rule:
-If Chinese text length ≤4 characters → output 2–4 Vietnamese words if possible.
-
-Output format:
-JSON array [{id, fixedText}]
+REMINDER: Every fixedText must be pure Vietnamese Latin script. Zero Chinese characters allowed.
 
 Segments:
 ${JSON.stringify(payload)}
@@ -463,9 +380,18 @@ export function buildExtractTitlePrompt(filename: string): { systemPrompt: strin
  */
 export function buildAnalyzeStylePrompt(titleOrSummary: string): { systemPrompt: string; userPrompt: string; responseSchema: object } {
   const systemPrompt = "You are a genre analysis assistant. Analyze the given title or summary and return genres and humor level.";
-  const userPrompt = `Phân tích thể loại dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}.
-Chỉ được phép chọn từ danh sách sau:
-Genres: ${GENRE_TAXONOMY.join(', ')}`;
+  const userPrompt = `Phân tích thể loại dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}
+
+Chỉ được phép chọn thể loại từ danh sách sau:
+${GENRE_TAXONOMY.join(', ')}
+
+Trả về JSON với format chính xác sau:
+{
+  "genres": ["thể loại 1", "thể loại 2"]
+}
+
+Quy tắc:
+- genres: chọn 1-5 thể loại phù hợp nhất từ danh sách`;
 
   const responseSchema = {
     type: "object",
