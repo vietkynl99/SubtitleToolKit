@@ -117,13 +117,9 @@ export async function analyzeTranslationStyle(titleOrSummary: string, model: AiM
             type: Type.ARRAY, 
             items: { type: Type.STRING },
             description: "1-5 thể loại phù hợp nhất từ danh sách."
-          },
-          humor_level: { 
-            type: Type.NUMBER,
-            description: "Mức độ hài hước từ 0 đến 10"
           }
         },
-        required: ["genres", "humor_level"]
+        required: ["genres"]
       }
     }
   });

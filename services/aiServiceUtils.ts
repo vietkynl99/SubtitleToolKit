@@ -379,7 +379,7 @@ export function buildExtractTitlePrompt(filename: string): { systemPrompt: strin
  * Build prompt for analyzing translation style
  */
 export function buildAnalyzeStylePrompt(titleOrSummary: string): { systemPrompt: string; userPrompt: string; responseSchema: object } {
-  const systemPrompt = "You are a genre analysis assistant. Analyze the given title or summary and return genres and humor level.";
+  const systemPrompt = "You are a genre analysis assistant. Analyze the given title or summary and return genres.";
   const userPrompt = `Phân tích thể loại dựa trên tiêu đề hoặc bản tóm tắt sau: ${titleOrSummary}
 
 Chỉ được phép chọn thể loại từ danh sách sau:
@@ -400,13 +400,9 @@ Quy tắc:
         type: "array",
         items: { type: "string" },
         description: "1-5 thể loại phù hợp nhất từ danh sách."
-      },
-      humor_level: {
-        type: "integer",
-        description: "Mức độ hài hước từ 0 đến 10"
       }
     },
-    required: ["genres", "humor_level"]
+    required: ["genres"]
   };
 
   return { systemPrompt, userPrompt, responseSchema };
@@ -422,6 +418,6 @@ export function parseStyleAnalysisResult(result: any, titleOrSummary: string): i
     },
     genres: result.genres || [],
     character_names: [],
-    humor_level: result.humor_level || 0
+    humor_level: 10
   };
 }
