@@ -2,7 +2,7 @@ export type Status = 'idle' | 'loading' | 'processing' | 'success' | 'partial-su
 
 export type Severity = 'safe' | 'warning' | 'critical';
 
-export type AiProvider = 'gemini' | 'openrouter';
+export type AiProvider = 'gemini' | 'openrouter' | 'custom';
 
 export type AiModel = 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
 
@@ -99,6 +99,9 @@ export interface AppSettings {
   apiKey: string;
   openRouterApiKey: string;
   openRouterModel: string;
+  customApiKey: string;
+  customModel: string;
+  customBaseUrl: string;
   maxSingleLineWords: number;
   autoSplitLongLines: boolean;
 }

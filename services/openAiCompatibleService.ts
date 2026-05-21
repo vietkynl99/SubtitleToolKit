@@ -10,7 +10,7 @@ import {
   parseStyleAnalysisResult
 } from "./aiServiceUtils";
 
-interface OpenRouterResponse {
+interface OpenAiCompatibleResponse {
   id: string;
   choices: Array<{
     message: {
@@ -25,23 +25,33 @@ interface OpenRouterResponse {
   };
 }
 
-async function callOpenRouter(
-  apiKey: string,
-  model: string,
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, '');
+}
+
+interface OpenAiCompatibleConfig {
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+}
+
+async function callOpenAiCompatible(
+  config: OpenAiCompatibleConfig,
   systemPrompt: string,
   userPrompt: string,
   responseSchema?: object
 ): Promise<{ content: string; tokens: number }> {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const normalizedBaseUrl = normalizeBaseUrl(config.baseUrl);
+  const response = await fetch(`${normalizedBaseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${config.apiKey}`,
       'HTTP-Referer': window.location.origin,
       'X-Title': 'SubtitleToolKit'
     },
     body: JSON.stringify({
-      model,
+      model: config.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -59,14 +69,24 @@ async function callOpenRouter(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+    throw new Error(`OpenAI-compatible API error: ${response.status} - ${errorText}`);
   }
 
-  const data: OpenRouterResponse = await response.json();
+  const data: OpenAiCompatibleResponse = await response.json();
   const content = data.choices[0]?.message?.content || '';
   const tokens = data.usage?.total_tokens || 0;
 
   return { content, tokens };
+}
+
+export async function testModelConnection(
+  config: OpenAiCompatibleConfig
+): Promise<{ content: string; tokens: number }> {
+  return callOpenAiCompatible(
+    config,
+    'You are a connection test assistant.',
+    'Reply with exactly OK if this model is working.'
+  );
 }
 
 /**
@@ -78,8 +98,7 @@ export async function translateBatch(
   contextBefore: string[],
   contextAfter: string[],
   preset: TranslationPreset | null,
-  model: string,
-  apiKey: string,
+  config: OpenAiCompatibleConfig,
   maxSingleLineWords: number,
   autoSplitLongLines: boolean
 ): Promise<{ translatedTexts: { id: number; text: string }[]; tokens: number }> {
@@ -89,7 +108,7 @@ export async function translateBatch(
   );
 
   try {
-    const { content, tokens } = await callOpenRouter(apiKey, model, systemPrompt, userPrompt, responseSchema);
+    const { content, tokens } = await callOpenAiCompatible(config, systemPrompt, userPrompt, responseSchema);
 
     const parsed = JSON.parse(content.trim() || "[]");
     if (!Array.isArray(parsed)) {
@@ -129,16 +148,19 @@ export async function translateBatch(
 export async function extractTitleFromFilename(filename: string, model: string, apiKey: string): Promise<{ title: string, tokens: number }> {
   const { systemPrompt, userPrompt, cleaned } = buildExtractTitlePrompt(filename);
 
-  const { content, tokens } = await callOpenRouter(apiKey, model, systemPrompt, userPrompt);
+  const { content, tokens } = await callOpenAiCompatible({ apiKey, model, baseUrl: 'https://openrouter.ai/api/v1' }, systemPrompt, userPrompt);
   const title = content.trim() || cleaned;
 
   return { title, tokens };
 }
 
-export async function analyzeTranslationStyle(titleOrSummary: string, model: string, apiKey: string): Promise<{ preset: TranslationPreset, tokens: number }> {
+export async function analyzeTranslationStyle(
+  titleOrSummary: string,
+  config: OpenAiCompatibleConfig
+): Promise<{ preset: TranslationPreset, tokens: number }> {
   const { systemPrompt, userPrompt, responseSchema } = buildAnalyzeStylePrompt(titleOrSummary);
 
-  const { content, tokens } = await callOpenRouter(apiKey, model, systemPrompt, userPrompt, responseSchema);
+  const { content, tokens } = await callOpenAiCompatible(config, systemPrompt, userPrompt, responseSchema);
   const result = JSON.parse(content || "{}");
   const preset = parseStyleAnalysisResult(result, titleOrSummary);
 
@@ -148,15 +170,14 @@ export async function analyzeTranslationStyle(titleOrSummary: string, model: str
 export async function aiFixSegments(
   segments: SubtitleSegment[],
   preset: TranslationPreset | null,
-  model: string,
-  apiKey: string,
+  config: OpenAiCompatibleConfig,
   targetCPS: number = 20
 ): Promise<{ segments: SubtitleSegment[]; tokens: number }> {
 
   const { systemPrompt, userPrompt, responseSchema } = buildOptimizePrompt(segments, preset);
 
   try {
-    const { content, tokens } = await callOpenRouter(apiKey, model, systemPrompt, userPrompt, responseSchema);
+    const { content, tokens } = await callOpenAiCompatible(config, systemPrompt, userPrompt, responseSchema);
     const fixes = JSON.parse(content || "[]");
 
     const updatedSegments = segments.map((s) => {

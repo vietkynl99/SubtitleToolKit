@@ -34,13 +34,15 @@ import {
 import { 
   translateBatch as translateBatchGemini,
   aiFixSegments as aiFixSegmentsGemini,
-  analyzeTranslationStyle as analyzeTranslationStyleGemini
+  analyzeTranslationStyle as analyzeTranslationStyleGemini,
+  testModelConnection as testGeminiModelConnection
 } from './services/geminiService';
 import { 
-  translateBatch as translateBatchOpenRouter,
-  aiFixSegments as aiFixSegmentsOpenRouter,
-  analyzeTranslationStyle as analyzeTranslationStyleOpenRouter
-} from './services/openRouterService';
+  translateBatch as translateBatchOpenAiCompatible,
+  aiFixSegments as aiFixSegmentsOpenAiCompatible,
+  analyzeTranslationStyle as analyzeTranslationStyleOpenAiCompatible,
+  testModelConnection as testOpenAiCompatibleModelConnection
+} from './services/openAiCompatibleService';
 import { splitToTwoLinesIfLong } from './services/aiServiceUtils';
 import Layout from './components/Layout';
 import { ICONS, DEFAULT_SETTINGS } from './constants';
@@ -55,6 +57,7 @@ const SegmentList = lazy(() => import('./components/SegmentList'));
 const AnalyzerPanel = lazy(() => import('./components/AnalyzerPanel'));
 const FileToolsPage = lazy(() => import('./components/FileToolsPage'));
 const PresetPage = lazy(() => import('./components/PresetPage'));
+const OPENROUTER_API_BASE_URL = 'https://openrouter.ai/api/v1';
 
 const App: React.FC = () => {
   // State
@@ -70,11 +73,20 @@ const App: React.FC = () => {
       const savedOpenRouterApiKey = localStorage.getItem('subtitle_openrouter_api_key');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
+        const openRouterApiKey = savedOpenRouterApiKey ?? parsed.openRouterApiKey ?? parsed.openAiCompatibleApiKey ?? '';
+        const openRouterModel = parsed.openRouterModel ?? parsed.openAiCompatibleModel ?? '';
+        const customApiKey = parsed.customApiKey ?? '';
+        const customModel = parsed.customModel ?? '';
+        const customBaseUrl = parsed.customBaseUrl ?? parsed.openAiCompatibleBaseUrl ?? '';
         const merged: AppSettings = {
           ...DEFAULT_SETTINGS,
           ...parsed,
           apiKey: savedApiKey ?? parsed.apiKey ?? '',
-          openRouterApiKey: savedOpenRouterApiKey ?? parsed.openRouterApiKey ?? ''
+          openRouterApiKey,
+          openRouterModel,
+          customApiKey,
+          customModel,
+          customBaseUrl
         };
         return merged;
       }
@@ -134,6 +146,11 @@ const App: React.FC = () => {
   const [translationPreset, setTranslationPreset] = useState<TranslationPreset | null>(null);
   const [isPresetLoading, setIsPresetLoading] = useState<boolean>(false);
   const [presetDraftSummary, setPresetDraftSummary] = useState<string>('');
+  const [isTestingAiConnection, setIsTestingAiConnection] = useState<boolean>(false);
+  const [aiConnectionTestResult, setAiConnectionTestResult] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const [translationState, setTranslationState] = useState<{
     status: 'idle' | 'running' | 'stopped' | 'error' | 'completed';
@@ -142,7 +159,7 @@ const App: React.FC = () => {
     customText?: string;
   }>({ status: 'idle', processed: 0, total: 0 });
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
-  const [showOpenRouterApiKey, setShowOpenRouterApiKey] = useState<boolean>(false);
+  const [showOpenAiCompatibleApiKey, setShowOpenAiCompatibleApiKey] = useState<boolean>(false);
   const [showQualityDashboard, setShowQualityDashboard] = useState<boolean>(true);
   const [showSearchBox, setShowSearchBox] = useState<boolean>(false);
   const [showReplaceBox, setShowReplaceBox] = useState<boolean>(false);
@@ -1171,26 +1188,53 @@ const App: React.FC = () => {
     }
   };
 
+  const getOpenAiCompatibleConfig = useCallback((currentSettings: AppSettings) => {
+    const isOpenRouter = currentSettings.aiProvider === 'openrouter';
+    return {
+      apiKey: isOpenRouter ? currentSettings.openRouterApiKey : currentSettings.customApiKey,
+      model: isOpenRouter ? currentSettings.openRouterModel : currentSettings.customModel,
+      baseUrl: isOpenRouter ? OPENROUTER_API_BASE_URL : currentSettings.customBaseUrl
+    };
+  }, []);
+
+  const validateAiProviderSettings = useCallback((currentSettings: AppSettings): string | null => {
+    if (currentSettings.aiProvider === 'gemini') {
+      if (!currentSettings.apiKey?.trim()) return "Please enter your Gemini API Key in Settings.";
+      return null;
+    }
+
+    const config = getOpenAiCompatibleConfig(currentSettings);
+    if (!config.apiKey?.trim()) {
+      return currentSettings.aiProvider === 'openrouter'
+        ? "Please enter your OpenRouter API Key in Settings."
+        : "Please enter your Custom Provider API Key in Settings.";
+    }
+    if (!config.model?.trim()) {
+      return currentSettings.aiProvider === 'openrouter'
+        ? "Please enter your OpenRouter model ID in Settings."
+        : "Please enter your Custom Provider model ID in Settings.";
+    }
+    if (currentSettings.aiProvider === 'custom' && !config.baseUrl?.trim()) {
+      return "Please enter your Custom Provider base URL in Settings.";
+    }
+    return null;
+  }, [getOpenAiCompatibleConfig]);
+
   const handleDNAAnalyze = async (input: string) => {
     const currentSettings = settingsRef.current;
-    const isGemini = currentSettings.aiProvider === 'gemini';
-    const hasApiKey = isGemini 
-      ? currentSettings.apiKey?.trim() 
-      : currentSettings.openRouterApiKey?.trim();
-    
-    if (!hasApiKey) {
-      showInlineStatus('warning', isGemini 
-        ? "Please enter your Gemini API Key in Settings." 
-        : "Please enter your OpenRouter API Key in Settings.");
+    const validationError = validateAiProviderSettings(currentSettings);
+    if (validationError) {
+      showInlineStatus('warning', validationError);
       setActiveTab('settings');
       return;
     }
+    const isGemini = currentSettings.aiProvider === 'gemini';
     if (!input.trim()) return;
     setIsPresetLoading(true);
     try {
       const { preset, tokens } = isGemini
         ? await analyzeTranslationStyleGemini(input, currentSettings.aiModel, currentSettings.apiKey)
-        : await analyzeTranslationStyleOpenRouter(input, currentSettings.openRouterModel, currentSettings.openRouterApiKey);
+        : await analyzeTranslationStyleOpenAiCompatible(input, getOpenAiCompatibleConfig(currentSettings));
       
       setTranslationPreset(preset);
       if (preset?.reference?.title_or_summary) {
@@ -1210,6 +1254,37 @@ const App: React.FC = () => {
       showToast('error', "Failed to analyze translation style.");
     } finally {
       setIsPresetLoading(false);
+    }
+  };
+
+  const handleTestAiConnection = async () => {
+    const currentSettings = settingsRef.current;
+    const validationError = validateAiProviderSettings(currentSettings);
+    if (validationError) {
+      setAiConnectionTestResult({ type: 'error', message: validationError });
+      showInlineStatus('warning', validationError);
+      setActiveTab('settings');
+      return;
+    }
+
+    setIsTestingAiConnection(true);
+    setAiConnectionTestResult(null);
+
+    try {
+      const result = currentSettings.aiProvider === 'gemini'
+        ? await testGeminiModelConnection(currentSettings.aiModel, currentSettings.apiKey)
+        : await testOpenAiCompatibleModelConnection(getOpenAiCompatibleConfig(currentSettings));
+
+      const summary = (result.content || 'OK').replace(/\s+/g, ' ').trim();
+      const successMessage = `Model is working. Response: ${summary}${result.tokens > 0 ? ` (${result.tokens} tokens)` : ''}`;
+      setAiConnectionTestResult({ type: 'success', message: successMessage });
+      showInlineStatus('success', successMessage, 7000);
+    } catch (err) {
+      const errorMessage = `Model test failed: ${formatAiErrorMessage(err)}`;
+      setAiConnectionTestResult({ type: 'error', message: errorMessage });
+      showInlineStatus('error', errorMessage, 9000);
+    } finally {
+      setIsTestingAiConnection(false);
     }
   };
 
@@ -1492,15 +1567,9 @@ const App: React.FC = () => {
       return;
     }
     const currentSettings = settingsRef.current;
-    const isGemini = currentSettings.aiProvider === 'gemini';
-    const hasApiKey = isGemini 
-      ? currentSettings.apiKey?.trim() 
-      : currentSettings.openRouterApiKey?.trim();
-    
-    if (!hasApiKey) {
-      showInlineStatus('warning', isGemini 
-        ? "Please enter your Gemini API Key in Settings." 
-        : "Please enter your OpenRouter API Key in Settings.");
+    const validationError = validateAiProviderSettings(currentSettings);
+    if (validationError) {
+      showInlineStatus('warning', validationError);
       setActiveTab('settings');
       return;
     }
@@ -1568,13 +1637,12 @@ const App: React.FC = () => {
               currentSettings.maxSingleLineWords,
               currentSettings.autoSplitLongLines
             )
-          : await translateBatchOpenRouter(
+          : await translateBatchOpenAiCompatible(
               translateBatchTargets,
               contextBefore,
               contextAfter,
               translationPreset,
-              currentSettings.openRouterModel,
-              currentSettings.openRouterApiKey,
+              getOpenAiCompatibleConfig(currentSettings),
               currentSettings.maxSingleLineWords,
               currentSettings.autoSplitLongLines
             );
@@ -1630,15 +1698,9 @@ const App: React.FC = () => {
 
   const handleAiOptimize = async () => {
     const currentSettings = settingsRef.current;
-    const isGemini = currentSettings.aiProvider === 'gemini';
-    const hasApiKey = isGemini 
-      ? currentSettings.apiKey?.trim() 
-      : currentSettings.openRouterApiKey?.trim();
-    
-    if (!hasApiKey) {
-      showInlineStatus('warning', isGemini 
-        ? "Please enter your Gemini API Key in Settings." 
-        : "Please enter your OpenRouter API Key in Settings.");
+    const validationError = validateAiProviderSettings(currentSettings);
+    if (validationError) {
+      showInlineStatus('warning', validationError);
       setActiveTab('settings');
       return;
     }
@@ -1698,7 +1760,7 @@ const App: React.FC = () => {
           const isGemini = currentSettings.aiProvider === 'gemini';
           const { segments: fixed, tokens } = isGemini
             ? await aiFixSegmentsGemini(currentBatch, translationPreset, currentSettings.aiModel, currentSettings.apiKey)
-            : await aiFixSegmentsOpenRouter(currentBatch, translationPreset, currentSettings.openRouterModel, currentSettings.openRouterApiKey);
+            : await aiFixSegmentsOpenAiCompatible(currentBatch, translationPreset, getOpenAiCompatibleConfig(currentSettings));
           requestCount++;
           
           fixed.forEach(f => {
@@ -2896,10 +2958,26 @@ const App: React.FC = () => {
           <div className="max-w-4xl mx-auto space-y-8">
             {/* AI Mode (v3.1.0) - Dropdown Selection */}
             <section className="bg-slate-900 border border-slate-800 rounded-[20px] sm:rounded-[28px] p-5 sm:p-6 shadow-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="text-blue-500">{ICONS.Fix}</span>
-                <h3 className="text-base sm:text-lg font-bold text-slate-100">AI Settings</h3>
+              <div className="flex items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-blue-500">{ICONS.Fix}</span>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-100">AI Settings</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTestAiConnection}
+                  disabled={isTestingAiConnection}
+                  className="px-4 py-2 rounded-2xl bg-blue-500 text-slate-950 font-bold text-sm hover:bg-blue-400 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  {isTestingAiConnection ? 'Testing...' : 'Test Model'}
+                </button>
               </div>
+
+              {aiConnectionTestResult && (
+                <p className={`mb-4 text-xs leading-relaxed ${aiConnectionTestResult.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {aiConnectionTestResult.message}
+                </p>
+              )}
 
               <div className="space-y-5">
                 {/* Provider Selection */}
@@ -2916,11 +2994,14 @@ const App: React.FC = () => {
                   >
                     <option value="gemini">Google Gemini</option>
                     <option value="openrouter">OpenRouter (Multi-model)</option>
+                    <option value="custom">Custom (OpenAI-compatible)</option>
                   </select>
                   <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                    {settings.aiProvider === 'gemini' 
+                    {settings.aiProvider === 'gemini'
                       ? 'Use Google Gemini API directly with your Gemini API key.'
-                      : 'Use OpenRouter to access multiple AI models (GPT, Claude, Gemini, etc.)'}
+                      : settings.aiProvider === 'openrouter'
+                        ? 'Use OpenRouter to access multiple AI models (GPT, Claude, Gemini, etc.).'
+                        : 'Use a custom OpenAI-compatible endpoint (e.g., 9router).'}
                   </p>
                 </div>
 
@@ -2978,56 +3059,91 @@ const App: React.FC = () => {
                   </>
                 )}
 
-                {/* OpenRouter Settings */}
-                {settings.aiProvider === 'openrouter' && (
+                {/* OpenAI-compatible Settings */}
+                {(settings.aiProvider === 'openrouter' || settings.aiProvider === 'custom') && (
                   <>
+                    {settings.aiProvider === 'custom' && (
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="openai-compatible-base-url-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                          Base URL
+                        </label>
+                        <input
+                          id="openai-compatible-base-url-input"
+                          type="text"
+                          placeholder="e.g., http://localhost:20128/v1"
+                          value={settings.customBaseUrl || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, customBaseUrl: e.target.value }))}
+                          className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        <p className="text-[10px] text-slate-500 italic leading-relaxed">
+                          Enter your OpenAI-compatible base URL. For 9router, use <code className="text-slate-400">http://localhost:20128/v1</code>.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="flex flex-col gap-2 relative">
-                      <label htmlFor="openrouter-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                        OpenRouter API Key
+                      <label htmlFor="openai-compatible-api-key-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        {settings.aiProvider === 'openrouter' ? 'OpenRouter API Key' : 'Custom Provider API Key'}
                       </label>
                       <input
-                        id="openrouter-api-key-input"
+                        id="openai-compatible-api-key-input"
                         type="text"
-                        placeholder="Enter your OpenRouter API Key (sk-or-...)"
-                        value={settings.openRouterApiKey || ''}
-                        onChange={(e) => setSettings(prev => ({ ...prev, openRouterApiKey: e.target.value }))}
+                        placeholder={settings.aiProvider === 'openrouter' ? 'Enter your OpenRouter API Key (sk-or-...)' : 'Enter your custom provider API key'}
+                        value={settings.aiProvider === 'openrouter' ? (settings.openRouterApiKey || '') : (settings.customApiKey || '')}
+                        onChange={(e) => setSettings(prev => ({
+                          ...prev,
+                          ...(settings.aiProvider === 'openrouter'
+                            ? { openRouterApiKey: e.target.value }
+                            : { customApiKey: e.target.value })
+                        }))}
                         className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 pr-16 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
                         autoComplete="off"
-                        name="openrouter_api_key"
+                        name="openai_compatible_api_key"
                         inputMode="text"
                         spellCheck={false}
-                        style={showOpenRouterApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
+                        style={showOpenAiCompatibleApiKey ? {} : ({ WebkitTextSecurity: 'disc' } as React.CSSProperties)}
                       />
                       <button
                         type="button"
-                        onClick={() => setShowOpenRouterApiKey(prev => !prev)}
+                        onClick={() => setShowOpenAiCompatibleApiKey(prev => !prev)}
                         className="absolute right-3 top-9 p-1 text-slate-400 hover:text-slate-200 transition-colors"
-                        aria-label={showOpenRouterApiKey ? 'Hide API key' : 'Show API key'}
-                        title={showOpenRouterApiKey ? 'Hide API key' : 'Show API key'}
+                        aria-label={showOpenAiCompatibleApiKey ? 'Hide API key' : 'Show API key'}
+                        title={showOpenAiCompatibleApiKey ? 'Hide API key' : 'Show API key'}
                       >
-                        {showOpenRouterApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showOpenAiCompatibleApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                       <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                        Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/keys</a>
+                        {settings.aiProvider === 'openrouter'
+                          ? <>Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/keys</a></>
+                          : 'Use the API key issued by your OpenAI-compatible provider.'}
                       </p>
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label htmlFor="openrouter-model-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      <label htmlFor="openai-compatible-model-input" className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                         Model ID
                       </label>
                       <input
-                        id="openrouter-model-input"
+                        id="openai-compatible-model-input"
                         type="text"
-                        placeholder="e.g., openrouter/auto, anthropic/claude-3.5-sonnet, openai/gpt-4o"
-                        value={settings.openRouterModel || ''}
-                        onChange={(e) => setSettings(prev => ({ ...prev, openRouterModel: e.target.value }))}
+                        placeholder={settings.aiProvider === 'openrouter' ? 'e.g., openrouter/auto, anthropic/claude-3.5-sonnet, openai/gpt-4o' : 'e.g., gpt-4o-mini, qwen3-coder'}
+                        value={settings.aiProvider === 'openrouter' ? (settings.openRouterModel || '') : (settings.customModel || '')}
+                        onChange={(e) => setSettings(prev => ({
+                          ...prev,
+                          ...(settings.aiProvider === 'openrouter'
+                            ? { openRouterModel: e.target.value }
+                            : { customModel: e.target.value })
+                        }))}
                         className="w-full bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-xs"
                         autoComplete="off"
                         spellCheck={false}
                       />
                       <p className="text-[10px] text-slate-500 italic leading-relaxed">
-                        Browse models at <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/models</a>. Use <code className="text-slate-400">openrouter/auto</code> for automatic selection.
+                        {settings.aiProvider === 'openrouter'
+                          ? <>Browse models at <a href="https://openrouter.ai/models" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">openrouter.ai/models</a>. Use <code className="text-slate-400">openrouter/auto</code> for automatic selection.</>
+                          : 'Use the model ID supported by your custom OpenAI-compatible provider.'}
                       </p>
                     </div>
                   </>

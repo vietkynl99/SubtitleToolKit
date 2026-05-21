@@ -64,5 +64,8 @@ export const DEFAULT_SETTINGS = {
   aiModel: 'gemini-2.5-flash' as const,
   apiKey: '',
   openRouterApiKey: '',
-  openRouterModel: 'openrouter/auto'
+  openRouterModel: '',
+  customApiKey: '',
+  customModel: '',
+  customBaseUrl: ''
 };

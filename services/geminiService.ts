@@ -135,6 +135,19 @@ export async function analyzeTranslationStyle(titleOrSummary: string, model: AiM
   return { preset, tokens };
 }
 
+export async function testModelConnection(model: AiModel, apiKey: string): Promise<{ content: string; tokens: number }> {
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model,
+    contents: "Reply with exactly OK if this model is working."
+  });
+
+  return {
+    content: response.text?.trim() || "",
+    tokens: response.usageMetadata?.totalTokenCount || 0
+  };
+}
+
 export async function aiFixSegments(
   segments: SubtitleSegment[],
   preset: TranslationPreset | null,
